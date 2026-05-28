@@ -45,12 +45,12 @@ After deploy, set the nine environment variables (see below) in your Vercel proj
 
 ## Environment variables
 
-Three providers, all independently configurable. Any OpenAI-compatible chat / image endpoint works (OpenAI, Anthropic via OpenAI-compat proxy, Gemini, OpenRouter, DeepSeek, local Ollama, …).
+Three providers, all independently configurable. Text and Vision accept any OpenAI-compatible endpoint (OpenAI, Anthropic via OpenAI-compat proxy, Gemini, OpenRouter, DeepSeek, local Ollama, …). Image goes to **Runware** (its own task-array protocol, not OpenAI-compatible).
 
 | Provider | Variables | Recommended |
 |---|---|---|
 | Text · story director | `TEXT_BASE_URL` `TEXT_API_KEY` `TEXT_MODEL` | `claude-opus-4-7` via Anthropic |
-| Image · UI renderer   | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL` | `gpt-image-2` via OpenAI |
+| Image · UI renderer   | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL` | `runware:400@6` (FLUX.2 [klein] 9B KV) via [Runware](https://runware.ai) |
 | Vision · click reader | `VISION_BASE_URL` `VISION_API_KEY` `VISION_MODEL` | `gemini-3-flash` via Google |
 
 See `apps/web/.env.example` for the exact shape.
@@ -88,4 +88,4 @@ yume/
 
 ## Cost & limits
 
-Each **scene** costs roughly **\$0.15–0.25** in API fees with the recommended model trio (one text + one image call); tapping through a scene's beats is free. To keep transitions instant, the engine also **pre-generates scenes you might pick but don't** — so real spend runs somewhat higher than the scenes you actually see. There is no rate limiting or auth out of the box — if you make your deployment public, your bill will reflect that. Add limits (and consider lowering the prefetch depth) before sharing widely.
+With the recommended trio, each **scene** is dominated by the text-LLM call. The FLUX.2 [klein] 9B KV image is roughly **\$0.001** per scene (1792×1024, 4 steps, sub-second); the text call is the rest. Tapping through a scene's beats is free. To keep transitions instant, the engine also **pre-generates scenes you might pick but don't** — so real spend runs somewhat higher than the scenes you actually see. There is no rate limiting or auth out of the box — if you make your deployment public, your bill will reflect that. Add limits (and consider lowering the prefetch depth) before sharing widely.

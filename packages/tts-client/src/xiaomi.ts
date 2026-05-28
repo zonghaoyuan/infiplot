@@ -77,6 +77,7 @@ export async function xiaomiSynthesize(
   voice: CharacterVoice,
   text: string,
   delivery?: string,
+  signal?: AbortSignal,
 ): Promise<{ audioBase64: string; mimeType: string }> {
   const url = joinUrl(cfg.baseUrl, "/chat/completions");
 
@@ -99,6 +100,7 @@ export async function xiaomiSynthesize(
     method: "POST",
     headers: buildHeaders(cfg),
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {

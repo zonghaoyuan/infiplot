@@ -145,10 +145,8 @@ export type StartResponse = {
   sessionId: string;
   scene: Scene;
   imageBase64: string;
-  /** Post-voice character registry (with provisioned voices). */
+  /** Character registry with voice references provisioned for new speakers. */
   characters: Character[];
-  /** Per-beat synthesized audio, keyed by beat.id. */
-  beatAudio?: Record<string, BeatAudio>;
 };
 
 // /api/scene — generates the next Scene, given session whose latest
@@ -162,7 +160,27 @@ export type SceneResponse = {
   scene: Scene;
   imageBase64: string;
   characters: Character[];
-  beatAudio?: Record<string, BeatAudio>;
+};
+
+// /api/beat-audio — lazily synthesize one beat's voice. Client fires this
+// per beat after a scene loads; server has a per-call timeout so MiMo
+// tail-latency cannot block the UI. A null audio response means "play silent."
+//
+// Payload deliberately slim: just the line to speak and the speaker's voice
+// reference. The client extracts the voice from its local session.characters
+// before posting — sending the full Session would force ~160KB of base64 per
+// OTHER speaker plus the entire scene history to ride along for nothing.
+export type BeatAudioRequest = {
+  beat: {
+    id: string;
+    line: string;
+    lineDelivery?: string;
+  };
+  voice: CharacterVoice;
+};
+
+export type BeatAudioResponse = {
+  audio: BeatAudio | null;
 };
 
 // /api/vision — interprets a background click on the current image and
@@ -197,5 +215,4 @@ export type InsertBeatPartial = {
 export type InsertBeatResponse = {
   partial: InsertBeatPartial;
   characters: Character[];
-  audio?: BeatAudio;
 };

@@ -1,5 +1,6 @@
 import type {
-  BeatAudio,
+  BeatAudioRequest,
+  BeatAudioResponse,
   Character,
   EngineConfig,
   InsertBeatRequest,
@@ -18,10 +19,15 @@ import { directInsertBeat, directScene } from "./director";
 import { mockImageBase64 } from "./mockImage";
 import { render } from "./renderer";
 import { interpret } from "./vision";
-import { voiceBeat, voiceScene } from "./voice";
+import { provisionVoicesForScene, synthesizeBeat } from "./voice";
 
 function newSessionId(): string {
   return `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// TEMP: per-phase timing for latency diagnosis. Remove after we have data.
+function tlog(label: string, t0: number): void {
+  console.log(`${label}: ${Date.now() - t0}ms`);
 }
 
 // Merge new character entries into the registry by name. If a name already
@@ -46,30 +52,26 @@ async function renderImage(
   return render(config.image, scene, styleGuide);
 }
 
-async function runVoiceScene(
+async function provisionForScene(
   config: EngineConfig,
   session: Session,
   scene: Scene,
-): Promise<{
-  beatAudio?: Record<string, BeatAudio>;
-  characters: Character[];
-}> {
+): Promise<{ characters: Character[] }> {
   if (!config.tts) return { characters: session.characters };
-  const res = await voiceScene(config.tts, session, scene);
-  return {
-    beatAudio: Object.keys(res.beatAudio).length ? res.beatAudio : undefined,
-    characters: res.characters,
-  };
+  return provisionVoicesForScene(config.tts, session, scene);
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  startSession — first scene + image + per-beat voice
+//  startSession — first scene + image + voice provisioning. The actual
+//  per-beat synth runs lazily via requestBeatAudio so MiMo's tail
+//  latency never blocks the UI.
 // ──────────────────────────────────────────────────────────────────────
 
 export async function startSession(
   config: EngineConfig,
   req: StartRequest,
 ): Promise<StartResponse> {
+  const tTotal = Date.now();
   const session: Session = {
     id: newSessionId(),
     createdAt: Date.now(),
@@ -79,28 +81,41 @@ export async function startSession(
     characters: [],
   };
 
+  const tDirect = Date.now();
   const { scene, characterUpdates } = await directScene(config.text, session);
+  tlog("[start] directScene", tDirect);
+
   const preVoiceSession: Session = {
     ...session,
     characters: mergeCharacters(session.characters, characterUpdates),
   };
 
-  const [imageBase64, voiceRes] = await Promise.all([
-    renderImage(config, scene, preVoiceSession.styleGuide),
-    runVoiceScene(config, preVoiceSession, scene),
-  ]);
+  const tImage = Date.now();
+  const tProv = Date.now();
+  const imagePromise = renderImage(config, scene, preVoiceSession.styleGuide)
+    .then((r) => {
+      tlog("[start] renderImage", tImage);
+      return r;
+    });
+  const provPromise = provisionForScene(config, preVoiceSession, scene)
+    .then((r) => {
+      tlog("[start] provisionForScene", tProv);
+      return r;
+    });
+  const [imageBase64, provRes] = await Promise.all([imagePromise, provPromise]);
+
+  tlog("[start] TOTAL", tTotal);
 
   return {
     sessionId: session.id,
     scene,
     imageBase64,
-    characters: voiceRes.characters,
-    beatAudio: voiceRes.beatAudio,
+    characters: provRes.characters,
   };
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  requestScene — generate the NEXT scene + image + per-beat voice.
+//  requestScene — generate the NEXT scene + image + voice provisioning.
 //  Used both on real scene transitions and on speculative prefetch.
 // ──────────────────────────────────────────────────────────────────────
 
@@ -108,22 +123,37 @@ export async function requestScene(
   config: EngineConfig,
   req: SceneRequest,
 ): Promise<SceneResponse> {
+  const tTotal = Date.now();
+
+  const tDirect = Date.now();
   const { scene, characterUpdates } = await directScene(config.text, req.session);
+  tlog("[scene] directScene", tDirect);
+
   const preVoiceSession: Session = {
     ...req.session,
     characters: mergeCharacters(req.session.characters, characterUpdates),
   };
 
-  const [imageBase64, voiceRes] = await Promise.all([
-    renderImage(config, scene, preVoiceSession.styleGuide),
-    runVoiceScene(config, preVoiceSession, scene),
-  ]);
+  const tImage = Date.now();
+  const tProv = Date.now();
+  const imagePromise = renderImage(config, scene, preVoiceSession.styleGuide)
+    .then((r) => {
+      tlog("[scene] renderImage", tImage);
+      return r;
+    });
+  const provPromise = provisionForScene(config, preVoiceSession, scene)
+    .then((r) => {
+      tlog("[scene] provisionForScene", tProv);
+      return r;
+    });
+  const [imageBase64, provRes] = await Promise.all([imagePromise, provPromise]);
+
+  tlog("[scene] TOTAL", tTotal);
 
   return {
     scene,
     imageBase64,
-    characters: voiceRes.characters,
-    beatAudio: voiceRes.beatAudio,
+    characters: provRes.characters,
   };
 }
 
@@ -141,24 +171,27 @@ export async function visionDecide(
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  requestInsertBeat — generates a transient in-scene beat (no image regen)
-//  and voices the line if any.
+//  requestInsertBeat — generates a transient in-scene beat (no image
+//  regen, no voice). The client fires /api/beat-audio for the new beat
+//  after this returns.
 // ──────────────────────────────────────────────────────────────────────
 
 export async function requestInsertBeat(
   config: EngineConfig,
   req: InsertBeatRequest,
 ): Promise<InsertBeatResponse> {
+  const tTotal = Date.now();
+
+  const tDirect = Date.now();
   const partial = await directInsertBeat(
     config.text,
     req.session,
     req.freeformAction,
   );
+  tlog("[insert-beat] directInsertBeat", tDirect);
 
-  // INSERT_BEAT prompt forbids new characters — but if the director violates
-  // it, voiceBeat's name-inferred fallback would silently provision and persist
-  // the hallucinated speaker. Strip the speaker attribution and promote the
-  // line into narration so the player still sees the text (the client only
+  // INSERT_BEAT prompt forbids new characters — promote disallowed-speaker
+  // lines to narration so the player still sees the text (the client only
   // renders `line` when there is a `speaker`).
   if (
     partial.speaker &&
@@ -169,6 +202,7 @@ export async function requestInsertBeat(
     );
     const promotedNarration =
       [partial.narration, partial.line].filter(Boolean).join("\n") || undefined;
+    tlog("[insert-beat] TOTAL", tTotal);
     return {
       partial: {
         narration: promotedNarration,
@@ -180,23 +214,20 @@ export async function requestInsertBeat(
     };
   }
 
-  if (!config.tts) {
-    // Always echo characters so callers don't need a ?? fallback.
-    return { partial, characters: req.session.characters };
-  }
+  tlog("[insert-beat] TOTAL", tTotal);
+  return { partial, characters: req.session.characters };
+}
 
-  // Insert beats stay in-scene and (per the INSERT_BEAT prompt) reuse the
-  // registered cast, so we voice against the existing character set.
-  const voiceRes = await voiceBeat(
-    config.tts,
-    req.session,
-    req.session.characters,
-    partial,
-  );
+// ──────────────────────────────────────────────────────────────────────
+//  requestBeatAudio — lazy per-beat synth. Returns audio:null on
+//  timeout / failure / TTS disabled, so the client just plays silent.
+// ──────────────────────────────────────────────────────────────────────
 
-  return {
-    partial,
-    characters: voiceRes.characters,
-    audio: voiceRes.audio,
-  };
+export async function requestBeatAudio(
+  config: EngineConfig,
+  req: BeatAudioRequest,
+): Promise<BeatAudioResponse> {
+  if (!config.tts) return { audio: null };
+  const audio = await synthesizeBeat(config.tts, req.voice, req.beat);
+  return { audio };
 }

@@ -15,6 +15,7 @@ import { PRESETS } from "@/lib/presets";
 import type {
   Beat,
   BeatAudio,
+  BeatAudioResponse,
   BeatChoice,
   InsertBeatResponse,
   Scene,
@@ -215,6 +216,10 @@ function PlayInner() {
 
   const startedRef = useRef(false);
   const poolRef = useRef<Map<string, PrefetchEntry>>(new Map());
+  // Lazy per-beat audio fetches keyed by beat.id. Aborted when the scene
+  // changes so stale in-flight requests can't poison the new scene's map
+  // (beat ids like "b1" are scene-local and would collide across scenes).
+  const beatAudioAbortRef = useRef<Map<string, AbortController>>(new Map());
 
   // Mirrors for use inside async handlers (closure-stable)
   const sessionRef = useRef<Session | null>(null);
@@ -258,6 +263,79 @@ function PlayInner() {
       };
     });
   }, [currentBeatId]);
+
+  // ── Lazy per-beat audio fetch ────────────────────────────────────────
+  // Returns silently on any failure — the UI never waits for audio, so a
+  // null result just means that beat plays without voice.
+  // Sends only the speaker's voice + the line to speak — NOT the whole
+  // session — so the per-beat payload stays small even with many characters
+  // (each voice.referenceAudioBase64 is ~160KB).
+  const fetchBeatAudio = useCallback(
+    async (
+      sess: Session,
+      beat: { id: string; speaker?: string; line?: string; lineDelivery?: string },
+    ): Promise<void> => {
+      if (!beat.speaker || !beat.line) return;
+      const speaker = sess.characters.find((c) => c.name === beat.speaker);
+      if (!speaker?.voice) return; // not yet provisioned — server can't synth anyway
+      if (beatAudioAbortRef.current.has(beat.id)) return;
+      const abort = new AbortController();
+      beatAudioAbortRef.current.set(beat.id, abort);
+      try {
+        const res = await fetch("/api/beat-audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            beat: { id: beat.id, line: beat.line, lineDelivery: beat.lineDelivery },
+            voice: speaker.voice,
+          }),
+          signal: abort.signal,
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as BeatAudioResponse;
+        // Skip the state write if we've been aborted between the .ok check and
+        // here — beat ids are scene-local, so a late arrival from a prior
+        // scene would otherwise overwrite the current scene's audio under the
+        // same id.
+        if (json.audio && !abort.signal.aborted) {
+          setBeatAudioMap((m) => ({ ...m, [beat.id]: json.audio as BeatAudio }));
+        }
+      } catch {
+        // aborted or network error — silent fallback
+      } finally {
+        // Only clear the slot if it's still ours. An aborted prior fetch
+        // running its finally late could otherwise delete the controller of a
+        // new fetch that took the same beat id, leaving the new one
+        // unabortable on the next scene change.
+        if (beatAudioAbortRef.current.get(beat.id) === abort) {
+          beatAudioAbortRef.current.delete(beat.id);
+        }
+      }
+    },
+    [],
+  );
+
+  function cancelBeatAudioFetches(): void {
+    for (const c of beatAudioAbortRef.current.values()) c.abort();
+    beatAudioAbortRef.current.clear();
+  }
+
+  // Fire one /api/beat-audio request per speaking beat each time the scene
+  // changes. Cancel any in-flight requests from the prior scene first —
+  // beat ids are scene-local ("b1" repeats across scenes) so a late arrival
+  // would land under the wrong beat in the audio map otherwise.
+  useEffect(() => {
+    cancelBeatAudioFetches();
+    setBeatAudioMap({});
+    const scene = currentScene;
+    const sess = sessionRef.current;
+    if (!scene || !sess) return;
+    for (const b of scene.beats) {
+      if (b.speaker && b.line) {
+        void fetchBeatAudio(sess, b);
+      }
+    }
+  }, [currentScene?.id, fetchBeatAudio]);
 
   // ── Mute persistence (read is via the useState lazy initializer above) ─
   const toggleMuted = useCallback(() => {
@@ -375,7 +453,8 @@ function PlayInner() {
         setCurrentScene(data.scene);
         setCurrentBeatId(data.scene.entryBeatId);
         setImageBase64(data.imageBase64);
-        setBeatAudioMap(data.beatAudio ?? {});
+        // beatAudioMap is populated lazily by the per-beat fetch effect once
+        // currentScene becomes non-null (see fetchBeatAudio).
         setPhase("ready");
       })
       .catch((e) => setError(String(e)));
@@ -410,8 +489,11 @@ function PlayInner() {
   // consumeChoice keeping the re-rooted survivor prefetches alive.
   useEffect(() => {
     const pool = poolRef.current;
+    const beatAborts = beatAudioAbortRef.current;
     return () => {
       clearPool(pool);
+      for (const c of beatAborts.values()) c.abort();
+      beatAborts.clear();
     };
   }, []);
 
@@ -459,7 +541,7 @@ function PlayInner() {
       setCurrentScene(result.scene);
       setCurrentBeatId(result.scene.entryBeatId);
       setImageBase64(result.imageBase64);
-      setBeatAudioMap(result.beatAudio ?? {});
+      // beatAudioMap reset + per-beat fetches kicked off by the scene effect.
       setLastExitLabel(exitLabel);
       setPhase("ready");
     } catch (e) {
@@ -559,7 +641,7 @@ function PlayInner() {
           };
           throw new Error(j.error ?? insertRes.statusText);
         }
-        const { partial, characters: insertChars, audio } =
+        const { partial, characters: insertChars } =
           (await insertRes.json()) as InsertBeatResponse;
 
         const fromBeatId =
@@ -581,21 +663,25 @@ function PlayInner() {
           beats: [...currentScene.beats, newBeat],
         };
 
-        setSession((s) =>
-          s
-            ? {
-                ...s,
-                history: s.history.map((h, i, arr) =>
-                  i === arr.length - 1 ? { ...h, scene: patched } : h,
-                ),
-                characters: insertChars,
-              }
-            : s,
-        );
+        const nextSession: Session = {
+          ...session,
+          history: session.history.map((h, i, arr) =>
+            i === arr.length - 1 ? { ...h, scene: patched } : h,
+          ),
+          characters: insertChars,
+        };
+        setSession(nextSession);
         setCurrentScene(patched);
         setCurrentBeatId(newBeatId);
-        if (audio) {
-          setBeatAudioMap((m) => ({ ...m, [newBeatId]: audio }));
+        // Insert-beat doesn't change scene.id, so the scene effect won't
+        // re-fire — manually kick off the audio fetch for the new beat.
+        if (newBeat.speaker && newBeat.line) {
+          void fetchBeatAudio(nextSession, {
+            id: newBeatId,
+            speaker: newBeat.speaker,
+            line: newBeat.line,
+            lineDelivery: newBeat.lineDelivery,
+          });
         }
         setLastExitLabel(decision.intent.freeformAction);
         setPhase("ready");
