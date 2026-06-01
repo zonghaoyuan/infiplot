@@ -266,6 +266,10 @@ function PlayInner() {
   // when older sessionStorage payloads omit the field. Mutated once in
   // bootstrap and read by fetchBeatAudio to early-return without any /api call.
   const audioEnabledRef = useRef<boolean>(true);
+  // Mirrors `muted` so the closure-stable fetchBeatAudio (deps []) can gate on
+  // it. Muting stops TTS *synthesis*, not just playback — TTS is the only sound
+  // source, so synthesizing audio the user can't hear just burns quota.
+  const mutedRef = useRef<boolean>(muted);
 
   // Mirrors for use inside async handlers (closure-stable)
   const sessionRef = useRef<Session | null>(null);
@@ -291,6 +295,9 @@ function PlayInner() {
   useEffect(() => {
     currentBeatRef.current = currentBeat;
   }, [currentBeat]);
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
 
   // Whenever currentBeatId changes, append it to visited (skip consecutive dups)
   useEffect(() => {
@@ -322,6 +329,7 @@ function PlayInner() {
       beat: { id: string; speaker?: string; line?: string; lineDelivery?: string },
     ): Promise<void> => {
       if (!audioEnabledRef.current) return; // user toggled 语音配音 → 关闭
+      if (mutedRef.current) return; // 静音 → 不合成 TTS（避免无谓的调用与花费）
       if (!beat.speaker || !beat.line) return;
       const speaker = sess.characters.find((c) => c.name === beat.speaker);
       if (!speaker?.voice) return; // not yet provisioned — server can't synth anyway
@@ -367,22 +375,26 @@ function PlayInner() {
     beatAudioAbortRef.current.clear();
   }
 
-  // Fire one /api/beat-audio request per speaking beat each time the scene
-  // changes. Cancel any in-flight requests from the prior scene first —
-  // beat ids are scene-local ("b1" repeats across scenes) so a late arrival
-  // would land under the wrong beat in the audio map otherwise.
-  useEffect(() => {
-    cancelBeatAudioFetches();
-    setBeatAudioMap({});
-    const scene = currentScene;
+  // Fire one /api/beat-audio request per speaking beat in the current scene.
+  // Reads refs (not props) so it stays closure-stable and can be re-run on
+  // un-mute as well as on scene change.
+  const prefetchSceneAudio = useCallback(() => {
+    const scene = currentSceneRef.current;
     const sess = sessionRef.current;
     if (!scene || !sess) return;
     for (const b of scene.beats) {
-      if (b.speaker && b.line) {
-        void fetchBeatAudio(sess, b);
-      }
+      if (b.speaker && b.line) void fetchBeatAudio(sess, b);
     }
-  }, [currentScene?.id, fetchBeatAudio]);
+  }, [fetchBeatAudio]);
+
+  // (Re)synthesize each time the scene changes. Cancel any in-flight requests
+  // from the prior scene first — beat ids are scene-local ("b1" repeats across
+  // scenes) so a late arrival would land under the wrong beat otherwise.
+  useEffect(() => {
+    cancelBeatAudioFetches();
+    setBeatAudioMap({});
+    prefetchSceneAudio();
+  }, [currentScene?.id, prefetchSceneAudio]);
 
   // ── Mute persistence (read is via the useState lazy initializer above) ─
   const toggleMuted = useCallback(() => {
@@ -396,6 +408,18 @@ function PlayInner() {
       return next;
     });
   }, []);
+
+  // Muting stops synthesis, not just playback: abort in-flight requests when
+  // muting. When un-muting, re-synthesize the current scene — fetchBeatAudio
+  // skips synthesis while muted, so a scene entered muted has no audio to play
+  // back otherwise. (Clearing the map re-synthesizes already-fetched beats on a
+  // mid-scene un-mute, but that's bounded to one scene and a rare toggle.)
+  useEffect(() => {
+    cancelBeatAudioFetches();
+    if (muted) return;
+    setBeatAudioMap({});
+    prefetchSceneAudio();
+  }, [muted, prefetchSceneAudio]);
 
   // ── Presentation mode toggle ─────────────────────────────────────────
   const togglePresentation = useCallback(async () => {

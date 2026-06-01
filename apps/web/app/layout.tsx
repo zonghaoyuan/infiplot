@@ -1,5 +1,23 @@
 import type { Metadata } from "next";
+import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
+
+// Editorial 云梦 fonts: drive tailwind `font-serif`/`font-sans` via
+// --font-serif / --font-sans across every page (home, /play, /new, CustomForm).
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "InfiPlot — AI 实时交互剧情游戏",
@@ -12,31 +30,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html
+      lang="zh-CN"
+      className={`${cormorant.variable} ${inter.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* Font Awesome — fa-solid icons used by home, /play, /new, CustomForm. */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         />
       </head>
-      <body className="min-h-screen overflow-x-hidden">
-        {/* Hand-drawn jitter filters used by every .frame element */}
-        <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
-          <filter id="s1">
-            <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="1.2" />
-          </filter>
-          <filter id="s2">
-            <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="2" seed="4" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" />
-          </filter>
-          <filter id="s3">
-            <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="3" seed="11" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="4.2" />
-          </filter>
-        </svg>
+      <body className="bg-cream-50 text-clay-900 font-sans antialiased min-h-screen overflow-x-hidden">
         {children}
       </body>
     </html>
