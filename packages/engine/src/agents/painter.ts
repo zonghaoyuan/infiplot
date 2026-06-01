@@ -1,12 +1,12 @@
 import { generateImage } from "@yume/ai-client";
-import type { GenerateImageOptions } from "@yume/ai-client";
+import type { GenerateImageOptions, GenerateImageResult } from "@yume/ai-client";
 import type {
   Beat,
   Character,
   EngineConfig,
   ProviderConfig,
 } from "@yume/types";
-import { mockImageBase64 } from "../mockImage";
+import { mockImageDataUri } from "../mockImage";
 import { buildPainterPrompt } from "../prompts";
 
 // ──────────────────────────────────────────────────────────────────────
@@ -24,6 +24,11 @@ import { buildPainterPrompt } from "../prompts";
 //       (most visually prominent)
 //    3. Other on-stage NPCs' portraits — secondary characters in the frame
 //
+//  References are sent as UUIDs (preferred — cheapest in transport) or URLs
+//  (fallback — still cheaper than base64). Base64 fallback was removed when
+//  generateImage switched to outputType=URL, which always returns both a UUID
+//  and a URL so we never lack a cheap reference handle.
+//
 //  Failure handling — two-tier degradation:
 //    A. referenceImages call           (preferred — full visual anchoring)
 //    B. pure text-to-image fallback    (last resort if Runware refs API errors)
@@ -36,8 +41,8 @@ export type PainterInput = {
   styleGuide: string;
   onStageCharacters: Character[];
   /**
-   * Prior scene's Runware UUID or base64. When set (= sceneKey hit a
-   * prior scene), it slots into referenceImages[0] for spatial continuity.
+   * Prior scene's Runware UUID or URL. When set (= sceneKey hit a prior
+   * scene), it slots into referenceImages[0] for spatial continuity.
    * Capacity-wise this displaces ONE character portrait — slot is shared
    * with character refs, capped at 4 total per Runware spec.
    */
@@ -67,10 +72,16 @@ export function collectReferenceImages(
   }
 
   // Slot 1+ — character portraits, speaker-first.
+  //
+  // Prefer URL over UUID: Runware's `imageInference` returns a UUID, but that
+  // UUID isn't always recognized by the `referenceImages` pipeline (the error
+  // surfaces as `failedToTransferImage`). The URL is Runware's own CDN link —
+  // they can always fetch it from their own infra. UUID is kept as a backstop
+  // for any edge case where URL is missing (e.g., legacy session state).
   const speakerName = entryBeat?.speaker;
   if (speakerName) {
     const speaker = characters.find((c) => c.name === speakerName);
-    const ref = speaker?.basePortraitUuid ?? speaker?.basePortraitBase64;
+    const ref = speaker?.basePortraitUrl ?? speaker?.basePortraitUuid;
     if (ref && refs.length < MAX_REFERENCE_IMAGES) {
       refs.push(ref);
       seen.add(speakerName);
@@ -81,7 +92,7 @@ export function collectReferenceImages(
     if (refs.length >= MAX_REFERENCE_IMAGES) break;
     if (seen.has(c.name)) continue;
     const char = characters.find((x) => x.name === c.name);
-    const ref = char?.basePortraitUuid ?? char?.basePortraitBase64;
+    const ref = char?.basePortraitUrl ?? char?.basePortraitUuid;
     if (ref) {
       refs.push(ref);
       seen.add(c.name);
@@ -96,7 +107,7 @@ async function tryGenerate(
   prompt: string,
   options: GenerateImageOptions,
   label: string,
-): Promise<string | null> {
+): Promise<GenerateImageResult | null> {
   try {
     return await generateImage(config, prompt, options);
   } catch (err) {
@@ -106,12 +117,18 @@ async function tryGenerate(
   }
 }
 
+export type PainterResult =
+  | { kind: "real"; imageUrl: string; imageUuid: string }
+  | { kind: "mock"; imageUrl: string };
+
 export async function runPainter(
   config: EngineConfig,
   input: PainterInput,
   entryBeat: Beat | undefined,
-): Promise<string> {
-  if (config.mockImage) return mockImageBase64();
+): Promise<PainterResult> {
+  if (config.mockImage) {
+    return { kind: "mock", imageUrl: await mockImageDataUri() };
+  }
 
   const prompt = buildPainterPrompt(
     input.integratedPrompt,
@@ -135,11 +152,12 @@ export async function runPainter(
       { referenceImages: refs },
       `referenceImages (${refs.length})`,
     );
-    if (r) return r;
+    if (r) return { kind: "real", imageUrl: r.imageUrl, imageUuid: r.imageUuid };
   }
 
   // Tier B — pure text-to-image. Last resort, used when Tier A failed OR
   // there are no references to send (first scene with no characters yet).
   // Errors here propagate to the caller.
-  return generateImage(config.image, prompt);
+  const r = await generateImage(config.image, prompt);
+  return { kind: "real", imageUrl: r.imageUrl, imageUuid: r.imageUuid };
 }

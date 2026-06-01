@@ -159,7 +159,7 @@ function ChoiceButton({
 
 // ── Main component ─────────────────────────────────────────────────────
 export function PlayCanvas({
-  imageBase64,
+  imageUrl,
   audioBase64,
   audioMime,
   muted,
@@ -171,7 +171,7 @@ export function PlayCanvas({
   onSelectChoice,
   fullViewport = false,
 }: {
-  imageBase64: string | null;
+  imageUrl: string | null;
   audioBase64: string | null;
   audioMime: string | null;
   muted: boolean;
@@ -271,7 +271,7 @@ export function PlayCanvas({
     });
   }
 
-  const interactive = phase === "ready" && !!imageBase64;
+  const interactive = phase === "ready" && !!imageUrl;
   const dimmed = phase === "transitioning";
 
   const sizeStyle = fullViewport
@@ -306,16 +306,16 @@ export function PlayCanvas({
         />
       )}
 
-      {imageBase64 ? (
+      {imageUrl ? (
         <div
           className="relative inline-block"
           style={{ boxShadow: fullViewport ? "none" : SHADOW }}
         >
-          {/* Background image */}
+          {/* Background image — Runware CDN URL or data URI (mock mode) */}
           <img
-            key={imageBase64.slice(-48)}
+            key={imageUrl.slice(-48)}
             ref={imgRef}
-            src={`data:image/png;base64,${imageBase64}`}
+            src={imageUrl}
             alt="Generated scene"
             onClick={handleImageClick}
             onLoad={(e) => {

@@ -1,5 +1,5 @@
 export { chat } from "./chat";
-export { generateImage, uploadImage } from "./image";
-export type { GenerateImageOptions } from "./image";
+export { generateImage } from "./image";
+export type { GenerateImageOptions, GenerateImageResult } from "./image";
 export { interpretClick } from "./vision";
 export type { ChatMessage } from "./chat";

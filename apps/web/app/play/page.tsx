@@ -28,6 +28,42 @@ import type {
 
 const MUTED_STORAGE_KEY = "yume:muted";
 
+// Cap how long we wait for the browser to download + decode a scene image
+// before giving up and rendering anyway. Runware's CDN is normally <2s for a
+// 1792×1024 PNG; tolerate up to 8s before the typewriter starts so a slow
+// download can't strand the player on a blank screen forever.
+const IMAGE_PRELOAD_TIMEOUT_MS = 8000;
+
+// ──────────────────────────────────────────────────────────────────────
+//  Image preload — decode the Runware URL in memory before committing to
+//  React state, so when the <img> mounts, the browser cache is warm and
+//  rendering is instant. Without this the user sees a blank canvas during
+//  the Runware-CDN download (~1-3s) after /api/scene returns.
+//
+//  Data URIs (MOCK_IMAGE mode) and prefetched-then-cached real URLs both
+//  resolve fast / instantly. Errors and timeouts resolve quietly — better
+//  to render a broken-image than to hang the play loop indefinitely.
+// ──────────────────────────────────────────────────────────────────────
+
+function preloadImage(url: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const img = new Image();
+    const done = () => resolve();
+    const timer = setTimeout(done, IMAGE_PRELOAD_TIMEOUT_MS);
+    img.onload = () => {
+      clearTimeout(timer);
+      // .decode() forces the bitmap to be fully decoded before we proceed —
+      // without it, a slow decode could still cause a flash on first paint.
+      img.decode().then(done, done);
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      done();
+    };
+    img.src = url;
+  });
+}
+
 // ──────────────────────────────────────────────────────────────────────
 //  Prefetch pool — speculative SceneResponses keyed by choice path.
 //
@@ -123,6 +159,12 @@ function prefetchScenePath(
     }
     const data = (await res.json()) as SceneResponse;
 
+    // Warm the browser's HTTP + image-decode cache for this URL so when the
+    // player eventually picks this choice and we render the <img>, it's
+    // instant. Don't await — let the bytes stream in the background; the
+    // transition path will await its own preloadImage() before committing.
+    void preloadImage(data.imageUrl);
+
     // Recursive: if the resulting scene has exactly one change-scene exit,
     // it is a must-pass node — prefetch its child too.
     if (depth + 1 < PREFETCH_MAX_DEPTH) {
@@ -193,7 +235,7 @@ function PlayInner() {
   const [session, setSession] = useState<Session | null>(null);
   const [currentScene, setCurrentScene] = useState<Scene | null>(null);
   const [currentBeatId, setCurrentBeatId] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [beatAudioMap, setBeatAudioMap] = useState<Record<string, BeatAudio>>({});
   // Lazy-initialize from localStorage so PlayCanvas never mounts with the
   // wrong muted value (an effect-based read would briefly let audio play
@@ -434,7 +476,12 @@ function PlayInner() {
         }
         return (await r.json()) as StartResponse;
       })
-      .then((data) => {
+      .then(async (data) => {
+        // Decode the Runware image in memory before committing to state, so
+        // the <img> renders instantly when it mounts (same rationale as the
+        // performSceneTransition path).
+        await preloadImage(data.imageUrl);
+
         const initial: Session = {
           id: data.sessionId,
           createdAt: Date.now(),
@@ -452,7 +499,7 @@ function PlayInner() {
         setSession(initial);
         setCurrentScene(data.scene);
         setCurrentBeatId(data.scene.entryBeatId);
-        setImageBase64(data.imageBase64);
+        setImageUrl(data.imageUrl);
         // beatAudioMap is populated lazily by the per-beat fetch effect once
         // currentScene becomes non-null (see fetchBeatAudio).
         setPhase("ready");
@@ -520,6 +567,14 @@ function PlayInner() {
       const base = sessionRef.current;
       if (!base) throw new Error("Session lost mid-transition");
 
+      // Wait for the browser to download + decode the Runware-hosted image
+      // BEFORE committing it to state, so the <img> renders instantly when it
+      // mounts. For prefetched scenes the preloadImage call inside
+      // prefetchScenePath has already warmed the cache, so this resolves
+      // almost immediately. For cold transitions we trade an extra ~1-3s of
+      // "transitioning" overlay for an image-pop-in-from-blank flash.
+      await preloadImage(result.imageUrl);
+
       const closedHistory = base.history.map((h, i, arr) =>
         i === arr.length - 1
           ? { ...h, visitedBeatIds: visitedForCurrent, exit }
@@ -540,7 +595,7 @@ function PlayInner() {
       setSession(newSession);
       setCurrentScene(result.scene);
       setCurrentBeatId(result.scene.entryBeatId);
-      setImageBase64(result.imageBase64);
+      setImageUrl(result.imageUrl);
       // beatAudioMap reset + per-beat fetches kicked off by the scene effect.
       setLastExitLabel(exitLabel);
       setPhase("ready");
@@ -607,7 +662,7 @@ function PlayInner() {
   }
 
   async function onBackgroundClick(click: { x: number; y: number }) {
-    if (phase !== "ready" || !session || !currentScene || !imageBase64) return;
+    if (phase !== "ready" || !session || !currentScene || !imageUrl) return;
     setPhase("vision-thinking");
     setPendingClick(click);
 
@@ -615,7 +670,7 @@ function PlayInner() {
       const visionRes = await fetch("/api/vision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session, prevImageBase64: imageBase64, click }),
+        body: JSON.stringify({ session, prevImageUrl: imageUrl, click }),
       });
       if (!visionRes.ok) {
         const j = (await visionRes.json().catch(() => ({}))) as {
@@ -763,7 +818,7 @@ function PlayInner() {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
         <PlayCanvas
-          imageBase64={imageBase64}
+          imageUrl={imageUrl}
           audioBase64={audioBase64}
           audioMime={audioMime}
           muted={muted}
@@ -805,7 +860,7 @@ function PlayInner() {
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-8 py-6 md:py-10">
         <PlayCanvas
-          imageBase64={imageBase64}
+          imageUrl={imageUrl}
           audioBase64={audioBase64}
           audioMime={audioMime}
           muted={muted}

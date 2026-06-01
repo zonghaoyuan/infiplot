@@ -1,11 +1,15 @@
 import sharp from "sharp";
 
-let cached: string | undefined;
+let cachedDataUri: string | undefined;
 
 // A static 16:9 placeholder used when MOCK_IMAGE=true, so we can exercise the
 // TTS path without paying for image generation. Generated once, then memoized.
-export async function mockImageBase64(): Promise<string> {
-  if (cached) return cached;
+// Returned as a data URI so the rest of the pipeline can treat it as an
+// `imageUrl` interchangeably with real Runware URLs (the client's <img src>
+// accepts both, and we never feed a mock image to Runware's referenceImages
+// because mockImage mode short-circuits the Painter entirely).
+export async function mockImageDataUri(): Promise<string> {
+  if (cachedDataUri) return cachedDataUri;
 
   const W = 1792;
   const H = 1024;
@@ -20,6 +24,6 @@ export async function mockImageBase64(): Promise<string> {
   </svg>`;
 
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
-  cached = png.toString("base64");
-  return cached;
+  cachedDataUri = `data:image/png;base64,${png.toString("base64")}`;
+  return cachedDataUri;
 }

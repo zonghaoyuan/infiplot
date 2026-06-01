@@ -37,21 +37,28 @@ There is no traditional game UI baked into the art. The AI paints the world in w
 
 ## One-click deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YOUR_USERNAME/yume&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL&envDescription=Three%20independently%20configurable%20providers.%20Any%20OpenAI-compatible%20endpoint%20works.&envLink=https://github.com/YOUR_USERNAME/yume%23environment-variables)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/yume&root-directory=apps/web&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision%2Ftts.&envLink=https://github.com/zonghaoyuan/yume%23environment-variables)
 
-After deploy, set the nine environment variables (see below) in your Vercel project. That's it.
+After deploy, set the environment variables (see below) in your Vercel project. Nine are required; TTS is optional (leave blank to run silently); `MOCK_IMAGE=true` skips image generation for cheap TTS-only testing. The Vercel project's **Root Directory** must be set to `apps/web` (the deploy button passes this; if you configure manually, set it in Project Settings).
 
 ---
 
 ## Environment variables
 
-Three providers, all independently configurable. Text and Vision accept any OpenAI-compatible endpoint (OpenAI, Anthropic via OpenAI-compat proxy, Gemini, OpenRouter, DeepSeek, local Ollama, …). Image goes to **Runware** (its own task-array protocol, not OpenAI-compatible).
+Three required providers + optional TTS. Text, Vision, and TTS accept any OpenAI-compatible endpoint (OpenAI, Anthropic via OpenAI-compat proxy, Gemini, OpenRouter, DeepSeek, local Ollama, …). Image goes to **Runware** (its own task-array protocol, not OpenAI-compatible).
 
-| Provider | Variables | Recommended |
-|---|---|---|
-| Text · story director | `TEXT_BASE_URL` `TEXT_API_KEY` `TEXT_MODEL` | `claude-opus-4-7` via Anthropic |
-| Image · UI renderer   | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL` | `runware:400@6` (FLUX.2 [klein] 9B KV) via [Runware](https://runware.ai) |
-| Vision · click reader | `VISION_BASE_URL` `VISION_API_KEY` `VISION_MODEL` | `gemini-3-flash` via Google |
+| Provider | Variables | Required? | Recommended |
+|---|---|---|---|
+| Text · story director  | `TEXT_BASE_URL` `TEXT_API_KEY` `TEXT_MODEL`        | ✅ | `claude-opus-4-7` via Anthropic |
+| Image · UI renderer    | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL`     | ✅ | `runware:400@6` (FLUX.2 [klein] 9B KV) via [Runware](https://runware.ai) |
+| Vision · click reader  | `VISION_BASE_URL` `VISION_API_KEY` `VISION_MODEL`  | ✅ | `gemini-3-flash` via Google |
+| TTS · per-character voice | `TTS_BASE_URL` `TTS_API_KEY` `TTS_SPEECH_MODEL` | optional — leave blank to run silently | `mimo-v2.5-tts` via Xiaomi MiMo |
+
+There's also a flag for cheap testing:
+
+| Variable | Effect |
+|---|---|
+| `MOCK_IMAGE=true` | Skip image generation; the renderer returns a static placeholder. Story, voice, and choices still run normally. Great for iterating on TTS without burning Runware credits. |
 
 See `apps/web/.env.example` for the exact shape.
 
@@ -64,7 +71,7 @@ Requires Node 20+ and pnpm 9+.
 ```bash
 pnpm install
 cp apps/web/.env.example apps/web/.env.local
-# fill in the nine env vars
+# fill in env vars (9 required + optional TTS/MOCK_IMAGE)
 pnpm dev
 # open http://localhost:3000
 ```
@@ -75,11 +82,12 @@ pnpm dev
 
 ```
 yume/
-├── apps/web/              Next.js 16 app — pages + API routes
+├── apps/web/              Next.js 16 app — pages + API routes (Vercel root)
 └── packages/
     ├── types/             shared TypeScript types
-    ├── ai-client/         unified OpenAI-compatible clients
-    └── engine/            three-stage AI orchestration (open core)
+    ├── ai-client/         unified OpenAI-compatible clients + Runware adapter
+    ├── tts-client/        Xiaomi MiMo TTS adapter
+    └── engine/            multi-agent AI orchestration (open core)
 ```
 
 `packages/engine` is the open core — pure TS, no Next.js or browser dependency. Import it directly to build your own visual-novel front-end (Tauri, Electron, CLI, anywhere).

@@ -4,7 +4,11 @@ import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// Capped at 60 for Vercel Hobby (300 allowed on Pro). The scene pipeline is
+// Writer + CharDesigner×N + Cinematographer + Painter — happy path 9–12s; the
+// tail (cold provider, multiple new characters) can push 30–45s, so 60 is a
+// reasonable headroom on Hobby.
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   let body: SceneRequest;

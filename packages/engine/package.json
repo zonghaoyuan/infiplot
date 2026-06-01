@@ -15,6 +15,7 @@
     "@yume/ai-client": "workspace:*",
     "@yume/tts-client": "workspace:*",
     "@yume/types": "workspace:*",
+    "jsonrepair": "^3.14.0",
     "sharp": "^0.33.5"
   }
 }
