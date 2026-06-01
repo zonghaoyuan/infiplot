@@ -6,8 +6,9 @@ import { jsonrepair, JSONRepairError } from "jsonrepair";
 //   3. Slice between first { and last } and parse.
 //   4. Apply targeted regex pre-repairs (see preRepair) and try jsonrepair.
 //
-// On final failure, logs the FULL raw model output so we can diagnose the
-// actual syntax error.
+// On final failure, logs the first 800 chars of the raw model output so we
+// can diagnose the actual syntax error without flooding logs or leaking
+// sensitive content.
 //
 // jsonrepair (npm package josdejong/jsonrepair — 2.3k+ stars) handles the
 // broad LLM-output failure modes: truncated JSON, missing commas/brackets,
@@ -86,7 +87,7 @@ export function parseJsonLoose<T>(raw: string): T {
     } catch (err) {
       const isRepairErr = err instanceof JSONRepairError;
       console.error(
-        `[parseJsonLoose] jsonrepair ${isRepairErr ? "could not repair" : "succeeded but JSON.parse rejected its output"}. Full raw model output:\n${raw}`,
+        `[parseJsonLoose] jsonrepair ${isRepairErr ? "could not repair" : "succeeded but JSON.parse rejected its output"}. Raw output (first 800 chars):\n${raw.slice(0, 800)}`,
       );
       throw err;
     }
