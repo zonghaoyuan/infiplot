@@ -75,6 +75,9 @@ importers:
       '@yume/types':
         specifier: workspace:*
         version: link:../types
+      jsonrepair:
+        specifier: ^3.14.0
+        version: 3.14.0
       sharp:
         specifier: ^0.33.5
         version: 0.33.5
@@ -592,6 +595,10 @@ packages:
 
   jiti@1.21.7:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
+    hasBin: true
+
+  jsonrepair@3.14.0:
+    resolution: {integrity: sha512-tWPGKMZf/8UPim+fcW2EfcQ/d/7aKUrP6IECz9G3Tu6Q5dX0orSleqJ9z6sSw7qrQkjF8/Edo4DvsWBZ8H+HNg==}
     hasBin: true
 
   lilconfig@3.1.3:
@@ -1239,6 +1246,8 @@ snapshots:
   is-number@7.0.0: {}
 
   jiti@1.21.7: {}
+
+  jsonrepair@3.14.0: {}
 
   lilconfig@3.1.3: {}
 

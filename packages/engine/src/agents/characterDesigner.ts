@@ -1,4 +1,4 @@
-import { chat, generateImage, uploadImage } from "@yume/ai-client";
+import { chat, generateImage } from "@yume/ai-client";
 import { provisionVoice } from "@yume/tts-client";
 import type {
   Character,
@@ -7,7 +7,7 @@ import type {
   Session,
 } from "@yume/types";
 import { parseJsonLoose } from "../jsonParser";
-import { mockImageBase64 } from "../mockImage";
+import { mockImageDataUri } from "../mockImage";
 import {
   CHARACTER_DESIGNER_SYSTEM,
   buildCharacterDesignerUserMessage,
@@ -24,8 +24,8 @@ import {
 //        which keeps appearance and vocal personality coherent)
 //
 //    2. In parallel:
-//       a. Image gen — base portrait from visualDescription + styleGuide
-//          then upload to Runware → get UUID for cheap re-reference
+//       a. Image gen — base portrait (Runware returns URL + UUID in one shot;
+//          no separate upload round-trip is needed for cheap re-reference)
 //       b. Voice provisioning — Xiaomi MiMo voicedesign from voiceDescription
 //          → reference audio for later voiceclone synth
 //
@@ -66,56 +66,38 @@ async function runDesignLLM(
   return parseJsonLoose<CharacterDesignOutput>(raw);
 }
 
-// Generate the per-character base portrait and upload it. The portrait is
-// a "concept sheet" — single character, neutral pose, plain background —
-// so it works well as a Runware referenceImages anchor for later scenes.
+// Generate the per-character base portrait. The portrait is a "concept
+// sheet" — single character, neutral pose, plain background — so it works
+// well as a Runware referenceImages anchor for later scenes.
 //
-// Returns both the base64 (for client-side asset use, e.g., 立绘登场
-// animations) and the Runware UUID (for cheap referencing in subsequent
-// Painter calls without resending the 100KB+ base64 each time).
+// Returns the URL (for any client display + URL-form references) and the
+// UUID (cheapest reference form for subsequent Painter calls). Both come
+// back in one `imageInference` response now that we use outputType=URL —
+// no separate upload step needed.
 //
-// The upload step is best-effort: if it fails, we still return the base64
-// so the next scene can pass it as a referenceImages entry directly (just
-// pays the bandwidth cost each call instead of once).
-async function renderAndUploadPortrait(
+// In mock mode we return the data URI as basePortraitUrl with no UUID
+// (Painter is short-circuited anyway, so the lack of a UUID is moot).
+async function renderPortrait(
   config: EngineConfig,
   charName: string,
   visualDescription: string,
   styleGuide: string,
-): Promise<{ basePortraitBase64?: string; basePortraitUuid?: string }> {
-  let base64: string;
+): Promise<{ basePortraitUrl?: string; basePortraitUuid?: string }> {
   try {
     if (config.mockImage) {
-      base64 = await mockImageBase64();
-    } else {
-      const prompt = buildCharacterPortraitPrompt(
-        charName,
-        visualDescription,
-        styleGuide,
-      );
-      base64 = await generateImage(config.image, prompt);
+      return { basePortraitUrl: await mockImageDataUri() };
     }
+    const prompt = buildCharacterPortraitPrompt(
+      charName,
+      visualDescription,
+      styleGuide,
+    );
+    const { imageUrl, imageUuid } = await generateImage(config.image, prompt);
+    return { basePortraitUrl: imageUrl, basePortraitUuid: imageUuid };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[characterDesigner] portrait gen failed for ${charName}: ${msg}`);
     return {}; // no portrait at all — degrade gracefully
-  }
-
-  // Skip upload in mock mode — the mock image is the same static SVG every
-  // time and uploading it gives us a UUID that points to a useless asset.
-  if (config.mockImage) {
-    return { basePortraitBase64: base64 };
-  }
-
-  try {
-    const uuid = await uploadImage(config.image, base64);
-    return { basePortraitBase64: base64, basePortraitUuid: uuid };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(
-      `[characterDesigner] portrait upload failed for ${charName}: ${msg} — will pass base64 in subsequent calls`,
-    );
-    return { basePortraitBase64: base64 };
   }
 }
 
@@ -157,8 +139,8 @@ export async function designCharacter(
   // Step 2 — parallel: portrait + voice provisioning.
   const tProvision = Date.now();
   const portraitPromise = visualDescription
-    ? renderAndUploadPortrait(config, charName, visualDescription, session.styleGuide)
-    : Promise.resolve({} as Awaited<ReturnType<typeof renderAndUploadPortrait>>);
+    ? renderPortrait(config, charName, visualDescription, session.styleGuide)
+    : Promise.resolve({} as Awaited<ReturnType<typeof renderPortrait>>);
   const voicePromise = provisionVoiceSafe(config, voiceDescription, charName);
 
   const [portrait, voice] = await Promise.all([portraitPromise, voicePromise]);
@@ -170,7 +152,7 @@ export async function designCharacter(
     name: charName,
     voiceDescription,
     visualDescription,
-    basePortraitBase64: portrait.basePortraitBase64,
+    basePortraitUrl: portrait.basePortraitUrl,
     basePortraitUuid: portrait.basePortraitUuid,
     voice,
   };

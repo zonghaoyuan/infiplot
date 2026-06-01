@@ -49,14 +49,14 @@ export async function startSession(
     characters: [],
   };
 
-  const { scene, sceneImageBase64, characters } = await directScene(config, session);
+  const { scene, sceneImageUrl, characters } = await directScene(config, session);
 
   tlog("[start] TOTAL", tTotal);
 
   return {
     sessionId: session.id,
     scene,
-    imageBase64: sceneImageBase64,
+    imageUrl: sceneImageUrl,
     characters,
   };
 }
@@ -71,7 +71,7 @@ export async function requestScene(
 ): Promise<SceneResponse> {
   const tTotal = Date.now();
 
-  const { scene, sceneImageBase64, characters } = await directScene(
+  const { scene, sceneImageUrl, characters } = await directScene(
     config,
     req.session,
   );
@@ -80,7 +80,7 @@ export async function requestScene(
 
   return {
     scene,
-    imageBase64: sceneImageBase64,
+    imageUrl: sceneImageUrl,
     characters,
   };
 }
@@ -95,7 +95,7 @@ export async function visionDecide(
   config: EngineConfig,
   req: VisionRequest,
 ): Promise<VisionResponse> {
-  const annotated = await annotateClick(req.prevImageBase64, req.click);
+  const annotated = await annotateClick(req.prevImageUrl, req.click);
   const current = req.session.history.at(-1)?.scene ?? null;
   return interpret(config.vision, annotated, current);
 }

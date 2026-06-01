@@ -14,9 +14,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.session || !body.prevImageBase64 || !body.click) {
+  if (!body.session || !body.prevImageUrl || !body.click) {
     return NextResponse.json(
-      { error: "session, prevImageBase64, click are required" },
+      { error: "session, prevImageUrl, click are required" },
       { status: 400 },
     );
   }

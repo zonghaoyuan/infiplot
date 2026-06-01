@@ -4,21 +4,23 @@ import { fetchWithRetry } from "./fetchWithRetry";
 // Runware uses its own task-array protocol (not OpenAI-compatible).
 // POST <baseUrl> with [{ taskType: "imageInference", ... }]; errors come
 // back as a 200 with `errors[]`, so we have to inspect the body either way.
-
-// FLUX img2img specifics:
-// - strength < 0.8 has minimal-to-no visible effect on FLUX models (per
-//   Runware docs); we default to 0.85 which leaves room to deviate while
-//   still anchoring on the seed image's composition.
-// - referenceImages caps at 4 per request; the FLUX.2 [klein] 9B KV model
-//   (runware:400@6) accelerates multi-reference inference by ~2.5× via its
-//   KV cache for reference latents (cached only WITHIN one inference run —
-//   not persisted across API calls, hence the upload-once-then-reference
-//   strategy below).
+//
+// referenceImages accepts UUIDs, public URLs, or base64. UUID is cheapest
+// in transport cost; URL is next; base64 last resort. The FLUX.2 [klein] 9B
+// KV variant (runware:400@6) accelerates multi-reference inference ~2.5× via
+// its KV cache for reference latents (cached only within one inference run,
+// not persisted across calls — hence the need to keep stable UUIDs/URLs for
+// later reuse).
+//
+// We request outputType=URL so Runware persists the image and returns a CDN
+// link the client can render directly. The same response also carries the
+// image UUID, so we never need a separate uploadImage round-trip to anchor
+// future referenceImages.
 const DEFAULT_IMG2IMG_STRENGTH = 0.85;
 const MAX_REFERENCE_IMAGES = 4;
 
 type RunwareImageResult = {
-  imageBase64Data?: string;
+  imageURL?: string;
   imageUUID?: string;
 };
 type RunwareError = {
@@ -33,32 +35,40 @@ type RunwareResponse = {
 
 export type GenerateImageOptions = {
   /**
-   * Reference image (UUID, plain base64, or data URI) to use as the
-   * img2img starting point. When set, FLUX preserves the seed image's
-   * composition and applies `strength` to allow deviation from it.
-   * Used for cross-scene visual continuity when sceneKey hits.
+   * Reference image (UUID, public URL, or base64) for img2img. When set,
+   * FLUX preserves the seed image's composition and applies `strength` to
+   * deviate. NOTE: FLUX.2 [klein] 9B KV does NOT support seedImage — use
+   * `referenceImages` for visual continuity instead.
    */
   seedImage?: string;
   /**
-   * Reference images (UUIDs or base64) to condition the generation on —
-   * typically character portraits to anchor identity / outfit / style
-   * across scenes. Runware caps at 4; we silently truncate beyond that.
+   * Reference images (UUIDs, URLs, or base64) to condition generation on —
+   * typically character portraits + the prior scene image. Runware caps at 4;
+   * we silently truncate beyond that.
    */
   referenceImages?: string[];
   /** 0–1, FLUX needs ≥ 0.8 to actually have an effect. */
   strength?: number;
 };
 
+export type GenerateImageResult = {
+  /** Public CDN URL of the generated image (Runware-hosted). */
+  imageUrl: string;
+  /** Stable UUID for cheap re-reference in later `referenceImages`. */
+  imageUuid: string;
+};
+
 // ──────────────────────────────────────────────────────────────────────
-//  generateImage — text-to-image (default) or img2img / multi-reference
-//  when seedImage / referenceImages are supplied. Returns base64.
+//  generateImage — text-to-image (default) or referenceImages-conditioned.
+//  Returns both the public URL (for client display + future references)
+//  and the UUID (cheapest reference form for subsequent calls).
 // ──────────────────────────────────────────────────────────────────────
 
 export async function generateImage(
   config: ProviderConfig,
   prompt: string,
   options?: GenerateImageOptions,
-): Promise<string> {
+): Promise<GenerateImageResult> {
   const url = config.baseUrl.replace(/\/$/, "");
 
   const task: Record<string, unknown> = {
@@ -71,8 +81,9 @@ export async function generateImage(
     steps: 4,
     CFGScale: 3.5,
     numberResults: 1,
-    outputType: "base64Data",
+    outputType: "URL",
     outputFormat: "PNG",
+    includeCost: false,
   };
 
   if (options?.seedImage) {
@@ -109,66 +120,11 @@ export async function generateImage(
     );
   }
 
-  const b64 = json.data?.[0]?.imageBase64Data;
-  if (!b64) {
-    throw new Error(`No image in Runware response: ${text.slice(0, 300)}`);
+  const result = json.data?.[0];
+  const imageUrl = result?.imageURL;
+  const imageUuid = result?.imageUUID;
+  if (!imageUrl || !imageUuid) {
+    throw new Error(`No image URL/UUID in Runware response: ${text.slice(0, 300)}`);
   }
-  return b64;
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  uploadImage — registers a base64 image on Runware and returns its
-//  UUID, so subsequent generateImage calls can pass the UUID in
-//  referenceImages / seedImage instead of resending the base64 payload
-//  every time. Character base portraits and scene snapshots both flow
-//  through this path.
-//
-//  Runware exposes the imageUpload taskType for exactly this purpose.
-//  Returns the UUID. Caller treats a thrown error as "fall back to
-//  sending base64 next time" — non-fatal.
-// ──────────────────────────────────────────────────────────────────────
-
-export async function uploadImage(
-  config: ProviderConfig,
-  base64: string,
-): Promise<string> {
-  const url = config.baseUrl.replace(/\/$/, "");
-
-  const body = [
-    {
-      taskType: "imageUpload",
-      taskUUID: crypto.randomUUID(),
-      image: `data:image/png;base64,${base64}`,
-    },
-  ];
-
-  const res = await fetchWithRetry(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  const text = await res.text();
-  let json: RunwareResponse;
-  try {
-    json = JSON.parse(text) as RunwareResponse;
-  } catch {
-    throw new Error(`Image upload API error ${res.status}: ${text.slice(0, 500)}`);
-  }
-
-  if (json.errors?.length) {
-    const e = json.errors[0]!;
-    throw new Error(
-      `Runware upload error [${e.code ?? "unknown"}]: ${e.message ?? "no message"}`,
-    );
-  }
-
-  const uuid = json.data?.[0]?.imageUUID;
-  if (!uuid) {
-    throw new Error(`No UUID in upload response: ${text.slice(0, 300)}`);
-  }
-  return uuid;
+  return { imageUrl, imageUuid };
 }

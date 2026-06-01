@@ -1,4 +1,4 @@
-import { chat, uploadImage } from "@yume/ai-client";
+import { chat } from "@yume/ai-client";
 import type {
   Character,
   EngineConfig,
@@ -29,7 +29,7 @@ import { INSERT_BEAT_SYSTEM, buildInsertBeatUserMessage } from "./prompts";
 //      │
 //      ├─ CharacterDesigner LLM × N    (parallel per new char)
 //      │     │
-//      │     ├─ portrait gen + upload  (parallel within agent)
+//      │     ├─ portrait gen (Runware returns URL + UUID in one call)
 //      │     └─ voice provisioning     (parallel within agent)
 //      │
 //      ├─ Cinematographer LLM          (parallel with all of the above)
@@ -37,13 +37,11 @@ import { INSERT_BEAT_SYSTEM, buildInsertBeatUserMessage } from "./prompts";
 //      └─ wait for all parallel branches
 //      │
 //      ▼
-//    Painter (FLUX referenceImages — two-tier degradation chain)
+//    Painter — generateImage with referenceImages (UUID/URL refs only;
+//              no base64 to upload, since outputType=URL gives both back)
 //      │
 //      ▼
-//    upload final scene image → Scene.imageUuid
-//      │
-//      ▼
-//    return { scene, sceneImageBase64, characters }
+//    return { scene, sceneImageUrl, characters }
 //
 //  The Cinematographer intentionally does NOT depend on CharacterDesigner
 //  output — it only positions named characters in the frame, not their
@@ -80,7 +78,7 @@ export function mergeCharacters(
       ...u,
       voice: u.voice ?? prev.voice,
       visualDescription: u.visualDescription ?? prev.visualDescription,
-      basePortraitBase64: u.basePortraitBase64 ?? prev.basePortraitBase64,
+      basePortraitUrl: u.basePortraitUrl ?? prev.basePortraitUrl,
       basePortraitUuid: u.basePortraitUuid ?? prev.basePortraitUuid,
       voiceDescription: u.voiceDescription || prev.voiceDescription,
     });
@@ -92,27 +90,22 @@ export function mergeCharacters(
 // scene — used by the Painter as one of the `referenceImages` (NOT as a
 // seedImage, because FLUX.2 [klein] 9B KV does not support seedImage).
 //
-// Returns the UUID if available (cheap reference, ~36 chars over the wire),
-// else the base64 of the most recent matching scene's image. Returns
-// undefined when no prior scene shares the current sceneKey.
+// Prefer URL over UUID for the same reason painter.collectReferenceImages
+// does: the UUID returned by `imageInference` isn't always recognized by
+// Runware's `referenceImages` pipeline, surfacing as `failedToTransferImage`.
+// The URL is Runware's own CDN link — they can always fetch it. UUID is kept
+// as a backstop. Returns undefined when no prior scene shares the sceneKey.
 function pickPriorSceneReference(
   session: Session,
   currentSceneKey: string | undefined,
-  priorImageBase64ByUuid: Map<string, string>,
 ): { priorSceneReference?: string; priorSceneKey?: string } {
   if (!currentSceneKey) return {};
   for (let i = session.history.length - 1; i >= 0; i--) {
     const prior = session.history[i]!.scene;
     if (prior.sceneKey === currentSceneKey) {
-      if (prior.imageUuid) {
-        return {
-          priorSceneReference: prior.imageUuid,
-          priorSceneKey: prior.sceneKey,
-        };
-      }
-      const cached = priorImageBase64ByUuid.get(prior.id);
-      if (cached) {
-        return { priorSceneReference: cached, priorSceneKey: prior.sceneKey };
+      const ref = prior.imageUrl ?? prior.imageUuid;
+      if (ref) {
+        return { priorSceneReference: ref, priorSceneKey: prior.sceneKey };
       }
     }
   }
@@ -121,25 +114,18 @@ function pickPriorSceneReference(
 
 export type SceneResult = {
   scene: Scene;
-  sceneImageBase64: string;
+  sceneImageUrl: string;
   characters: Character[];
 };
 
 // ──────────────────────────────────────────────────────────────────────
 //  directScene — the multi-agent pipeline. Used by orchestrator's
 //  startSession and requestScene.
-//
-//  priorImageBase64ByUuid: optional map from prior Scene.id → base64
-//  the caller has on-hand. If a sceneKey-hit scene's imageUuid is missing
-//  but the base64 is cached locally, we can still feed it as one of the
-//  Painter's referenceImages. Pass an empty map when caller has no cache
-//  (orchestrator does pass it for the start-session bootstrap).
 // ──────────────────────────────────────────────────────────────────────
 
 export async function directScene(
   config: EngineConfig,
   session: Session,
-  priorImageBase64ByUuid: Map<string, string> = new Map(),
 ): Promise<SceneResult> {
   const tTotal = Date.now();
 
@@ -168,7 +154,6 @@ export async function directScene(
   const { priorSceneReference, priorSceneKey } = pickPriorSceneReference(
     session,
     writerOut.sceneKey,
-    priorImageBase64ByUuid,
   );
 
   // Stage 2 — parallel: CharacterDesigner(s) and Cinematographer.
@@ -237,7 +222,7 @@ export async function directScene(
   );
 
   const tPainter = Date.now();
-  const sceneImageBase64 = await runPainter(
+  const painted = await runPainter(
     config,
     {
       integratedPrompt: cinemaOut.integratedPrompt,
@@ -248,22 +233,6 @@ export async function directScene(
     entryBeat,
   );
   tlog("[directScene] Painter", tPainter);
-
-  // Stage 4 — best-effort upload of the final scene image so the NEXT
-  // sceneKey-match call can reference its UUID instead of carrying base64.
-  // If upload fails, the scene still works; only loses cheap referencing
-  // on the next hop. Don't wait on mock images (static placeholder).
-  let imageUuid: string | undefined;
-  if (!config.mockImage) {
-    try {
-      const tUpload = Date.now();
-      imageUuid = await uploadImage(config.image, sceneImageBase64);
-      tlog("[directScene] image upload", tUpload);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[directScene] scene image upload failed: ${msg} — sceneKey reuse will need base64 fallback`);
-    }
-  }
 
   const scene: Scene = {
     id: newSceneId(),
@@ -276,12 +245,13 @@ export async function directScene(
     beats: writerOut.beats,
     entryBeatId: writerOut.entryBeatId,
     sceneKey: writerOut.sceneKey,
-    imageUuid,
+    imageUuid: painted.kind === "real" ? painted.imageUuid : undefined,
+    imageUrl: painted.imageUrl,
   };
 
   tlog("[directScene] TOTAL", tTotal);
 
-  return { scene, sceneImageBase64, characters };
+  return { scene, sceneImageUrl: painted.imageUrl, characters };
 }
 
 // ──────────────────────────────────────────────────────────────────────

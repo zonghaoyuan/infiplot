@@ -1,13 +1,45 @@
+import { jsonrepair, JSONRepairError } from "jsonrepair";
+
 // Strict-then-forgiving JSON parser for LLM output. Tries in order:
 //   1. Direct JSON.parse on the trimmed text.
 //   2. Extract from ```json``` fenced block.
 //   3. Slice between first { and last } and parse.
-//   4. Apply best-effort regex repair (trailing commas, missing commas
-//      between adjacent values) and try again.
+//   4. Apply targeted regex pre-repairs (see preRepair) and try jsonrepair.
 //
 // On final failure, logs the first 800 chars of the raw model output so we
-// can see what the LLM did wrong (the standard error message only shows
-// the position, not the surrounding context).
+// can diagnose the actual syntax error without flooding logs or leaking
+// sensitive content.
+//
+// jsonrepair (npm package josdejong/jsonrepair — 2.3k+ stars) handles the
+// broad LLM-output failure modes: truncated JSON, missing commas/brackets,
+// single quotes, Python None/True/False, JS comments. We layer a small set
+// of targeted pre-repairs in front of it for failure modes jsonrepair can't
+// disambiguate on its own (see preRepair).
+
+// ──────────────────────────────────────────────────────────────────────
+//  preRepair — fix specific LLM error patterns before handing to jsonrepair.
+//
+//  Pattern 1: missing closing quote on a key.
+//     Broken:  "lineDelivery: "语速稍快...",
+//     Correct: "lineDelivery": "语速稍快...",
+//
+//  jsonrepair fails on this because it's ambiguous — "lineDelivery: " could
+//  be a complete string value, leaving "语速稍快..." as a syntax error. But
+//  if we see  "<key-like>:<whitespace>"  we know structurally it should be
+//  a key-colon-value triplet.
+//
+//  Match constraints:
+//    - The key match excludes  "  \n  :  so we can't overrun into adjacent
+//      fields or absorb the colon as part of the key name.
+//    - The colon must be followed by whitespace and another  "  (the value
+//      string's opening quote). This is what disambiguates from a value
+//      string that happens to contain a colon.
+// ──────────────────────────────────────────────────────────────────────
+
+function preRepair(s: string): string {
+  return s.replace(/"([^"\n:]+):(\s+)"/g, '"$1":$2"');
+}
+
 export function parseJsonLoose<T>(raw: string): T {
   const trimmed = raw.trim();
 
@@ -28,54 +60,36 @@ export function parseJsonLoose<T>(raw: string): T {
 
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
-  if (first !== -1 && last > first) {
-    const slice = trimmed.slice(first, last + 1);
-    try {
-      return JSON.parse(slice) as T;
-    } catch {
-      // Last resort: try repairing common LLM-output malformations.
-      const repaired = repairJsonString(slice);
+  const slice =
+    first !== -1 && last > first ? trimmed.slice(first, last + 1) : trimmed;
+
+  // Try the brace-sliced version first; if there were no braces at all
+  // (slice === trimmed), this is just a second attempt at the raw text.
+  try {
+    return JSON.parse(slice) as T;
+  } catch {
+    // Targeted pre-repair (no-op on already-valid JSON) → jsonrepair.
+    const prefixed = preRepair(slice);
+
+    // If preRepair changed something, give the cheap path another shot —
+    // the input might already be valid now without needing jsonrepair.
+    if (prefixed !== slice) {
       try {
-        return JSON.parse(repaired) as T;
-      } catch (err) {
-        console.error(
-          `[parseJsonLoose] all strategies failed. Raw output (first 800 chars):\n${raw.slice(0, 800)}`,
-        );
-        throw err;
+        return JSON.parse(prefixed) as T;
+      } catch {
+        // fall through to jsonrepair
       }
     }
+
+    try {
+      const repaired = jsonrepair(prefixed);
+      return JSON.parse(repaired) as T;
+    } catch (err) {
+      const isRepairErr = err instanceof JSONRepairError;
+      console.error(
+        `[parseJsonLoose] jsonrepair ${isRepairErr ? "could not repair" : "succeeded but JSON.parse rejected its output"}. Raw output (first 800 chars):\n${raw.slice(0, 800)}`,
+      );
+      throw err;
+    }
   }
-
-  console.error(
-    `[parseJsonLoose] no { ... } found. Raw output (first 800 chars):\n${raw.slice(0, 800)}`,
-  );
-  throw new Error(`Failed to parse JSON from model output: ${raw.slice(0, 200)}`);
-}
-
-// Best-effort repair of LLM-typical JSON syntax errors. Targeted at the two
-// most common failures we see in practice:
-//   1. Trailing comma before } or ].
-//   2. Missing comma between two adjacent JSON values (the specific error
-//      mode we hit at position 3390).
-//
-// Deliberately conservative — does NOT try to fix unclosed strings,
-// unbalanced braces, or strip JS-style comments. The comment-stripping
-// path was previously included but would corrupt JSON string values
-// containing `//` (e.g. URLs like "https://example.com"); since LLMs in
-// `responseFormat: "json_object"` mode essentially never emit comments,
-// dropping that step is a net win for safety.
-function repairJsonString(s: string): string {
-  return s
-    // 1. Strip trailing commas before } or ].
-    .replace(/,(\s*[}\]])/g, "$1")
-    // 2. Insert missing commas between two adjacent JSON values. The cases:
-    //      } { → },{        ] [ → ],[        } [ → },[        ] { → ],{
-    //      "string" "key"   "string" {       "string" [
-    //      number then "key" / { / [
-    //
-    //    The regex looks for a closing token (} ] " or a digit) followed by
-    //    a newline and an opening token (} ] " a letter), and inserts a
-    //    comma between them. Requires the newline (\s*\n\s*) so it only
-    //    fires across line boundaries, never within a single-line value.
-    .replace(/(\}|\]|"|\d)(\s*\n\s*)(\{|\[|")/g, "$1,$2$3");
 }
