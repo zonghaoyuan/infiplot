@@ -71,6 +71,49 @@ export async function generateImage(
 ): Promise<GenerateImageResult> {
   const url = config.baseUrl.replace(/\/$/, "");
 
+  // 1. OpenAI-compatible route (GPTGod, DALL-E, etc.)
+  const isOpenAi = !url.includes("runware.ai") || config.model === "image-2-vip";
+  if (isOpenAi) {
+    const endpoint = url.endsWith("/images/generations") ? url : `${url}/images/generations`;
+    console.log(`[ai-client] Calling OpenAI-compatible image generations at: ${endpoint} with model: ${config.model}`);
+    
+    const res = await fetchWithRetry(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        prompt: prompt,
+        n: 1,
+        size: "1792x1024", // Use horizontal size (16:9)
+      }),
+    });
+
+    const text = await res.text();
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
+    }
+
+    if (json.error) {
+      throw new Error(`OpenAI Image API error: ${json.error.message || JSON.stringify(json.error)}`);
+    }
+
+    const data = json.data?.[0];
+    const imageUrl = data?.url;
+    if (!imageUrl) {
+      throw new Error(`No image URL in OpenAI response: ${text.slice(0, 300)}`);
+    }
+    // Generate a mock UUID since OpenAI compatible endpoint doesn't have UUIDs
+    const imageUuid = crypto.randomUUID();
+    return { imageUrl, imageUuid };
+  }
+
+  // 2. Runware task-array route
   const task: Record<string, unknown> = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),

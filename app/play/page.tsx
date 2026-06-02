@@ -962,7 +962,7 @@ function PlayInner() {
               title="全屏 (F)"
             >
               <i className="fa-solid fa-expand text-[10px]" />
-              F · 全 · 屏
+              F · 键 · 全 · 屏
             </button>
           }
           aboveCanvasLeft={

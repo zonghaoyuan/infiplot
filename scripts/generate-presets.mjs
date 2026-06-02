@@ -40,19 +40,24 @@ if (!BASE_URL || !API_KEY || !MODEL) {
 const STYLES = [
   "古典厚涂油画 (学术奇幻)",
   "极简中国水墨 (Image 0参考升级版)",
-  "浮世绘",
+  "浮世绘木刻 (美人画升级)",
   "莫高窟壁画风 (敦煌学)",
+  "细密画 (波斯/伊斯兰风)",
   "镶嵌画 (拜占庭/马赛克)",
   "彩绘玻璃 (哥特风)",
-  "吉卜力治愈手绘",
-  "京阿尼细腻日常",
+  "吉卜力治愈手绘 (Image 4参考)",
+  "京阿尼细腻日常 (Image 5参考)",
   "新海诚唯美光影 (Image 2参考)",
   "赛博朋克 / 赛璐珞二次元",
   "Galgame CG 梦幻光影",
   "3D 动漫电影质感",
   "蒸汽波 (Vaporwave) 赛璐珞",
+  "极简矢量插画 (Minimalist Vector)",
+  "低多边形 (Low Poly)",
+  "双重曝光 (Double Exposure)",
   "波普艺术 (Pop Art)",
   "故障艺术 (Glitch Art)",
+  "瑞士平面设计 (Typography-Centric)",
   "剪纸艺术 (Papercut)",
   "科幻：太阳朋克 (Solar Punk)",
   "奇幻：爱手艺 (Lovecraftian Horror)",
@@ -61,41 +66,43 @@ const STYLES = [
   "哥特言情：庄园废墟 (Gothic Romance)",
   "格林童话：暗黑森林 (Fairytale Noir)",
   "废土科幻 (Post-Apocalyptic)",
-  "都市幻想：隐形世界 (Urban Fantasy)"
+  "都市幻想：隐形世界 (Urban Fantasy)",
+  "文字与图形：抽象主义 (BookPosterLayout)"
 ];
 
 const SYSTEM_PROMPT = `你是一个顶级互动式视觉小说剧情策划和爆款短剧编剧。
-你精通各种网文爽点与戏剧冲突冲突（例如：战神归来、赘婿亮剑、系统觉醒、都市异能、白月光、逆袭、豪门恩怨等各种爆款套路）。
-请根据给定的 24 个艺术/视觉风格，分别从「男性向（面向男玩家）」和「女性向（面向女玩家）」视角，为每个风格策划一个极具戏剧张力、代入感极强的开场预设剧情。
+你精通各种网文爽点与戏剧冲突（例如：战神归来、赘婿亮剑、系统觉醒、都市异能、白月光、逆袭、豪门恩怨、重生、虐心、甜宠、扮猪吃虎等爆款套路）。
+请根据给定的 30 个艺术/视觉风格，分别从「男性向（面向男玩家）」和「女性向（面向女玩家）」视角，为每个风格策划一个极具戏剧张力、代入感极强的开场预设剧情。
 
 每个预设剧情包含：
-1. title: 故事标题（4-8字，吸睛爆款风格，例如《赘婿亮剑》《废柴嫡女》）
-2. outline: 开场剧情简介 / 钩子（1-3句话，100字以内，充满悬念与强冲突，给玩家强烈的代入感与爽点）。例如："五年前我战死边境，灵柩送回家时她抱着儿子改嫁了。今天我站在他们的婚礼门口，新郎刚要骂人，跪在他面前的二十个保镖喊了我一声「上将」。"
-3. style: 对应的风格名称（必须与输入一致）
+1. title: 故事标题（4-8字，吸睛爆款风格，例如《贤者陨落》《棺中新娘》《辐射新娘》）
+2. outline: 开场剧情简介 / 钩子（1-3句话，100字以内，充满悬念与强冲突，给玩家强烈的代入感与爽点）。
+3. tags: 数组，包含 2 到 3 个最契合 the grid 系统的网文/短剧中文分类标签（例如：["逆袭", "系统", "都市玄幻"]、["重生", "虐心", "科幻废土"]、["甜宠", "穿越", "古风言情"]等）。
+4. style: 对应的风格名称（必须与输入一致）
 
 要求：
-- 请严格返回 JSON 格式，包含 "男性向" 数组（24个）和 "女性向" 数组（24个）。
+- 请严格返回 JSON 格式，包含 "男性向" 数组（30个）和 "女性向" 数组（30个）。
 - 不要返回任何 markdown 标记包裹的文本，只返回纯合法的 JSON 字符串。
-- 确保数组中的元素严格对应输入的 24 个艺术风格（按顺序一一对应）。
-- 内容必须极具网文爆款爽文短剧感，有强烈的冲突和反转。`;
+- 确保数组中的元素严格对应输入的 30 个艺术风格（按顺序一一对应，共 60 个故事卡片）。
+- 内容必须极具网文爆款爽文短剧感，有强烈的冲突 and 反转。`;
 
-const USER_PROMPT = `请按照顺序，为以下 24 个风格各生成一个男性向和一个女性向的预设故事卡片：
+const USER_PROMPT = `请按照顺序，为以下 30 个风格各生成一个男性向和一个女性向的预设故事卡片（包含 title, outline, tags, style 字段）：
 ${STYLES.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 请严格按照如下 JSON 结构返回（不要有 \`\`\`json 标记，只输出纯 JSON）：
 {
   "男性向": [
-    { "title": "...", "outline": "...", "style": "古典厚涂油画 (学术奇幻)" },
+    { "title": "...", "outline": "...", "tags": ["...", "..."], "style": "古典厚涂油画 (学术奇幻)" },
     ...
   ],
   "女性向": [
-    { "title": "...", "outline": "...", "style": "古典厚涂油画 (学术奇幻)" },
+    { "title": "...", "outline": "...", "tags": ["...", "..."], "style": "古典厚涂油画 (学术奇幻)" },
     ...
   ]
 }`;
 
 async function main() {
-  console.log("[presets] Calling LLM API to generate 24 story presets...");
+  console.log("[presets] Calling LLM API to generate 30 story presets with tags...");
   const t0 = Date.now();
   const url = BASE_URL.replace(/\/$/, "") + "/chat/completions";
   
@@ -131,7 +138,6 @@ async function main() {
 
   let parsed;
   try {
-    // Strip potential markdown wrapper codeblocks if any
     const cleanJsonText = rawText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
     parsed = JSON.parse(cleanJsonText);
   } catch (e) {
@@ -139,16 +145,22 @@ async function main() {
     process.exit(1);
   }
 
-  if (!parsed["男性向"] || !parsed["女性向"] || parsed["男性向"].length !== 24 || parsed["女性向"].length !== 24) {
+  if (!parsed["男性向"] || !parsed["女性向"] || parsed["男性向"].length !== 30 || parsed["女性向"].length !== 30) {
     console.error("Invalid output structure or item count mismatch. Male count:", parsed["男性向"]?.length, "Female count:", parsed["女性向"]?.length);
     process.exit(1);
   }
 
-  console.log(`[presets] Successfully generated 48 stories in ${((Date.now() - t0)/1000).toFixed(1)}s.`);
+  console.log(`[presets] Successfully generated 60 stories in ${((Date.now() - t0)/1000).toFixed(1)}s.`);
 
   // Write new STORIES constant to apps/web/app/page.tsx
   console.log("[presets] Reading page.tsx...");
   let pageContent = readFileSync(PAGE_FILE, "utf8");
+
+  // Normalize line endings to LF
+  const hasCrlf = pageContent.includes('\r\n');
+  if (hasCrlf) {
+    pageContent = pageContent.replace(/\r\n/g, '\n');
+  }
 
   // Format the STORIES constant string
   const storiesString = `const STORIES: Record<Gender, StoryContent[]> = {
@@ -157,7 +169,6 @@ async function main() {
 };`;
 
   // Locate the old STORIES constant
-  // Match `const STORIES: Record<Gender, StoryContent[]> = {` up to `};`
   const storiesRegex = /const STORIES: Record<Gender, StoryContent\[\]> = \{[\s\S]*?\n\};/m;
   if (!storiesRegex.test(pageContent)) {
     console.error("Could not find 'const STORIES: Record<Gender, StoryContent[]> = {' in page.tsx!");
@@ -165,8 +176,14 @@ async function main() {
   }
 
   pageContent = pageContent.replace(storiesRegex, storiesString);
+
+  // Restore line endings if they were originally CRLF
+  if (hasCrlf) {
+    pageContent = pageContent.replace(/\n/g, '\r\n');
+  }
+
   writeFileSync(PAGE_FILE, pageContent, "utf8");
-  console.log("[presets] Successfully updated page.tsx with the new 48 story cards!");
+  console.log("[presets] Successfully updated page.tsx with the new 60 story cards (including tags)!");
 }
 
 main().catch(e => {

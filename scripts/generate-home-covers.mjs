@@ -39,37 +39,78 @@ if (!BASE_URL || !API_KEY || !MODEL) {
   process.exit(2);
 }
 
-const STYLE_PROMPTS = [
-  "Dark fantasy oil painting style, a sprawling clockwork steampunk city built into a mountain range at twilight, immense gothic spires with glowing green lamps, complex gears and platforms. Richly detailed, impasto texture, dramatic academic lighting. A grand airship arrives at a high dock. Horizontal composition with massive clear dark sky for typography.",
-  "Minimalist Chinese ink wash style, a lone immortal cultivator sitting on a precipice, facing an endless sea of clouds and distant jagged peaks. Ethereal, sparse composition with poetic brushstrokes, monochrome palette with subtle blue hints. Very large blank mist area for text placement.",
-  "Ukiyo-e woodblock print style, a majestic red and gold phoenix with elaborate trailing feathers rising above a wave-crested dark blue sea, Mount Fuji visible through cherry branches. Bold outlines, flat colors with paper texture, ancient and mystical atmosphere. Central clear area in the sea and sky for typography.",
-  "Dunhuang fresco style, a celestial apsaras flying with flowing scarves, holding a Lute, surrounded by stylized lotus flowers and floating geometric patterns on an aged stucco wall. Muted, oxidized mineral colors, delicate line art, historical and divine ambiance. Side vertical area cleared for titles.",
-  "Byzantine mosaic style, an iconic portrait of a warrior saint with golden armor and a halo, composed of thousands of small, glittering glass tesseræ. Deep blues and golds, spiritual and ancient feel, flat background. Background field of gold tiles left blank for text.",
-  "Stained glass style, a depiction of a griffin battling a serpent, framed by gothic archways and trefoils. Vibrant, translucent jewel colors, bold black leading lines. The image should look like an ancient window panel. Outer panels of plain blue glass left clear for text.",
-  "Ghibli hand-painted watercolor style, a detailed concept art of a girl and her small companion creature running through a vast wildflower meadow toward a fantastical airship. Natural daylight, soft washes, nostalgic feel. Upper left sky area is negative space for typography.",
-  "KyoAni anime style, fine line art, a detailed high school girl sitting by a library window during light rain, warm library light contrasting the cool moonlight outside. Deep emotional atmosphere, delicate expression. Empty right-side foreground area for title.",
-  "Makoto Shinkai anime style, hyper-detailed, a wide panoramic night view of a glowing cherry tree under a dramatic starry sky with a comet trail, a lonely high school girl in a uniform looking up. Brilliant lighting effects, vivid colors. Significant blank space in the upper atmosphere for text.",
-  "Cyberpunk anime style, cel-shaded animation, a tech-wear protagonist standing on a rainy rooftop, looking out at a dense, neon-drenched futuristic megacity with flying vehicles. Hard edges, high saturation, sharp contrast. Massive upper background sky area for title placement.",
-  "High-quality Galgame CG illustration, a dreamlike beach scene with sparkling waves, a beautiful girl with pastel pink hair in a white summer dress smiling warmly. Pastel colors, bloom lighting, clean composition, soft focus. Significant negative space in the sky and sea area for text.",
-  "Cinematic 3D animated film style (like Makoto Shinkai or Pixar), a high-resolution render of a young boy pilot fixing a small propeller plane in a rustic hangar at sunrise. Volumetric lighting, warm colors, deep textures, cinematic composition. Blank wall space and open doorway area for text.",
-  "Vaporwave aesthetic, anime style, a nostalgic portrait of a character with purple hair wearing sunglasses, a geometric grid floor and palm trees, background sunset over a purple ocean. Glitch effects, soft neon pink and blue palette, retro feel. Blank foreground grid area for title.",
-  "Pop Art style illustration, a close-up of a glamorous woman with red lips and a speech bubble with an exclamation point, rendered with comic book dots and bold outlines. High-saturation contrasting colors. Speech bubble and large background color blocks left blank for text.",
-  "Glitch art style portrait, a character profile distorted by data corruption, pixel sorting, and digital artifacts in cyan, magenta, and yellow. Cybernetic, high-tech and moody atmosphere. Dark, uncorrupted negative space in the upper background for typography.",
-  "Multilayered papercut art style, a 3D landscape of a deep forest and a fairytale castle, made of staggered paper layers with intricate cutouts. Backlighting, soft shadows, dimensional depth. Blank background layer cleared for title placement.",
-  "Solar Punk art style, a wide view of a sustainable, futuristic city integrated with dense green rooftop gardens and vertical farms, illuminated by clean solar and wind energy. Bright, optimistic lighting, organic textures. Large foreground plaza area cleared for titles.",
-  "Dark cosmic horror illustration, a lone explorer stands on a desolate shore, gazing at a massive, ancient, indescribable eldritch entity rising from a stormy sea. Moody, muted cool colors, dramatic lighting, visible brushstrokes. The dark, stormy sky quadrant left completely blank for text.",
-  "Modern urban noir, a minimalist silhouette of a man in a trench coat, standing in a dark, wet alleyway under a single buzzing neon sign reflecting on puddles. High contrast, cinematic noir lighting, deep shadows. The wet cobblestone ground left mostly dark for typography.",
-  "Cozy mystery book cover illustration, a charming, warm English village scene at night, snow on the thatched roofs, golden light from a bookstore window, and a single cat perched on a fence. Comforting and mysterious feel. Significant background sky and foreground pavement area for title.",
-  "Gothic romance illustration, a wide panoramic view of a young woman in a flowing dark velvet dress, standing before the desolate, moonlit ruins of a grand gothic manor on a foggy cliff. Muted greys and blues, romantic and melancholic. The upper background cliff and sky for bold titles.",
-  "Dark fairytale illustration, a wide shot of a small girl in a red cloak walking into a massive, dark, twisted ancient forest where the trees look like claws. Grimm's style, classical illustration, mood of awe and dread. The dark foreground forest ground left blank for text.",
-  "Post-apocalyptic landscape illustration, a vast desert wasteland with the rusted remains of overgrown highway and a fallen Statue of Liberty in the distance under a dusty orange sky. Muted cool and warm colors. Significant clear ground and sky area for text.",
-  "Urban fantasy concept art, a detailed view of a hidden, glowing magical pathway revealed underneath a busy modern pedestrian bridge in a rain-streaked metropolitan city. Contrast of mundane and magical. Minimal detail in the wet street foreground and upper sky for titles."
+// 30 Male-Oriented Custom Prompts (focused on power, handsome heroes, and action)
+const MALE_PROMPTS = [
+  "Dark fantasy oil painting style, vertical composition. Close-up portrait of a fiercely handsome grand mage with silver-streaked hair and glowing green magical eyes, wearing a tattered velvet robe with heavy steel chains wrapped around his shoulders. Behind him, a towering, ruined magical academy under a stormy dark sky. Dramatic chiaroscuro lighting, rich impasto textures.",
+  "Minimalist Chinese ink wash style, vertical composition. An elegantly handsome young scholar with flowing robes, holding a luminous glowing calligraphy brush, standing on a misty cliff. From his brushstrokes, a magnificent monochrome dragon emerges into the sky. Ethereal, sparse composition, monochrome palette with subtle blue hints, large blank mist area at the top.",
+  "Ukiyo-e woodblock print style, vertical composition. A fiercely handsome young samurai with sharp facial contours and long tied black hair, wielding a glowing katana. Background features crashing waves, cherry blossoms, and a distant Mount Fuji under a dramatic blood-orange sky. Bold outlines, flat colors with paper texture.",
+  "Dunhuang fresco style, vertical composition. A ruggedly handsome young archaeologist with sharp features, discovering a glowing mural of a celestial apsaras inside a dark Dunhuang cave. Magical warm light reflecting on his face and the ancient stone walls. Muted mineral colors, divine and ancient ambiance.",
+  "Persian miniature style, vertical composition. An attractive young Persian scholar in ornate robes, sitting in a beautiful tiled garden under a cypress tree, playing a gold-plated chess set with mechanical automatons. Flattened perspective, intricate gold filigree, jeweled colors, decorative borders.",
+  "Byzantine mosaic style, vertical composition. An iconic portrait of a fiercely handsome warrior saint with sharp cheekbones, a strong jawline, wearing heavy gold plate armor and holding a glowing silver spear, a divine golden halo behind him. Composed of thousands of glittering glass tiles. Gold background field left blank.",
+  "Stained glass style, vertical composition. An angelic, armored knight with a flawless, handsome visage, gripping a shining broadsword as he slashes a dark shadow serpent. Intricate gothic archway framing, brilliant jewel-like colors, bold black leading lines. The image resembles a tall cathedral window.",
+  "Ghibli hand-painted style, vertical composition. An adventurous young boy hero with messy brown hair and bright, expressive eyes, standing next to a large friendly forest spirit in a lush, grassy woodland during golden hour. Soft watercolor washes, warm sunlight filtering through the trees.",
+  "KyoAni anime style, vertical composition. A handsome high school boy animator with messy black hair and detailed, expressive eyes, looking at a magical glowing sketchpad in a quiet classroom. Soft twilight coming through the window, detailed everyday elements, nostalgic and emotional feel.",
+  "Makoto Shinkai anime style, vertical composition. A handsome young man looking up at a towering, brilliant starry sky with a descending pink comet trail, cherry blossoms falling around him. Vivid blue and violet hues, dramatic volumetric light shafts, deep emotional atmosphere.",
+  "Cyberpunk anime style, vertical composition. A highly attractive, edgy tech-wear rogue hacker with a glowing cybernetic arm and tactical goggles, standing on a rainy neon-lit skyscraper roof. Giant holographic ads and rain streaks in the background. Cool blue and magenta lighting.",
+  "Galgame CG style, vertical composition. A handsome, detailed male student with messy hair standing on a beach at sunset, looking back and smiling warmly, holding out his hand. Sparkling orange waves, soft focus background, warm summer breeze atmosphere.",
+  "Cinematic 3D animated film style, vertical composition. A ruggedly handsome young pilot with messy hair and expressive eyes, repairing a tall propeller aircraft engine in a rustic wooden hangar. Warm sunrise light streaming through the large hangar doors, dusty volumetric rays.",
+  "Vaporwave aesthetic, vertical composition. A nostalgic portrait of a stylish young man with retro sunglasses and purple hair, standing before a grid pattern floor that leads to a palm tree silhouette, neon pink sunset over a purple ocean in the background. Glitch lines, retro pastel colors.",
+  "Minimalist vector illustration, vertical composition. A sharp silhouette of an elegant male assassin in a flowing cloak, standing on top of a giant sand dune under a massive, glowing red sun. Geometric forms, clean flat vector colors, minimal styling, massive sky for typography.",
+  "Low poly art style, vertical composition. A fiercely handsome elven warrior with sharp, geometric facial features and glowing crystal armor, standing on a faceted mountain peak under a starry poly night sky. Sharp polygon edges, ambient cool colors.",
+  "Digital double exposure portrait, vertical composition. A sharp profile silhouette of a handsome detective, merged seamlessly with tall pine trees and a stormy, rain-slicked city street with flashing yellow lights. High contrast black and white with subtle neon accents.",
+  "Pop Art style illustration, vertical composition. A captivating, handsome retro superhero with a strong jawline and confident smile, alongside a tall speech bubble with an exclamation point. Dot patterns, bold outlines, highly saturated primary colors.",
+  "Glitch art style, vertical composition. A dangerously handsome rogue hacker with synthetic red eyes and a sharp jawline, his portrait distorted by colorful data corruption and neon scan lines in cyan and yellow. Cybernetic, high-tech and dark atmosphere.",
+  "Swiss typography poster style, vertical composition. A minimalist high-contrast silhouette of an attractive male face integrated with abstract architectural grids. Deep red, black, and white color blocks, clean geometric poster layout.",
+  "Multilayered papercut art, vertical composition. A beautifully intricate silhouette of a handsome prince in armor standing in a dark forest before a towering gothic paper castle. Backlighting, soft paper shadows, deep dimensional layering.",
+  "Solar Punk art style, vertical composition. A charismatic, smiling young eco-engineer with detailed, expressive facial features, standing before a towering vertical green city with solar panels and hanging gardens. Warm optimistic sunlight.",
+  "Dark cosmic horror illustration, vertical composition. A rugged, handsome investigator with terrified, intense eyes, holding a lantern as he gazes up at a towering, multi-eyed eldritch shadow emerging from a stormy ocean under a pitch-black sky.",
+  "Modern urban noir, vertical composition. A dangerously handsome detective in a trench coat, standing in a dark, wet brick alleyway under a vertical neon sign reflecting in rain puddles. Deep shadows, high-contrast cinematic lighting.",
+  "Cozy mystery illustration, vertical composition. A handsome young amateur sleuth in a tweed coat, looking through a magnifying glass inside a warm, candlelit village library at night, snow falling outside the window. Comforting, mysterious mood.",
+  "Gothic romance style, vertical composition. A pale, strikingly handsome gothic lord in a black velvet coat, standing before the moonlit ruins of his grand manor on a foggy cliff. Melancholic blue and grey tones, misty atmosphere.",
+  "Dark fairytale style, vertical composition. A handsome young hunter in a dark leather hood, holding a silver crossbow as he walks into a dense, ominous forest with towering twisted trees. Grimm's style, mood of suspense and dread.",
+  "Post-apocalyptic style, vertical composition. A ruggedly attractive, battle-scarred male survivor with piercing eyes and a perfectly grimy face, standing in front of a ruined vertical skyscraper under a dusty orange desert sky.",
+  "Urban fantasy concept art, vertical composition. A charismatic, handsome modern mage in a tailored suit, casting a glowing cyan spell that reveals a magical spiral staircase ascending into the rain-slicked city streets.",
+  "Abstract geometric poster layout, vertical composition. A minimalist line-art profile of a handsome male face integrated with intersecting gold circles and emerald green shapes on a deep dark blue background. Elegant, clean abstract design."
+];
+
+// 30 Female-Oriented Custom Prompts (focused on elegant heroines, romantic elements, and beautiful emotional settings)
+const FEMALE_PROMPTS = [
+  "Dark fantasy oil painting style, vertical composition. A breathtakingly beautiful young bride in a white lace veil and gothic gown, sitting inside an ornate carved stone sarcophagus. Kneeling beside her is a pale, mesmerizingly handsome undead prince with a golden crown, gently holding her hand. Soft glowing embers rise around them in the dark mausoleum. Moody academic lighting, fine impasto textures.",
+  "Minimalist Chinese ink wash style, vertical composition. A beautiful, serene young female artisan with long black hair, sitting on a mossy stone. Wrapping gently around her shoulders is a majestic, ethereal monochrome dragon with glowing blue eyes, looking down at her protectively. Ink splash details, poetic brushstrokes, soft mist background.",
+  "Ukiyo-e woodblock print style, vertical composition. A breathtakingly beautiful Japanese woman (bijin) in an ornate, flowing silk kimono with exquisite cherry blossom patterns. She has an elegant, captivating face and traditional hair ornaments, holding a paper umbrella (wagasa) in a falling blossom shower under Mount Fuji. Flat colors, bold lines.",
+  "Dunhuang fresco style, vertical composition. A breathtakingly beautiful celestial apsaras with delicate, mesmerizing facial features, flying upwards with flowing scarves, holding a Lute. Surrounded by stylized lotus flowers and floating geometric patterns on an aged stucco wall. Muted, oxidized mineral colors, divine and graceful ambiance.",
+  "Persian miniature style, vertical composition. An exquisitely beautiful princess in a flowered silk tunic, dancing gracefully in an ornate palace courtyard surrounded by roses and cypress trees, a handsome prince watching her admiringly from a tiled balcony. High detail, flat perspective, brilliant jewel-like colors.",
+  "Byzantine mosaic style, vertical composition. A stunningly beautiful mosaic portrait of a royal empress with large, captivating eyes, a crown of rubies and pearls, and a glittering golden halo. Composed of thousands of sparkling glass tesseræ in deep blues and golds. Majestic, spiritual, and ancient ambiance.",
+  "Stained glass style, vertical composition. A breathtakingly beautiful angelic female knight with long flowing silver hair and a serene expression, wielding a glowing sword framed by a gothic archway. Translucent jewel-colored panels, bold black leading lines. The light shines through like a cathedral window.",
+  "Ghibli hand-painted watercolor style, vertical composition. A charming, highly expressive young heroine with large, bright, attractive eyes and wind-blown hair, running up a wildflower meadow hill toward a fantastical airship in the sky. Natural daylight, soft washes, nostalgic and warm mood.",
+  "KyoAni anime style, vertical composition. An incredibly beautiful high school girl with delicate, expressive facial features and lustrous hair, sitting by a tall library window during light rain. Warm library light contrasting the cool moonlight outside, deep emotional atmosphere. Soft focus, delicate linework.",
+  "Makoto Shinkai anime style, vertical composition. A gorgeous young girl with luminous, tear-filled eyes and a highly attractive, detailed face, looking up at a towering, dramatic starry sky with a descending comet trail. Glowing cherry tree branches, brilliant lighting effects, vivid colors, deep romantic atmosphere.",
+  "Cyberpunk anime style, vertical composition. An exquisitely beautiful female scientist with glowing cyan eyes, gently touching the cheek of a flawless, handsome male android she designed. Behind them, rain-slicked neon streets and soft glowing city lights. Atmospheric lighting, warm and futuristic mood.",
+  "High-quality Galgame CG illustration, vertical composition. An exquisitely beautiful girl with perfectly detailed facial features, mesmerizing eyes, and pastel pink hair in a white summer dress smiling warmly. Dreamlike beach scene with sparkling waves rolling in. Pastel colors, bloom lighting, clean composition, soft focus.",
+  "Cinematic 3D animated film style, vertical composition. An adorable, beautifully rendered young female mechanic with bright green eyes and messy hair, holding a glowing magical wrench, smiling next to a cute floating repair robot in a futuristic hangar at sunset. Soft volumetric light, warm tones.",
+  "Vaporwave aesthetic, vertical composition. A gorgeous, highly stylized character with purple hair and striking facial contours, looking over lowered sunglasses in a retro summer setting. Geometric pink grid floor, palm trees, purple ocean sunset. Glitch filters, retro neon pink and cyan palette.",
+  "Minimalist vector illustration, vertical composition. A stylized, elegant silhouette of a beautiful heroine with a flowing cape and dynamic, attractive posture, climbing a massive sand dune towards a giant rising sun. Geometric shapes, flat colors, clean lines, vast sky area.",
+  "Low poly art style, vertical composition. A majestic, fiercely attractive elven princess with sharp, geometric facial features and a flowing gown, standing alongside a glowing white stag on a faceted crystal ridge under a towering starry night sky. Polygon facets, ambient blue lighting.",
+  "Digital double exposure portrait, vertical composition. A vertical silhouette profile of a strikingly beautiful woman with elegant, sharp facial contours, merged seamlessly with blooming roses and a starry galaxy inside her hair. Soft pastel color grading, elegant, mysterious and romantic.",
+  "Pop Art style illustration, vertical composition. A captivating, classically gorgeous retro woman with intense, alluring eyes, red lips, and dramatic makeup, alongside a tall speech bubble with an exclamation point. Rendered with comic book dots and bold outlines, high-saturation contrasting colors.",
+  "Glitch art style, vertical composition. An incredibly beautiful female hacker with synthetic cyan eyes and a sharp jawline, her portrait distorted by data corruption and glowing holographic glitches. Intricate high-tech neon background, dark moody atmosphere.",
+  "Modern Swiss graphic design style, vertical composition. A vertical minimalist composition featuring a high-contrast, stylized silhouette of a striking, attractive female face integrated with tall abstract geometric shapes and lines. Black, white, and red color palette, modern poster layout.",
+  "Multilayered papercut art style, vertical composition. A beautifully intricate silhouette of a captivating fairytale princess with delicate, expressive features in the foreground. Behind her, a towering 3D landscape of a deep forest and a tall gothic castle, made of staggered paper layers. Backlighting, soft shadows.",
+  "Solar Punk art style, vertical composition. A vibrant, highly attractive female botanist with a charismatic smile, tending to glowing bioluminescent plants in a vertical city greenhouse with hanging gardens and wind turbines. Bright, optimistic, warm morning light.",
+  "Dark cosmic horror illustration, vertical composition. A brave, beautiful female explorer with intense, determined eyes, standing on a desolate shore, holding a glowing lantern to light up a massive, ancient, eldritch shadow entity in a dark stormy sea. Moody cool colors.",
+  "Modern urban noir, vertical composition. A beautiful, mysterious woman in a dark red trench coat and a wide-brimmed hat, standing under a glowing neon sign in a rain-slicked dark alleyway. Deep dramatic shadows, wet brick textures, high-contrast cinematic lighting.",
+  "Cozy mystery book cover, vertical composition. A charming, elegantly dressed female sleuth with a highly attractive, curious face, looking out from a tall bookstore window filled with old books. Outside, a warm English village scene at night, snow falling from a dark sky. Cozy, mysterious feel.",
+  "Gothic romance illustration, vertical composition. A pale, breathtakingly beautiful young woman with piercing, sorrowful eyes, wearing a flowing dark velvet gown, standing before the towering, moonlit ruins of a grand gothic manor on a foggy cliff. Muted greys and blues, melancholic atmosphere.",
+  "Dark fairytale illustration, vertical composition. A striking, fiercely beautiful young woman in a red cloak with intense, captivating eyes, gripping a silver blade as she walks into a massive, dark forest with towering twisted ancient trees. Grimm's style, mood of awe and dread.",
+  "Post-apocalyptic style, vertical composition. A beautiful, battle-hardened female survivor with intense eyes and a perfectly grimy face, looking at the camera, standing in a vast desert wasteland with a ruined skyscraper and a dusty orange sunset sky behind. Muted warm colors.",
+  "Urban fantasy concept art, vertical composition. A beautiful modern sorceress in a glowing tailored coat, casting a spiral magical ward that illuminates a rain-streaked metropolitan alleyway at night. Rich magical blue and purple lighting, mysterious atmosphere.",
+  "Abstract geometric book poster layout, vertical composition. An elegant, attractive female silhouette minimalist line-art seamlessly integrated into a vertical arrangement of intersecting lines, circles, and curves in a gradient of emerald green and deep blue. Dark background, elegant abstract design."
 ];
 
 const BASE_QUALITY = "masterpiece, best quality, highly detailed, cinematic lighting, soft warm color grading, intricate background, no text, no watermark";
 
-const W = 1792;
-const H = 1024;
+const W = 1024;
+const H = 1792;
 
 async function generate(prompt) {
   const body = [
@@ -118,44 +159,45 @@ async function generate(prompt) {
 async function main() {
   if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
 
-  console.log(`[covers] Starting image generation for 48 covers (24 male, 24 female)...`);
+  // Persist the 60 prompts alongside the images so we can replay them
+  // (e.g. to seed first-act prebake with the cover's exact visual anchor).
+  const promptsManifest = {};
+  for (let i = 0; i < MALE_PROMPTS.length; i++) {
+    promptsManifest[`m${i}`] = MALE_PROMPTS[i];
+    promptsManifest[`f${i}`] = FEMALE_PROMPTS[i];
+  }
+  writeFileSync(
+    resolve(OUT_DIR, "prompts.json"),
+    JSON.stringify(promptsManifest, null, 2),
+  );
+  console.log(`[covers] Wrote ${Object.keys(promptsManifest).length} prompts → home/prompts.json`);
+
+  console.log(`[covers] Starting image generation for 60 gender-differentiated covers (30 male, 30 female)...`);
   const t0 = Date.now();
 
-  for (let i = 0; i < STYLE_PROMPTS.length; i++) {
-    const stylePrompt = STYLE_PROMPTS[i];
-
-    // Male Cover (m{i})
+  for (let i = 0; i < MALE_PROMPTS.length; i++) {
+    // 1. Male Cover (m{i})
     const malePngName = `m${i}.png`;
     const malePngPath = resolve(OUT_DIR, malePngName);
-    const maleWebpPath = resolve(OUT_DIR, `m${i}.webp`);
-    if (!FORCE && (existsSync(malePngPath) || existsSync(maleWebpPath))) {
-      console.log(`[covers] Skip m${i} (already exists)`);
-    } else {
-      console.log(`[covers] Generating m${i} ... `);
-      try {
-        const buf = await generate(stylePrompt);
-        writeFileSync(malePngPath, buf);
-        console.log(`[covers] m${i} successfully generated! size: ${buf.length} B`);
-      } catch (e) {
-        console.error(`[covers] FAIL generating m${i}: ${e.message}`);
-      }
+    console.log(`[covers] Generating m${i} ... `);
+    try {
+      const buf = await generate(MALE_PROMPTS[i]);
+      writeFileSync(malePngPath, buf);
+      console.log(`[covers] m${i} successfully generated! size: ${buf.length} B`);
+    } catch (e) {
+      console.error(`[covers] FAIL generating m${i}: ${e.message}`);
     }
 
-    // Female Cover (f{i})
+    // 2. Female Cover (f{i})
     const femalePngName = `f${i}.png`;
     const femalePngPath = resolve(OUT_DIR, femalePngName);
-    const femaleWebpPath = resolve(OUT_DIR, `f${i}.webp`);
-    if (!FORCE && (existsSync(femalePngPath) || existsSync(femaleWebpPath))) {
-      console.log(`[covers] Skip f${i} (already exists)`);
-    } else {
-      console.log(`[covers] Generating f${i} ... `);
-      try {
-        const buf = await generate(stylePrompt);
-        writeFileSync(femalePngPath, buf);
-        console.log(`[covers] f${i} successfully generated! size: ${buf.length} B`);
-      } catch (e) {
-        console.error(`[covers] FAIL generating f${i}: ${e.message}`);
-      }
+    console.log(`[covers] Generating f${i} ... `);
+    try {
+      const buf = await generate(FEMALE_PROMPTS[i]);
+      writeFileSync(femalePngPath, buf);
+      console.log(`[covers] f${i} successfully generated! size: ${buf.length} B`);
+    } catch (e) {
+      console.error(`[covers] FAIL generating f${i}: ${e.message}`);
     }
   }
 

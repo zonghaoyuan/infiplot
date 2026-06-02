@@ -66,3 +66,16 @@
     opacity: 0;
   }
 }
+
+/* Hide Next.js dev compiler indicators and static overlays completely */
+next-route-announcer,
+nextjs-portal,
+#nextjs-dev-indicator,
+.nextjs-static-indicator,
+div[data-nextjs-toast-wrapper],
+div[data-nextjs-toast] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

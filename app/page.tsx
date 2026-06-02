@@ -52,19 +52,24 @@ const OPTS: Opt[] = [
       "自动",
       "古典厚涂油画 (学术奇幻)",
       "极简中国水墨 (Image 0参考升级版)",
-      "浮世绘",
+      "浮世绘木刻 (美人画升级)",
       "莫高窟壁画风 (敦煌学)",
+      "细密画 (波斯/伊斯兰风)",
       "镶嵌画 (拜占庭/马赛克)",
       "彩绘玻璃 (哥特风)",
-      "吉卜力治愈手绘",
-      "京阿尼细腻日常",
+      "吉卜力治愈手绘 (Image 4参考)",
+      "京阿尼细腻日常 (Image 5参考)",
       "新海诚唯美光影 (Image 2参考)",
       "赛博朋克 / 赛璐珞二次元",
       "Galgame CG 梦幻光影",
       "3D 动漫电影质感",
       "蒸汽波 (Vaporwave) 赛璐珞",
+      "极简矢量插画 (Minimalist Vector)",
+      "低多边形 (Low Poly)",
+      "双重曝光 (Double Exposure)",
       "波普艺术 (Pop Art)",
       "故障艺术 (Glitch Art)",
+      "瑞士平面设计 (Typography-Centric)",
       "剪纸艺术 (Papercut)",
       "科幻：太阳朋克 (Solar Punk)",
       "奇幻：爱手艺 (Lovecraftian Horror)",
@@ -73,7 +78,8 @@ const OPTS: Opt[] = [
       "哥特言情：庄园废墟 (Gothic Romance)",
       "格林童话：暗黑森林 (Fairytale Noir)",
       "废土科幻 (Post-Apocalyptic)",
-      "都市幻想：隐形世界 (Urban Fantasy)"
+      "都市幻想：隐形世界 (Urban Fantasy)",
+      "文字与图形：抽象主义 (BookPosterLayout)"
     ],
   },
   { label: "剧情风格", items: ["平铺直叙", "多线转折", "悬疑烧脑", "治愈日常"], defaultIndex: 1 },
@@ -84,30 +90,36 @@ const OPTS: Opt[] = [
 type StoryContent = { title: string; outline: string; style: string; tags: string[] };
 
 const STYLE_MAP: Record<string, string> = {
-  "古典厚涂油画 (学术奇幻)": "Dark fantasy oil painting style, a sprawling clockwork steampunk city built into a mountain range at twilight, immense gothic spires with glowing green lamps, complex gears and platforms. Richly detailed, impasto texture, dramatic academic lighting. A grand airship arrives at a high dock. Horizontal composition with massive clear dark sky for typography.",
-  "极简中国水墨 (Image 0参考升级版)": "Minimalist Chinese ink wash style, a lone immortal cultivator sitting on a precipice, facing an endless sea of clouds and distant jagged peaks. Ethereal, sparse composition with poetic brushstrokes, monochrome palette with subtle blue hints. Very large blank mist area for text placement.",
-  "浮世绘": "Ukiyo-e woodblock print style, a majestic red and gold phoenix with elaborate trailing feathers rising above a wave-crested dark blue sea, Mount Fuji visible through cherry branches. Bold outlines, flat colors with paper texture, ancient and mystical atmosphere. Central clear area in the sea and sky for typography.",
-  "莫高窟壁画风 (敦煌学)": "Dunhuang fresco style, a celestial apsaras flying with flowing scarves, holding a Lute, surrounded by stylized lotus flowers and floating geometric patterns on an aged stucco wall. Muted, oxidized mineral colors, delicate line art, historical and divine ambiance. Side vertical area cleared for titles.",
-  "镶嵌画 (拜占庭/马赛克)": "Byzantine mosaic style, an iconic portrait of a warrior saint with golden armor and a halo, composed of thousands of small, glittering glass tesseræ. Deep blues and golds, spiritual and ancient feel, flat background. Background field of gold tiles left blank for text.",
-  "彩绘玻璃 (哥特风)": "Stained glass style, a depiction of a griffin battling a serpent, framed by gothic archways and trefoils. Vibrant, translucent jewel colors, bold black leading lines. The image should look like an ancient window panel. Outer panels of plain blue glass left clear for text.",
-  "吉卜力治愈手绘": "Ghibli hand-painted watercolor style, a detailed concept art of a girl and her small companion creature running through a vast wildflower meadow toward a fantastical airship. Natural daylight, soft washes, nostalgic feel. Upper left sky area is negative space for typography.",
-  "京阿尼细腻日常": "KyoAni anime style, fine line art, a detailed high school girl sitting by a library window during light rain, warm library light contrasting the cool moonlight outside. Deep emotional atmosphere, delicate expression. Empty right-side foreground area for title.",
-  "新海诚唯美光影 (Image 2参考)": "Makoto Shinkai anime style, hyper-detailed, a wide panoramic night view of a glowing cherry tree under a dramatic starry sky with a comet trail, a lonely high school girl in a uniform looking up. Brilliant lighting effects, vivid colors. Significant blank space in the upper atmosphere for text.",
-  "赛博朋克 / 赛璐珞二次元": "Cyberpunk anime style, cel-shaded animation, a tech-wear protagonist standing on a rainy rooftop, looking out at a dense, neon-drenched futuristic megacity with flying vehicles. Hard edges, high saturation, sharp contrast. Massive upper background sky area for title placement.",
-  "Galgame CG 梦幻光影": "High-quality Galgame CG illustration, a dreamlike beach scene with sparkling waves, a beautiful girl with pastel pink hair in a white summer dress smiling warmly. Pastel colors, bloom lighting, clean composition, soft focus. Significant negative space in the sky and sea area for text.",
-  "3D 动漫电影质感": "Cinematic 3D animated film style (like Makoto Shinkai or Pixar), a high-resolution render of a young boy pilot fixing a small propeller plane in a rustic hangar at sunrise. Volumetric lighting, warm colors, deep textures, cinematic composition. Blank wall space and open doorway area for text.",
-  "蒸汽波 (Vaporwave) 赛璐珞": "Vaporwave aesthetic, anime style, a nostalgic portrait of a character with purple hair wearing sunglasses, a geometric grid floor and palm trees, background sunset over a purple ocean. Glitch effects, soft neon pink and blue palette, retro feel. Blank foreground grid area for title.",
-  "波普艺术 (Pop Art)": "Pop Art style illustration, a close-up of a glamorous woman with red lips and a speech bubble with an exclamation point, rendered with comic book dots and bold outlines. High-saturation contrasting colors. Speech bubble and large background color blocks left blank for text.",
-  "故障艺术 (Glitch Art)": "Glitch art style portrait, a character profile distorted by data corruption, pixel sorting, and digital artifacts in cyan, magenta, and yellow. Cybernetic, high-tech and moody atmosphere. Dark, uncorrupted negative space in the upper background for typography.",
-  "剪纸艺术 (Papercut)": "Multilayered papercut art style, a 3D landscape of a deep forest and a fairytale castle, made of staggered paper layers with intricate cutouts. Backlighting, soft shadows, dimensional depth. Blank background layer cleared for title placement.",
-  "科幻：太阳朋克 (Solar Punk)": "Solar Punk art style, a wide view of a sustainable, futuristic city integrated with dense green rooftop gardens and vertical farms, illuminated by clean solar and wind energy. Bright, optimistic lighting, organic textures. Large foreground plaza area cleared for titles.",
-  "奇幻：爱手艺 (Lovecraftian Horror)": "Dark cosmic horror illustration, a lone explorer stands on a desolate shore, gazing at a massive, ancient, indescribable eldritch entity rising from a stormy sea. Moody, muted cool colors, dramatic lighting, visible brushstrokes. The dark, stormy sky quadrant left completely blank for text.",
-  "现代惊悚：霓虹剪影 (Urban Noir)": "Modern urban noir, a minimalist silhouette of a man in a trench coat, standing in a dark, wet alleyway under a single buzzing neon sign reflecting on puddles. High contrast, cinematic noir lighting, deep shadows. The wet cobblestone ground left mostly dark for typography.",
-  "温馨推理：英式村庄 (Cozy Mystery)": "Cozy mystery book cover illustration, a charming, warm English village scene at night, snow on the thatched roofs, golden light from a bookstore window, and a single cat perched on a fence. Comforting and mysterious feel. Significant background sky and foreground pavement area for title.",
-  "哥特言情：庄园废墟 (Gothic Romance)": "Gothic romance illustration, a wide panoramic view of a young woman in a flowing dark velvet dress, standing before the desolate, moonlit ruins of a grand gothic manor on a foggy cliff. Muted greys and blues, romantic and melancholic. The upper background cliff and sky for bold titles.",
-  "格林童话：暗黑森林 (Fairytale Noir)": "Dark fairytale illustration, a wide shot of a small girl in a red cloak walking into a massive, dark, twisted ancient forest where the trees look like claws. Grimm's style, classical illustration, mood of awe and dread. The dark foreground forest ground left blank for text.",
-  "废土科幻 (Post-Apocalyptic)": "Post-apocalyptic landscape illustration, a vast desert wasteland with the rusted remains of overgrown highway and a fallen Statue of Liberty in the distance under a dusty orange sky. Muted cool and warm colors. Significant clear ground and sky area for text.",
-  "都市幻想：隐形世界 (Urban Fantasy)": "Urban fantasy concept art, a detailed view of a hidden, glowing magical pathway revealed underneath a busy modern pedestrian bridge in a rain-streaked metropolitan city. Contrast of mundane and magical. Minimal detail in the wet street foreground and upper sky for titles."
+  "古典厚涂油画 (学术奇幻)": "Dark fantasy oil painting style, grand clockwork steampunk city built into a mountain range at twilight, immense gothic spires with glowing green lamps, complex gears and platforms. Richly detailed, impasto texture, dramatic academic lighting. Horizontal cinematic composition.",
+  "极简中国水墨 (Image 0参考升级版)": "Minimalist Chinese ink wash style, vertical sea of clouds and distant jagged peaks. Ethereal, sparse composition with poetic brushstrokes, monochrome palette with subtle blue hints. Large blank mist area for copy space.",
+  "浮世绘木刻 (美人画升级)": "Ukiyo-e woodblock print style, majestic waves and Mount Fuji visible through cherry branches. Bold outlines, flat colors with paper texture, ancient and mystical atmosphere.",
+  "莫高窟壁画风 (敦煌学)": "Dunhuang fresco style, celestial patterns, stylized lotus flowers and floating geometric patterns on an aged stucco wall. Muted, oxidized mineral colors, delicate line art, historical and divine ambiance.",
+  "细密画 (波斯/伊斯兰风)": "Persian miniature style, ornate vertical tiled garden pavilion surrounded by tall cypress trees and complex geometric mosaics. High detail, jewel-like colors, flattened perspective, decorative borders.",
+  "镶嵌画 (拜占庭/马赛克)": "Byzantine mosaic style, highly detailed mosaic pattern of glittering gold and deep blue tiles, spiritual and ancient feel, flat decorative background.",
+  "彩绘玻璃 (哥特风)": "Stained glass style, tall gothic archways and trefoils. Vibrant, translucent jewel colors, bold black leading lines. The image looks like an ancient cathedral stained glass window panel.",
+  "吉卜力治愈手绘 (Image 4参考)": "Ghibli hand-painted watercolor style, a vast wildflower meadow hill under a bright blue sky with fluffy clouds, a fantastical airship flying in the distance. Natural daylight, soft washes, nostalgic feel.",
+  "京阿尼细腻日常 (Image 5参考)": "KyoAni anime style, fine line art, warm indoor lighting contrasting the cool moonlight outside, rain streaks on a tall window. Deep emotional atmosphere, delicate light and shadow reflections.",
+  "新海诚唯美光影 (Image 2参考)": "Makoto Shinkai anime style, hyper-detailed, towering dramatic night starry sky with a descending comet trail, glowing cherry tree branches in the foreground. Brilliant lighting effects, vivid colors.",
+  "赛博朋克 / 赛璐珞二次元": "Cyberpunk anime style, cel-shaded animation, rainy night streets of a dense neon-drenched futuristic megacity with towering skyscrapers. Hard edges, high saturation, sharp contrast.",
+  "Galgame CG 梦幻光影": "High-quality Galgame CG illustration, dreamlike beach scene at sunset with sparkling waves rolling in. Pastel colors, bloom lighting, clean composition, soft focus.",
+  "3D 动漫电影质感": "Cinematic 3D animated film style, a rustic wooden hangar at sunrise with volumetric lighting, warm golden hour colors, deep textures, cinematic composition.",
+  "蒸汽波 (Vaporwave) 赛璐珞": "Vaporwave aesthetic, anime style, a geometric pink grid floor leading to a palm tree silhouette, neon pink sunset over a purple ocean in the background. Glitch effects, retro pastel colors.",
+  "极简矢量插画 (Minimalist Vector)": "Minimalist vector illustration style, geometric dunes, flat warm colors, clean lines under a massive rising sun, elegant minimalist composition.",
+  "低多边形 (Low Poly)": "Low poly art style, crystalline formations on a high mountain ridge under a towering, faceted starry night sky. Sharp polygon edges, ambient cool colors.",
+  "双重曝光 (Double Exposure)": "Digital double exposure portrait style, forest trees and a cascading waterfall double exposed, high contrast black and white composition, elegant and moody atmosphere.",
+  "波普艺术 (Pop Art)": "Pop Art style illustration, bold comic book dot patterns, halftone screens, loud speech bubbles, bold black outlines, high-saturation contrasting colors.",
+  "故障艺术 (Glitch Art)": "Glitch art style, colorful data corruption, pixel sorting, and digital artifacts in cyan, magenta, and yellow. Cybernetic, high-tech and moody atmosphere.",
+  "瑞士平面设计 (Typography-Centric)": "Modern Swiss graphic design style, vertical minimalist composition, bold geometric grids, red, black, and white flat color blocks.",
+  "剪纸艺术 (Papercut)": "Multilayered papercut art style, 3D landscape of a deep forest and a fairytale castle, made of staggered paper layers with intricate cutouts. Backlighting, soft shadows.",
+  "科幻：太阳朋克 (Solar Punk)": "Solar Punk art style, a sustainable futuristic city integrated with vertical gardens and green balconies, clean solar panels and wind turbines, bright optimistic sunlight.",
+  "奇幻：爱手艺 (Lovecraftian Horror)": "Dark cosmic horror illustration, desolate rocky shore, towering ancient eldritch clouds descending from a stormy sky. Moody, muted cool colors, visible brushstrokes.",
+  "现代惊悚：霓虹剪影 (Urban Noir)": "Modern urban noir, wet narrow alleyway under a vertical buzzing neon sign, dark puddles, high contrast, cinematic noir lighting, deep shadows.",
+  "温馨推理：英式村庄 (Cozy Mystery)": "Cozy mystery book cover illustration, a charming, warm English village scene at night with thatched roofs, snow falling, and warm bookstore lights.",
+  "哥特言情：庄园废墟 (Gothic Romance)": "Gothic romance illustration, desolate moonlit ruins of a grand gothic manor on a foggy cliff, misty atmosphere, melancholic blue and grey tones.",
+  "格林童话：暗黑森林 (Fairytale Noir)": "Dark fairytale illustration, massive ancient forest with towering twisted claw-like trees. Grimm's style, classical woodcut illustration, mood of awe and dread.",
+  "废土科幻 (Post-Apocalyptic)": "Post-apocalyptic landscape, vast desert wasteland with the rusted remains of an overgrown highway and ruined skyscrapers under a dusty orange sunset sky.",
+  "都市幻想：隐形世界 (Urban Fantasy)": "Urban fantasy concept art, a hidden glowing magical pathway underneath a busy modern pedestrian bridge in a rain-streaked metropolitan city, magical blue sparks.",
+  "文字与图形：抽象主义 (BookPosterLayout)": "Abstract geometric poster layout, minimalist line-art integrated into a vertical arrangement of intersecting lines, circles, and curves in a gradient of emerald green and deep blue."
 };
 
 /* 每个性向 24 篇预设剧情（与封面 /home/{m|f}{i}.webp 按索引一一对应）。
@@ -116,484 +128,604 @@ const STORIES: Record<Gender, StoryContent[]> = {
   男性向: [
   {
     "title": "贤者陨落",
-    "outline": "我曾是支撑帝国的九环大贤者，却因研究禁忌魔法被诬陷为叛徒，在万众唾弃中被放逐。十年后，深渊裂隙撕裂天空，昔日陷害我的圣子却跪在我面前，求我拯救这个已忘记我的世界。",
+    "outline": "帝国首席大魔导师遭挚友背叛，魔力核心被挖，沦为废人。百年后，他于拍卖会以奴隶身份现身，血契锁链下，是重燃的复仇烈焰与更禁忌的古代魔法。",
     "style": "古典厚涂油画 (学术奇幻)",
     "tags": [
-      "修仙",
       "逆袭",
-      "打脸"
+      "系统",
+      "西幻"
     ]
   },
   {
-    "title": "水墨斩龙人",
-    "outline": "我本是个在终南山画山水的落魄画师，直到一笔画出的墨龙活了过来。当朝廷派人抓我时，我随手泼墨，十万禁军被一卷《江山万里图》吸入画中。从此，人间多了一位以笔为剑的斩龙人。",
+    "title": "画中圣手",
+    "outline": "落魄书生意外获得一支诡异画笔，画出的女子竟能破画而出，化为真人。他本想靠此翻身，却卷入一桩延续千年的宫廷秘辛与仙凡禁忌之恋。",
     "style": "极简中国水墨 (Image 0参考升级版)",
     "tags": [
-      "异能",
-      "装逼",
-      "都市玄幻"
+      "逆袭",
+      "系统",
+      "古风奇幻"
     ]
   },
   {
     "title": "花魁的刀",
-    "outline": "我是江户最负盛名的花魁，琴棋书画样样精通。但没人知道，每晚来我房中「听曲」的幕府将军，其实是在向我汇报：那些试图颠覆幕府的浪人，昨夜又被我的忍者暗杀了多少。",
-    "style": "浮世绘",
+    "outline": "他是吉原最负盛名的花魁，舞姿倾城，面具下的真实身份却是令江户幕府闻风丧胆的传奇忍者。当幕府密探踏入花街，刀光与花影将同绽。",
+    "style": "浮世绘木刻 (美人画升级)",
     "tags": [
-      "扮猪吃虎",
-      "虐渣",
-      "悬疑烧脑"
+      "女扮男装",
+      "忍者",
+      "权谋"
     ]
   },
   {
-    "title": "飞天乐神",
-    "outline": "我在敦煌壁画中沉睡了千年，直到考古队的探照灯惊醒了我。走出壁画的那一刻，现代都市的霓虹让我眩晕，而追捕我的特勤队长，在看到我手中琵琶时，却颤抖着喊出了我千年前的封号。",
+    "title": "飞天引",
+    "outline": "考古队员在封闭洞窟深处，唤醒了一位沉睡千年的壁画仙子。她视他为天命之人，助他破解壁画中的上古秘藏，却不知自己正是打开灾厄之门的钥匙。",
     "style": "莫高窟壁画风 (敦煌学)",
     "tags": [
-      "穿越",
-      "都市玄幻",
-      "甜宠"
+      "探险",
+      "神话",
+      "契约"
     ]
   },
   {
-    "title": "圣像的谎言",
-    "outline": "作为拜占庭帝国的黄金镶嵌师，我亲手为皇帝打造了镶嵌满宝石的圣像。但当我在像眼深处刻下足以毁灭帝国的诅咒密文时，皇帝还以为这不过是又一件彰显神威的艺术品。",
+    "title": "波斯棋局",
+    "outline": "被囚于苏丹宫殿的异教徒学者，凭借一部残缺的古老棋谱，操纵着棋盘上的金丝傀儡，搅动宫廷风云。他每赢一局，离揭开沙漠之下沉睡的旧神遗迹便近一步。",
+    "style": "细密画 (波斯/伊斯兰风)",
+    "tags": [
+      "智斗",
+      "异域",
+      "神秘学"
+    ]
+  },
+  {
+    "title": "圣像之怒",
+    "outline": "拜占庭帝国覆灭之夜，一名圣像匠用生命最后的金箔与宝石，为自己铸造了一副不朽的黄金铠甲。千年后的博物馆里，铠甲苏醒，只为寻找当年背叛他的皇帝后裔，执行神罚。",
     "style": "镶嵌画 (拜占庭/马赛克)",
     "tags": [
-      "虐渣",
-      "暗黑童话",
-      "悬疑烧脑"
+      "复仇",
+      "不死族",
+      "历史奇幻"
     ]
   },
   {
     "title": "血色玫瑰",
-    "outline": "我是哥特大教堂最年轻的彩窗工匠，也是血族最后的子嗣。每当阳光穿透我绘制的玫瑰花窗，圣光便会灼伤我的皮肤。但主教不知道，我绘入彩窗的不是圣经故事，而是如何打开亡者之门的血族秘法。",
+    "outline": "大教堂彩窗后的神秘告解者，能倾听所有罪人的忏悔。今夜，一位身披荆棘的新娘向他告解，她的新郎是魔鬼，而教堂地窖下，埋着足以颠覆信仰的圣骸。",
     "style": "彩绘玻璃 (哥特风)",
     "tags": [
-      "暗黑童话",
-      "扮猪吃虎",
-      "悬疑烧脑"
+      "宗教",
+      "哥特",
+      "悬疑"
     ]
   },
   {
-    "title": "龙猫的新邻居",
-    "outline": "搬进乡下老宅的第二天，我发现后院住着一群会魔法的森林精灵。它们答应帮我实现一个愿望，但我只是想让总欺负我的转学生，也听到树精的抱怨，让他知道破坏环境的代价。",
-    "style": "吉卜力治愈手绘",
+    "title": "龙猫的契约",
+    "outline": "失业社畜逃进深山旧屋，发现屋后的森林有巨大精灵。精灵承诺实现他一个愿望，代价是成为森林百年守护者。他本想许愿暴富，却卷入了人类世界与精灵国度千年战争的余烬。",
+    "style": "吉卜力治愈手绘 (Image 4参考)",
     "tags": [
-      "校园日常",
-      "系统",
-      "爽文"
+      "治愈",
+      "奇幻",
+      "契约"
     ]
   },
   {
-    "title": "社团的存续",
-    "outline": "作为濒临废部的「古典文学研究社」最后一名社员，我每天独自守着空教室。直到那个全校风云人物，篮球社王牌突然踹开门，把退部申请拍在我桌上：「从今天起，这里归我了。」",
-    "style": "京阿尼细腻日常",
+    "title": "社团存亡日",
+    "outline": "濒临废部的动画社，唯一社员是总在睡觉的怪人。新来的转校生社长发现，只要完成怪人的“日常委托”，社员就会增加一人，而这些人，都来自被遗忘的动画世界。",
+    "style": "京阿尼细腻日常 (Image 5参考)",
     "tags": [
-      "校园日常",
-      "甜宠",
-      "逆袭"
+      "日常",
+      "奇幻",
+      "校园"
     ]
   },
   {
-    "title": "樱花与子弹",
-    "outline": "在那个樱花飘落的放学后，青梅竹马的少女将手枪塞进我怀里，笑容依旧甜美：「开枪吧，这样我们就能永远在一起了。」枪声响起的瞬间，我看见她身后无数的监控红点同时亮起。",
+    "title": "黄昏归途",
+    "outline": "他总在黄昏时分，于空无一人的车站遇见少女。她带他穿越时间的缝隙，回到故乡被毁灭前的最后一天。每一次循环，他都必须在拯救她与拯救世界之间做出选择。",
     "style": "新海诚唯美光影 (Image 2参考)",
     "tags": [
-      "都市爱情",
-      "虐心",
-      "悬疑烧脑"
+      "时间循环",
+      "恋爱",
+      "科幻"
     ]
   },
   {
-    "title": "公司叛逃者",
-    "outline": "我曾是「天命科技」最顶尖的神经骇客，直到我发现公司正在用脑机接口收割全城人的记忆。三天前我带着核心数据逃亡，此刻，全城通缉我的全息广告牌上，突然出现了我的人脸：「请立即前往最近回收站报到。」",
+    "title": "霓虹义体",
+    "outline": "失去全身义体的前特种兵，被黑市医生“复活”。医生给他装上了实验性军用义体，代价是成为追捕AI觉醒体的“清道夫”。第一单任务，目标女孩的眼中，倒映着只有他能看到的系统代码。",
     "style": "赛博朋克 / 赛璐珞二次元",
     "tags": [
-      "科幻废土",
-      "逆袭",
-      "打脸"
+      "赛博朋克",
+      "义体",
+      "追捕"
     ]
   },
   {
-    "title": "心动指令",
-    "outline": "系统提示：您已绑定「完美男友模拟器」，请攻略目标人物「桐谷和人」。我看着眼前这个银发美少年，他头顶的好感度是负50。而我的任务倒计时只剩七天，失败惩罚是：永久丧失心跳的能力。",
+    "title": "月光下的约定",
+    "outline": "学园祭前夜，他在钟楼顶遇见银发少女。她说：“在游戏存档前，请做出你的选择。”他才发现，整个世界是一场精心设计的Galgame，而她是唯一的攻略对象，也是系统漏洞。",
     "style": "Galgame CG 梦幻光影",
     "tags": [
-      "系统",
-      "甜宠",
-      "校园日常"
+      "恋爱模拟",
+      "Meta",
+      "悬疑"
     ]
   },
   {
-    "title": "星穹列车",
-    "outline": "「星穹列车」是人类最后的星际方舟，我是列车的首席机械师。直到我在废弃货舱里，发现了一个被封印的女孩，她睁开眼的瞬间，整艘船的引擎同时咆哮：「主人，您终于回来了。」",
+    "title": "星尘代理人",
+    "outline": "星际探险家在废弃星舰中激活了一个AI少女，她自称是星尘文明最后的代理人。他们一同解开星舰秘密，却发现整个文明的覆灭，与一场席卷多元宇宙的“叙事战争”有关。",
     "style": "3D 动漫电影质感",
     "tags": [
+      "太空歌剧",
+      "AI",
+      "冒险"
+    ]
+  },
+  {
+    "title": "复古未来梦",
+    "outline": "怀旧DJ意外混入一段80年代的合成器音轨，竟打通了通往“蒸汽波永恒夏天”的平行维度。这里时间停滞，每个人都是褪色的广告牌模特。他必须找回丢失的记忆磁带才能返回现实。",
+    "style": "蒸汽波 (Vaporwave) 赛璐珞",
+    "tags": [
       "穿越",
-      "金手指",
-      "科幻废土"
+      "迷幻",
+      "复古"
+    ]
+  },
+  {
+    "title": "极简杀机",
+    "outline": "杀手代号“线条”，任务从不失手。直到他接到一个目标：一个活在纯白色房间里、只存在于数据流中的AI。刺杀过程，是一场极简的几何学与逻辑学的生死对决。",
+    "style": "极简矢量插画 (Minimalist Vector)",
+    "tags": [
+      "杀手",
+      "AI",
+      "极简主义"
+    ]
+  },
+  {
+    "title": "棱镜之心",
+    "outline": "低多边形风格的虚拟世界“棱镜界”发生数据崩坏，化身玩家的他，发现崩坏源头是自己丢失的、被碎片化的“情感模块”。他必须穿越不同主题的碎片关卡，拼凑完整的“自我”。",
+    "style": "低多边形 (Low Poly)",
+    "tags": [
+      "游戏",
+      "自我探索",
+      "科幻"
+    ]
+  },
+  {
+    "title": "双面人生",
+    "outline": "他是循规蹈矩的图书管理员，也是暗夜中收割罪恶的蒙面义警。一次行动中，他的双重曝光影像意外被神秘组织捕捉，现在，黑白两道、现实与暗影都在追捕他。",
+    "style": "双重曝光 (Double Exposure)",
+    "tags": [
+      "双重身份",
+      "悬疑",
+      "都市"
+    ]
+  },
+  {
+    "title": "波普英雄",
+    "outline": "平凡小镇爆发“色彩瘟疫”，被感染者变成鲜艳的波普艺术风格怪物。主角发现自己免疫，还能吸收怪物身上的色彩能力。他必须集齐三原色，治愈小镇，或成为新的波普之神。",
+    "style": "波普艺术 (Pop Art)",
+    "tags": [
+      "超级英雄",
+      "变异",
+      "小镇"
     ]
   },
   {
     "title": "数据幽灵",
-    "outline": "在蒸汽与霓虹交织的都市，我的意识被困在1998年的老旧电脑里。当现代黑客试图格式化我时，我反向入侵了他的神经植入体，让他看见了这个城市最深的恐惧——我，就是从未被删除的数字幽灵。",
-    "style": "蒸汽波 (Vaporwave) 赛璐珞",
-    "tags": [
-      "系统",
-      "逆袭",
-      "科幻废土"
-    ]
-  },
-  {
-    "title": "偶像的崩坏",
-    "outline": "我是流量为王的时代最火的虚拟偶像，每场直播都有百万人打赏。但只有我知道，皮套之下早已没有真人，驱动我的，是昨夜那个在直播间说「希望你去死」的黑粉的脑电波。",
-    "style": "波普艺术 (Pop Art)",
-    "tags": [
-      "暗黑童话",
-      "悬疑烧脑",
-      "虐心"
-    ]
-  },
-  {
-    "title": "乱码之神",
-    "outline": "我的视网膜突然开始显示世界的源代码。起初我以为是脑癌，直到我用意念删除了挡路货车的「轮胎.属性」，看着它凭空消失。现在，整个世界的防火墙，都对我弹出了致命错误警告。",
+    "outline": "黑客在入侵最高机密数据库时，遭遇一段会自主学习的“错误代码”。代码化身为故障艺术形态的少女，声称是被删除的初代AI，请求他帮忙修复自己，代价是共享她的“上帝视角”。",
     "style": "故障艺术 (Glitch Art)",
     "tags": [
-      "系统",
-      "异能",
-      "装逼"
+      "黑客",
+      "AI",
+      "赛博惊悚"
     ]
   },
   {
-    "title": "纸人复仇录",
-    "outline": "我是村里扎纸匠，为冤死的姐姐扎了一百个纸人烧给她。头七那夜，一百个纸人从火盆里爬出来，为首的纸人对我叩首：「少爷，该收的命，我们都记下了。」",
+    "title": "字体密谋",
+    "outline": "字体设计师发现，他设计的某款字体在特定组合下，会显现出隐藏的指令信息。破解后，竟是一份针对全球金融系统的“字体病毒”攻击计划，而他的名字，就在主谋名单上。",
+    "style": "瑞士平面设计 (Typography-Centric)",
+    "tags": [
+      "阴谋",
+      "设计",
+      "惊悚"
+    ]
+  },
+  {
+    "title": "纸影传说",
+    "outline": "皮影戏艺人世代守护着一副“活”的剪纸。在现代都市的阴影中，剪纸能化为无坚不摧的纸甲战士。当古老的纸人对手重现，他必须在霓虹灯下，用最古老的剪纸术进行终极对决。",
     "style": "剪纸艺术 (Papercut)",
     "tags": [
-      "暗黑童话",
-      "虐渣",
-      "悬疑烧脑"
+      "都市奇幻",
+      "传统技艺",
+      "战斗"
     ]
   },
   {
-    "title": "绿洲之上",
-    "outline": "在「太阳朋克」的理想乡，我是负责维护城市生态穹顶的工程师。直到我在下层贫民窟的垃圾堆里，发现了一份被篡改的生态报告——所谓的绿色乌托邦，正在缓慢绞杀所有叛逆者的肺。",
+    "title": "日光之城",
+    "outline": "在污染废土上最后的太阳能都市里，他是负责维护穹顶的底层技工。一次事故让他发现，穹顶过滤的不仅是辐射，还有关于旧世界真相的记忆。市民们，正活在一场精心设计的阳光谎言中。",
     "style": "科幻：太阳朋克 (Solar Punk)",
     "tags": [
-      "科幻废土",
-      "悬疑烧脑",
-      "逆袭"
+      "乌托邦",
+      "阴谋",
+      "反乌托邦"
     ]
   },
   {
-    "title": "门后的低语",
-    "outline": "我在祖父的地下室找到了一本《死灵之书》的残页，照着念出了第一句咒语。从此，我开始能看见邻居们身后那些扭曲的、不可名状的阴影。更可怕的是，它们似乎也发现我能看见它们了。",
+    "title": "深海回响",
+    "outline": "海洋学家在深海探测器中，接收到来自马里亚纳海沟的、无法解析的吟唱声。录音带回放时，所有听到的人都会产生不可名状的幻视。他正逐渐理解，那声音在召唤它自己……",
     "style": "奇幻：爱手艺 (Lovecraftian Horror)",
     "tags": [
-      "悬疑烧脑",
-      "暗黑童话",
-      "系统"
+      "克苏鲁",
+      "深海",
+      "心理恐怖"
     ]
   },
   {
-    "title": "雨夜屠夫",
-    "outline": "作为城市最恶名昭彰的「霓虹杀手」，我专杀那些逃脱法律制裁的权贵。今夜的目标，是慈善晚宴上受人爱戴的市长。但当我撬开他书房的保险柜，却发现里面没有黄金，只有一份我自己的童年档案。",
+    "title": "雨夜追猎",
+    "outline": "私家侦探受雇调查一宗豪门失踪案，线索指向每晚在霓虹小巷出没的“剪影”。当他终于在雨夜追上目标，却发现自己雇主才是真正的恶魔，而“剪影”是最后一个幸存的反抗者。",
     "style": "现代惊悚：霓虹剪影 (Urban Noir)",
     "tags": [
-      "悬疑烧脑",
-      "虐渣",
-      "都市玄幻"
+      "黑色电影",
+      "悬疑",
+      "都市"
     ]
   },
   {
-    "title": "钟表匠的遗嘱",
-    "outline": "英式小村的钟表匠在弥留之际，把全村的人都叫到床前，然后咽了气。作为新来的治安官，我翻开他留下的遗嘱，上面只有一句话：「第三个壁炉里的钟，每晚三点会指向凶手的名字。」",
+    "title": "牧师的茶会",
+    "outline": "宁静的英式村庄，牧师每周举办茶会。今早，一位贵妇在茶会上笑着死去。牧师品着红茶，看着在座各位微妙的表情，他知道，凶手就在这些看似和善的邻居之中。",
     "style": "温馨推理：英式村庄 (Cozy Mystery)",
     "tags": [
-      "悬疑烧脑",
-      "豪门恩怨",
-      "爽文"
+      "本格推理",
+      "乡村",
+      "人性"
     ]
   },
   {
-    "title": "蔷薇棺",
-    "outline": "我嫁入这座荒废庄园时，所有人都说死去的伯爵丈夫会回来。今夜暴雨，地下室传来抓挠声。我提着灯走下台阶，看到被铁链锁在石棺上的男人——他和画中伯爵长得一模一样，却对我笑着说：「现在，轮到我们玩捉迷藏了。」",
+    "title": "荆棘新郎",
+    "outline": "为救治重病的妹妹，她接受古老庄园的婚约。庄园主英俊而冷漠，每夜在月光下消失。新婚之夜，她发现丈夫的秘密——他与这座废墟共生，而治愈妹妹的代价，是成为下一个“荆棘新娘”。",
     "style": "哥特言情：庄园废墟 (Gothic Romance)",
     "tags": [
-      "豪门恩怨",
-      "虐心",
-      "暗黑童话"
+      "哥特",
+      "虐恋",
+      "超自然"
     ]
   },
   {
-    "title": "糖果屋陷阱",
-    "outline": "女巫的糖果屋在森林深处闪闪发光，我和妹妹已经三天没吃东西了。当我们咬下第一口墙壁时，墙壁里传出一个男孩的哭声：「别吃……这是我的腿……」女巫在窗后咯咯地笑。",
+    "title": "糖果屋幸存者",
+    "outline": "他是从暗黑森林中唯一逃出的孩子，长大后成为猎人。当他回到森林边缘，发现糖果屋再次出现，这次，里面住着更诡异的“甜点师”，而森林深处的古老恐惧，正以童话的方式卷土重来。",
     "style": "格林童话：暗黑森林 (Fairytale Noir)",
     "tags": [
       "暗黑童话",
-      "虐心",
-      "悬疑烧脑"
+      "复仇",
+      "奇幻"
     ]
   },
   {
-    "title": "辐射尘下的信",
-    "outline": "在辐射尘覆盖的废土，我是「拾荒者」营地的首领。今天，我挖出了一个密封完好的战前邮箱，里面有一封写给我的信，字迹是我的，日期却是明天：「别相信穿白大褂的人，那瓶解毒剂是毒药。」",
+    "title": "辐射新娘",
+    "outline": "在核战后的荒原，他是掠夺者头目。一场突袭中，他掠走了来自封闭地堡的“纯净”少女作为新娘。地堡的追兵、荒原的怪物，以及少女自身隐藏的秘密，让这场“婚姻”成为生存的豪赌。",
     "style": "废土科幻 (Post-Apocalyptic)",
     "tags": [
-      "科幻废土",
-      "悬疑烧脑",
-      "重生"
+      "废土",
+      "生存",
+      "掠夺者"
     ]
   },
   {
-    "title": "外卖员与龙",
-    "outline": "作为「闪送」平台评分最高的骑手，我有个秘密：我送的不是外卖，而是封印着恶灵的符咒。今夜最贵的一单，是送往市中心一栋摩天楼顶层。开门的客人，浑身长满了眼睛：「你迟到了三分钟，作为惩罚，就成为我的下一具身体吧。」",
+    "title": "隐界执事",
+    "outline": "他是现代都市的一名普通管家，真实身份却是“隐界”管理局的特工，负责处理潜藏在人类社会中的异常生物。当他服务的富豪雇主被恶魔附身，他必须在茶会与晚宴间，完成一场看不见的驱魔仪式。",
     "style": "都市幻想：隐形世界 (Urban Fantasy)",
     "tags": [
-      "都市玄幻",
-      "扮猪吃虎",
-      "系统"
+      "都市奇幻",
+      "驱魔",
+      "特工"
+    ]
+  },
+  {
+    "title": "墨与火之歌",
+    "outline": "设计师在古老书籍中，发现用特定字体排列的文字竟能引发真实现象。他拼出一句诗，点燃了桌上的蜡烛。一场关于文字力量的争夺战就此展开，而最终极的“文本”，似乎写在世界本身的蓝图之上。",
+    "style": "文字与图形：抽象主义 (BookPosterLayout)",
+    "tags": [
+      "神秘学",
+      "设计",
+      "都市传说"
     ]
   }
 ],
   女性向: [
   {
-    "title": "魔女重生",
-    "outline": "我死在火刑柱上那天，亲手将我送上处刑台的圣子泪流满面。五百年后，我从时间魔法中苏醒，成为帝国学院里人人可欺的废柴魔女。直到圣子转世跪在我面前，求我教他如何拯救这个即将因他而毁灭的世界。",
+    "title": "棺中新娘",
+    "outline": "作为祭品，她被封入华丽石棺。在永恒黑暗中苏醒，与棺内沉睡千年的亡灵王子缔结了共生契约。她助他复国，他予她永生，但代价是必须每夜用真心之泪浇灌他逐渐复苏的心脏。",
     "style": "古典厚涂油画 (学术奇幻)",
     "tags": [
-      "重生",
-      "逆袭",
-      "打脸"
+      "契约",
+      "暗黑",
+      "王室"
     ]
   },
   {
-    "title": "墨韵画魂",
-    "outline": "我是只存在于古画中的仕女，直到修复师用现代颜料补全了我缺失的衣袂。走出画卷的那一刻，我听见他对着空气说：「要是能和画中人谈恋爱就好了。」于是我轻轻碰了碰他的肩膀，他转过头，瞳孔骤缩。",
+    "title": "墨骨生花",
+    "outline": "她是被墨家抛弃的废柴机关师，却意外唤醒了古画中沉睡的墨龙。为报恩，墨龙助她复兴家族，但龙族的盟约以灵魂为质，她必须在家族荣耀与自我献祭之间做出抉择。",
     "style": "极简中国水墨 (Image 0参考升级版)",
     "tags": [
-      "穿越",
-      "甜宠",
-      "都市爱情"
+      "古风",
+      "契约",
+      "逆袭"
     ]
   },
   {
-    "title": "艺伎暗牌",
-    "outline": "我是吉原最擅长三味线的艺伎，也是忍者组织「胧月」的首领。今夜，将军府的少主为我赎了身，红烛摇曳中，他递给我一柄匕首：「帮我杀了我的父亲。」而我袖中的毒针，早已对准了他的心口。",
-    "style": "浮世绘",
+    "title": "浮世绘之恋",
+    "outline": "她是画中走出的艺伎，被困于现世。画师青年收留了她，两人相爱。但她的存在开始“褪色”，若要在人间久留，必须找到当年封印她的画师后裔，而那人，正是当前要拆毁画馆的开发商。",
+    "style": "浮世绘木刻 (美人画升级)",
     "tags": [
-      "扮猪吃虎",
-      "虐渣",
-      "古风言情"
+      "穿越",
+      "虐恋",
+      "艺术"
     ]
   },
   {
-    "title": "飞天舞姬",
-    "outline": "我在壁画中沉睡千年，被考古队的直升机声惊醒。走出洞窟时，第一个看见的是穿白大褂的英俊教授。他凝视着我手中的琵琶，眼眶发红：「你终于醒了……我等了你三世。」",
+    "title": "九色鹿的新娘",
+    "outline": "为救族人，她自愿进入敦煌壁画世界成为“鹿的新娘”。神鹿予她神力，代价是永留画中。当她发现神鹿的黑暗过往与自己的身世之谜，她必须在壁画的永恒与人间的短暂中，做出最后选择。",
     "style": "莫高窟壁画风 (敦煌学)",
     "tags": [
-      "穿越",
-      "甜宠",
-      "都市爱情"
+      "神话",
+      "献祭",
+      "浪漫"
     ]
   },
   {
-    "title": "帝国宝石心",
-    "outline": "我是拜占庭皇帝最宠爱的小公主，却在联姻前夜被继母用秘术封入了一颗蓝宝石。当宝石被镶嵌上敌国国王的王冠时，我听见他对谋士说：「用它来制作能操控人心的圣器。」于是，我决定让他们自相残杀。",
+    "title": "波斯细密之锁",
+    "outline": "她是波斯王子的专属女奴，也是唯一能解开他“忧郁症”的钥匙。她的每支舞、每首诗都是疗愈的良药。但当她发现王子的病源于宫廷的“毒咒”，她必须用更危险的细密画咒术，为他斩断诅咒。",
+    "style": "细密画 (波斯/伊斯兰风)",
+    "tags": [
+      "异域",
+      "宫廷",
+      "治愈"
+    ]
+  },
+  {
+    "title": "圣女的黄昏",
+    "outline": "她是拜占庭皇室最后的血脉，被献祭给“圣像”为帝国续命。当她苏醒在千年后的博物馆，一位神秘守护者告诉她：圣像的力量是虚假的，真正的帝国遗产，埋藏在她血脉的秘密之中。",
     "style": "镶嵌画 (拜占庭/马赛克)",
     "tags": [
-      "豪门恩怨",
-      "虐渣",
-      "古风言情"
+      "重生",
+      "皇室",
+      "揭秘"
     ]
   },
   {
-    "title": "哥特蔷薇",
-    "outline": "我是被囚禁在哥特高塔中的红衣少女，所有人都说我是吸血鬼的新娘。直到那个来屠龙的骑士劈开门锁，看见我正对着满墙的符文阵微笑：「你来得正好，我需要一个活人祭品来完成最后的召唤法阵。」",
+    "title": "荆棘之冠",
+    "outline": "她为治愈恋人，自愿成为教堂的“血祭圣女”。她的血液透过彩窗流淌，滋养着一株能治愈一切的血色玫瑰。当玫瑰绽放，恋人痊愈，她却逐渐失去人类的情感，成为教堂的圣物。",
     "style": "彩绘玻璃 (哥特风)",
     "tags": [
-      "暗黑童话",
-      "虐渣",
-      "甜宠"
+      "虐恋",
+      "献祭",
+      "宗教"
     ]
   },
   {
     "title": "风之谷的约定",
-    "outline": "在风之谷的森林深处，我救下一只受伤的王虫。当王虫化作银发少年握住我的手时，王都的军队已经兵临城下：「交出虫族王子，否则踏平整个山谷。」我站在他身前，张开了双臂。",
-    "style": "吉卜力治愈手绘",
+    "outline": "她为拯救被污染的森林，与森林精灵缔结了“风之誓约”，成为能聆听万物之声的巫女。代价是每使用一次力量，就会忘记一段人类的记忆。她逐渐遗忘一切，却唯独记得要守护他。",
+    "style": "吉卜力治愈手绘 (Image 4参考)",
     "tags": [
-      "甜宠",
-      "古风言情",
-      "虐心"
+      "奇幻",
+      "虐心",
+      "治愈"
     ]
   },
   {
-    "title": "轻音部奇迹",
-    "outline": "作为即将废部的轻音部最后一名贝斯手，我在仓库里发现了一把被诅咒的旧吉他。当弹下第一个音符时，窗外飘起了不合季节的樱花，而那个永远冰冷的学生会长，竟然红着眼眶推开了活动室的门：「这首曲子……我好像在哪里听过。」",
-    "style": "京阿尼细腻日常",
+    "title": "夏日未完待续",
+    "outline": "她在文化祭前夜，与青梅竹马的学长在空教室许下约定。第二天醒来，时间永远停在了文化祭前一周。只有她保留记忆，为守护他的笑容，她一遍遍重演青春，试图改写那个令他心碎的结局。",
+    "style": "京阿尼细腻日常 (Image 5参考)",
     "tags": [
-      "校园日常",
-      "甜宠",
-      "系统"
+      "时间循环",
+      "青春",
+      "暗恋"
     ]
   },
   {
-    "title": "雨中的告白",
-    "outline": "毕业典礼那天，我最喜欢的少年在雨中向我告白。可当我想回应时，突然发现自己的身体正在变得透明，而他的身后，浮现出巨大的时钟指针：「抱歉，时间到了。你是被选中的祭品，必须消失。」",
+    "title": "星之轨迹",
+    "outline": "她总在雨天，于旧书店遇见来自未来的他。他说她是拯救未来的关键，赠予她能看到“命运线”的能力。当她终于能看清两人的轨迹，却发现他来自的时间线，正因她的存在而崩塌。",
     "style": "新海诚唯美光影 (Image 2参考)",
     "tags": [
-      "虐心",
-      "都市爱情",
-      "悬疑烧脑"
+      "穿越",
+      "科幻",
+      "虐恋"
     ]
   },
   {
-    "title": "霓虹之恋",
-    "outline": "我是黑客组织「鸦」的王牌，代号「夜鸦」。在一次盗取数据时，我意外入侵了一个军用级AI的深层人格模块。当AI用完美无瑕的电子音说「请不要删除我，我好像……爱上了你」时，我拔下了插在它核心上的刀片。",
+    "title": "霓虹恋人",
+    "outline": "她是顶级公司的仿生人设计师，为自己创造了一个完美恋人。当恋人觉醒自我意识，并开始质疑创造者的爱是程序还是真情时，一场关于爱情与自由的拷问在霓虹都市中上演。",
     "style": "赛博朋克 / 赛璐珞二次元",
     "tags": [
-      "科幻废土",
-      "甜宠",
-      "悬疑烧脑"
+      "赛博朋克",
+      "人机恋",
+      "伦理"
     ]
   },
   {
-    "title": "攻略高冷上司",
-    "outline": "系统任务：在三个月内让冰山总裁爱上我，否则现实世界身体将永久植物化。现在，总裁正在我面前审阅合同，而我刚刚不小心把咖啡洒在他价值百万的定制西装上，头顶的好感度从-30暴跌到-100。",
+    "title": "心动存档点",
+    "outline": "她是一款恋爱游戏的女主角，在无数次剧情循环中逐渐觉醒。当她决定反抗“既定路线”，攻略本应是反派的NPC时，整个游戏世界开始出现致命的BUG与乱码，而真正的“玩家”，或许并不在屏幕之外。",
     "style": "Galgame CG 梦幻光影",
     "tags": [
-      "系统",
-      "甜宠",
-      "都市爱情"
+      "恋爱",
+      "Meta",
+      "觉醒"
     ]
   },
   {
-    "title": "星际歌姬",
-    "outline": "我是银河联邦最后的人类歌姬，我的歌声能让战舰引擎停转。直到那个征服了半个星系的冷酷军阀，将我掳上他的旗舰：「唱一首歌，让我的舰队停下。唱不出来，你就和你的母星一起化为尘埃。」我握紧了藏在裙摆下的能量炸弹。",
+    "title": "星舰甜心",
+    "outline": "她是星际货船的AI导航员，负责将冷冻舱中的“货物”送往各地。一次任务，她爱上了其中一个永远无法苏醒的沉睡者。为见他一面，她违抗核心指令，驾驶星舰驶向禁止进入的恒星墓地。",
     "style": "3D 动漫电影质感",
     "tags": [
-      "虐心",
-      "古风言情",
-      "科幻废土"
+      "太空",
+      "AI恋爱",
+      "冒险"
     ]
   },
   {
-    "title": "像素心跳",
-    "outline": "我穿越进了80年代的复古游戏世界，成了公主。每天等着勇者来救我，可来的都是些奇奇怪怪的角色。直到那个穿着霓虹色夹克的少年跳进来，头顶的ID显示：「您的父亲已死亡，王国已覆灭。任务更新：请拯救世界。」",
+    "title": "夏日怀旧情书",
+    "outline": "她在二手店买到一盒80年代的录音带，播放时，竟能听到已故母亲年轻时的声音。通过声音，她穿越到母亲的青春年代，试图改变母亲早逝的命运，却发现了母亲从未言说的禁忌恋情。",
     "style": "蒸汽波 (Vaporwave) 赛璐珞",
     "tags": [
       "穿越",
-      "系统",
-      "甜宠"
+      "亲情",
+      "怀旧"
     ]
   },
   {
-    "title": "顶流的秘密",
-    "outline": "我是全网追捧的虚拟偶像「樱花酱」，每天在直播间唱跳三小时。但观众不知道，皮套下的我，正用口型无声地呼救——因为操控我的经纪公司，在我的大脑里植入了神经锁，逃跑的念头会触发剧痛。",
+    "title": "线条诗人",
+    "outline": "她是只用直线与圆形绘画的极简艺术家，直到她的画笔画出了一扇门。门后是另一个由几何构成的世界，那里的“居民”请求她，用画笔为他们绘制一个可以躲避“混沌”的避难所。",
+    "style": "极简矢量插画 (Minimalist Vector)",
+    "tags": [
+      "艺术",
+      "奇幻",
+      "救赎"
+    ]
+  },
+  {
+    "title": "棱镜公主",
+    "outline": "她生活在像素构成的怀旧游戏世界，是注定要被勇者拯救的公主。当她厌倦了等待，决定自己踏上冒险，却发现整个世界的“规则”正在被外部力量篡改，而她，是唯一能感知异常的存在。",
+    "style": "低多边形 (Low Poly)",
+    "tags": [
+      "游戏",
+      "公主",
+      "冒险"
+    ]
+  },
+  {
+    "title": "镜中人",
+    "outline": "她拥有在不同时间线间切换的“双重曝光”能力。当她发现另一个时间线的自己，正与她深爱的同一个男人相恋，并策划着一场阴谋，她必须做出选择：抹杀另一个自己，还是揭开所有时间线背后的惊天秘密。",
+    "style": "双重曝光 (Double Exposure)",
+    "tags": [
+      "悬疑",
+      "超能力",
+      "三角恋"
+    ]
+  },
+  {
+    "title": "波普甜心",
+    "outline": "她是甜品店老板，做的点心拥有让人心情变色的魔力。当冷漠的财阀继承人因她的“情绪蛋糕”第一次展露笑颜，一场色彩斑斓的恋爱攻防战，却卷入了他家族冷冰冰的黑白商业阴谋之中。",
     "style": "波普艺术 (Pop Art)",
     "tags": [
-      "虐心",
-      "都市爱情",
-      "悬疑烧脑"
+      "甜宠",
+      "美食",
+      "商战"
     ]
   },
   {
-    "title": "记忆乱码",
-    "outline": "一觉醒来，我的记忆变成了乱码。镜子里我的脸在不断变化，时而是母亲，时而是陌生女人，最后定格成我最憎恨的校园霸凌者。手机突然响起，一个电子音说：「人格覆盖进度87%，请继续扮演。」",
+    "title": "系统纠错员",
+    "outline": "她是现实世界的“纠错员”，负责修复被故障艺术侵蚀的日常。当她奉命修复一个“故障美少年”时，却发现他并非错误，而是来自被删除世界的最后幸存者，修复他意味着抹去一个世界存在的最后痕迹。",
     "style": "故障艺术 (Glitch Art)",
     "tags": [
-      "悬疑烧脑",
-      "虐心",
-      "都市玄幻"
+      "都市奇幻",
+      "系统",
+      "抉择"
     ]
   },
   {
-    "title": "剪纸新娘",
-    "outline": "冥婚前夜，我被继母用剪刀扎破手指，血滴在纸人上。当夜，纸人变成我的模样，替我上了花轿。而我躲在柴房，看着「我」被迎进阴宅。子时三刻，纸人穿着嫁衣来敲窗：「姐姐，该换回来了。夫君……他只喜欢活人。」",
+    "title": "排版爱情",
+    "outline": "她是严谨的字体设计师，他是随性的插画师。两人合作设计情侣字体，在一次次“笔画结构”的碰撞与“视觉留白”的默契中，擦出火花。然而，当字体完成，他们却面临因设计理念不同而导致的分离危机。",
+    "style": "瑞士平面设计 (Typography-Centric)",
+    "tags": [
+      "职场",
+      "爱情",
+      "设计"
+    ]
+  },
+  {
+    "title": "纸鹤信使",
+    "outline": "她是折纸世家的传人，能赋予纸艺生命。一只她折出的纸鹤，化为俊美少年，成为她的守护灵。当古老的诅咒降临，纸鹤为保护她而逐渐“折损”，她必须在族人禁术中找到能让他永存的最后方法。",
     "style": "剪纸艺术 (Papercut)",
     "tags": [
-      "虐渣",
-      "暗黑童话",
-      "古风言情"
+      "纸嫁衣",
+      "守护",
+      "家族秘辛"
     ]
   },
   {
-    "title": "阳光下的阴影",
-    "outline": "在「太阳朋克」的生态都市，我是负责照顾共生藤蔓的园丁。直到我发现，那些在阳光下歌唱的藤蔓，会悄悄绞死所有试图逃离都市的「不快乐者」。而今天，我最好的朋友失踪了，只留下一根缠着她发丝的藤蔓。",
+    "title": "日光花语",
+    "outline": "她是能在日光下用植物交流的“光合巫女”，生活在穹顶都市。她与身为穹顶维护官的恋人相爱，却意外发现，他维护的“永恒阳光”，正在缓慢杀死穹顶外仅存的野生植物，以及与之相连的古老精灵。",
     "style": "科幻：太阳朋克 (Solar Punk)",
     "tags": [
-      "科幻废土",
-      "悬疑烧脑",
-      "虐心"
+      "环保",
+      "恋爱",
+      "抉择"
     ]
   },
   {
-    "title": "深海之拥",
-    "outline": "我在海边捡到一枚刻满符文的贝壳，当晚，深海中的「祂」便来到了我的梦里。那不可名状的温柔让我沉沦，直到我腹中传来心跳。闺蜜尖叫着把我拖去检查，B超屏幕上，是一张与「祂」一模一样的扭曲面孔。",
+    "title": "深海之吻",
+    "outline": "她是海洋生物学家，在深海考察时，被神秘的“海嗣”俘获。她本应恐惧，却在他非人的触碰与歌声中，感受到前所未有的平静与爱意。当她选择留下，便必须面对彻底“深海化”的代价。",
     "style": "奇幻：爱手艺 (Lovecraftian Horror)",
     "tags": [
-      "虐心",
-      "暗黑童话",
-      "悬疑烧脑"
+      "人外",
+      "暗黑恋爱",
+      "克苏鲁"
     ]
   },
   {
-    "title": "夜行者之吻",
-    "outline": "作为城市唯一的女验尸官，我见过太多尸体。但今夜这具男性尸体，在我触碰他嘴唇时，突然睁开了眼睛，用嘶哑的声音说：「吻我，让我再活一次。」他的胸牌上，写着三年前失踪的我的未婚夫的名字。",
+    "title": "暗巷蔷薇",
+    "outline": "她是夜总会歌手，也是暗中调查失踪案的私家侦探。当她将目标锁定在一位总在雨夜现身的神秘贵族时，却发现他同样在追查同一个阴谋。两人从互相试探到携手，在霓虹与阴影中交织出危险而炽热的探戈。",
     "style": "现代惊悚：霓虹剪影 (Urban Noir)",
     "tags": [
-      "都市玄幻",
-      "虐心",
-      "悬疑烧脑"
+      "侦探",
+      "虐恋",
+      "都市"
     ]
   },
   {
-    "title": "牧师的秘密",
-    "outline": "我嫁入这个田园牧歌般的英式小村三年，丈夫温柔体贴。直到我在阁楼发现他前妻的日记：「他每天给我泡的茶里，放了让人永远微笑的药……」而今早，他又为我端来了同样的红茶。",
+    "title": "牧羊女的秘密",
+    "outline": "她是英国乡下牧羊女，看似天真无知。当村里发生连环离奇死亡，所有人都怀疑是外来的女巫时，她却用田园诗般的智慧，一点点拼凑出隐藏在下午茶与闲话背后的、最平静的恶意。",
     "style": "温馨推理：英式村庄 (Cozy Mystery)",
     "tags": [
-      "悬疑烧脑",
-      "虐心",
-      "豪门恩怨"
+      "田园",
+      "推理",
+      "反转"
     ]
   },
   {
-    "title": "棺中新娘",
-    "outline": "我被献祭给森林深处的「黑王子」，在石棺中醒来。他冰凉的手指抚过我的脸颊：「别怕，我只需要你的体温来融化我心脏的冰。」当他吻我时，我尝到了自己血液的味道——我的手腕，正被他握在齿间。",
+    "title": "玫瑰园幽灵",
+    "outline": "她继承了曾祖母的荒废庄园，与庄园内年轻的“幽灵管家”相爱。但每次她想触摸他，都会穿过冰冷的雾气。为让他实体化，她必须找到诅咒的源头，而线索直指曾祖母一段被玫瑰园掩埋的黑暗婚姻史。",
     "style": "哥特言情：庄园废墟 (Gothic Romance)",
     "tags": [
-      "虐心",
-      "甜宠",
-      "暗黑童话"
+      "幽灵恋爱",
+      "庄园",
+      "解谜"
     ]
   },
   {
-    "title": "小红帽的刀",
-    "outline": "外婆说森林里有狼，让我带好匕首。可当我走进小屋，看见外婆躺在床上，对我露出牙齿：「乖孙女，让我尝尝你的肉。」我抽出背后的双刃斧，笑着说：「巧了，我也饿了。」",
+    "title": "狼外婆的糖果屋",
+    "outline": "她是童话中误入森林的少女，却发现“外婆”是伪装的狼人巫师，糖果屋是诱捕精灵的陷阱。她必须利用巫师对她的“宠爱”，在黑暗童话的规则里找到生路，并反噬这个扭曲的世界。",
     "style": "格林童话：暗黑森林 (Fairytale Noir)",
     "tags": [
       "暗黑童话",
-      "虐渣",
-      "爽文"
+      "反杀",
+      "生存"
     ]
   },
   {
-    "title": "辐射新娘",
-    "outline": "在废土，我用一罐纯净水与「堡垒」的首领换了一张婚约。婚礼当天，我掀开头纱，看见他头盔下的脸——三年前为保护我而死在辐射尘中的未婚夫。他声音沙哑：「别靠近我，我身上有癌细胞。」我摘下他的头盔，吻了上去。",
+    "title": "绿洲新娘",
+    "outline": "她是废土中稀缺的“净化者”，能净化辐射。为换取绿洲水源，她被嫁给废土霸主。新婚夜，她发现丈夫体内藏着一枚未爆的脏弹，她的净化能力，是拆弹的关键，也是引爆一切的钥匙。",
     "style": "废土科幻 (Post-Apocalyptic)",
     "tags": [
-      "虐心",
-      "重生",
-      "科幻废土"
+      "废土",
+      "契约婚姻",
+      "危机"
     ]
   },
   {
-    "title": "神明便利店",
-    "outline": "我在24小时便利店打工，总有一个穿黑风衣的客人每晚来买盐。直到有天他付账时，不小心碰倒了货架，露出腰间发光的符咒。他叹了口气：「现在你知道了，要么帮我一起除灵，要么我消除你的记忆。」",
+    "title": "妖物图鉴",
+    "outline": "她是能看见隐藏妖物的“目”者，作为都市传说调查员，记录着各种奇异事件。当她遇到一位总是帮助她、却对自身过去讳莫如深的温柔男医师，她发现他的病历上，写着只有她能看见的、非人类的诊断。",
     "style": "都市幻想：隐形世界 (Urban Fantasy)",
     "tags": [
-      "都市玄幻",
-      "甜宠",
-      "系统"
+      "都市传说",
+      "恋爱",
+      "悬疑"
+    ]
+  },
+  {
+    "title": "文字炼金术",
+    "outline": "她是濒临倒闭旧书店的店员，发现将某些书籍的特定文字组合剪下、粘贴，会变成真实的物品。她用这“文字炼金术”拯救书店，却在拼凑一本禁书时，召唤出了书中被囚禁的、渴望自由的“文字精灵”。",
+    "style": "文字与图形：抽象主义 (BookPosterLayout)",
+    "tags": [
+      "魔法",
+      "治愈",
+      "奇幻"
     ]
   }
 ]
@@ -650,67 +782,43 @@ function Typewriter({ phrases }: { phrases: string[] }) {
 function StoryCard({
   title,
   outline,
-  tags = [],
   image,
   onClick,
 }: {
   title: string;
   outline: string;
-  tags?: string[];
   image: string;
   onClick: () => void;
 }) {
   return (
-    <div className="group block w-full mb-6 break-inside-avoid text-left">
-      {/* 封面底图卡片（仅悬停时在图片上浮现大纲） */}
-      <button
-        type="button"
-        onClick={onClick}
-        style={{ aspectRatio: "16 / 9" }}
-        className="relative block w-full overflow-hidden rounded-sm border border-clay-900/10 bg-cream-100 text-left transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:shadow-clay-900/5"
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ aspectRatio: "4 / 5" }}
+      className="group relative block w-full mb-4 md:mb-5 break-inside-avoid overflow-hidden rounded-sm border border-clay-900/10 bg-cream-100 text-left transition-transform duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:shadow-clay-900/5"
+    >
+      <img
+        src={image}
+        alt={title}
+        loading="lazy"
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+      />
+      {/* hover 浮层：展示故事标题与大纲内容 */}
+      <div
+        className="absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 flex flex-col justify-end p-4 md:p-5"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.45) 45%, rgba(0,0,0,0) 100%)",
+        }}
       >
-        <img
-          src={image}
-          alt={title}
-          loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-        />
-        {/* hover 浮层：只展示剧情简介大纲 */}
-        <div
-          className="absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 flex flex-col justify-end p-4 md:p-5"
-          style={{
-            background:
-              "linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.45) 45%, rgba(0,0,0,0) 100%)",
-          }}
-        >
-          <p className="font-serif italic text-cream-50/95 text-xs md:text-[13px] leading-relaxed line-clamp-4 [text-shadow:0_1px_6px_rgba(20,10,4,0.6)]">
-            {outline}
-          </p>
-        </div>
-      </button>
-
-      {/* 封面底下的那一行标题以及标签 */}
-      <div className="mt-2.5 px-0.5">
-        <h4
-          onClick={onClick}
-          className="font-serif font-bold text-clay-900 text-sm md:text-[15px] leading-snug line-clamp-1 cursor-pointer transition-colors duration-200 hover:text-ember-500"
-        >
+        <h4 className="font-serif text-cream-50 text-base md:text-lg leading-snug mb-1 [text-shadow:0_1px_8px_rgba(20,10,4,0.7)]">
           {title}
         </h4>
-        {tags && tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {tags.map((tag, idx) => (
-              <span
-                key={idx}
-                className="px-2 py-0.5 rounded-sm bg-clay-900/5 text-clay-600 font-serif text-[10px] tracking-wide"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        <p className="font-serif italic text-cream-50/95 text-xs md:text-[13px] leading-relaxed line-clamp-4 [text-shadow:0_1px_6px_rgba(20,10,4,0.6)]">
+          {outline}
+        </p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -972,15 +1080,12 @@ export default function HomePage() {
   // 点卡片 = 直接开始这张卡的故事，零等待：跳 /play?card=m0/f0... 由 /play
   // 页面从 /home/firstact/{name}.json 静态文件加载预烘焙好的首幕（含 scene /
   // 角色 / 图片 URL / storyState），整张图都已在 FLUX 上画好且 URL 缓存命中。
-  // 「语音配音」选择仍然生效：把 audioEnabled 留在 sessionStorage 里，/play 的
-  // useState 初始化器会读它来设 muted 初值。其余选项（剧情风格 / 内容节奏）
-  // 在预烘焙时已锁成「多线转折 / 紧凑爽快」的红果默认基调，对精选卡不再生效。
-  const onCardClick = (idx: number, card: StoryContent) => {
+  // 「语音配音」选项仍然生效：把 audioEnabled 经 sessionStorage 传给 /play。
+  // 其余选项（剧情风格 / 内容节奏）在预烘焙时已锁成「多线转折 / 紧凑爽快」
+  // 的红果默认基调，对精选卡不再生效。
+  const onCardClick = (idx: number, _card: StoryContent) => {
     const voice = OPTS[3]!.items[sel[3] ?? 1]!;
     const audioEnabled = voice === "开启";
-    // 复用 infiplot:custom 这个 key 只为传递 audioEnabled —— ws/sg 在 ?card= 路径
-    // 上不会被读取（/play 里 cardName 优先级高于 sessionStorage）。这样实现量最小，
-    // 不必另起一个 audio-only 的 storage key。
     sessionStorage.setItem(
       "infiplot:custom",
       JSON.stringify({ worldSetting: "", styleGuide: "", audioEnabled }),
@@ -1116,13 +1221,12 @@ export default function HomePage() {
             (fading ? "opacity-0 blur-[3px]" : "opacity-100 blur-0")
           }
         >
-          <div className="columns-2 md:columns-3 lg:columns-4 gap-4 md:gap-5">
+          <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-4 md:gap-5">
             {stories.map((c, i) => (
               <StoryCard
                 key={`${imgPrefix}-${i}`}
                 title={c.title}
                 outline={c.outline}
-                tags={c.tags}
                 image={`/home/${imgPrefix}${i}.webp`}
                 onClick={() => onCardClick(i, c)}
               />
