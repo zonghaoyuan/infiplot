@@ -67,10 +67,11 @@ export type Scene = {
   imageUuid?: string;
   /**
    * Public CDN URL of this Scene's generated image. Returned to the client for
-   * `<img src>` rendering, and is what the client passes back to `/api/vision`
-   * as `prevImageUrl` so the server can re-fetch the bytes for click annotation.
+   * `<img src>` rendering; the client also feeds it through a Canvas 2D click
+   * annotator before posting to `/api/vision` (see
+   * `VisionRequest.annotatedImageBase64`).
    *
-   * For MOCK_IMAGE=true this is a `data:image/png;base64,...` data URI, not a
+   * For MOCK_IMAGE=true this is a `data:image/svg+xml;...` data URI, not a
    * Runware URL — the client renders both forms transparently.
    */
   imageUrl?: string;
@@ -306,12 +307,16 @@ export type BeatAudioResponse = {
 export type VisionRequest = {
   session: Session;
   /**
-   * Public CDN URL (or data URI in MOCK_IMAGE mode) of the scene the player
-   * just clicked. The server re-fetches the bytes to annotate the click and
-   * pass an OpenAI-compatible image_url to the vision LLM.
+   * Raw PNG base64 (no `data:` prefix) of the scene image WITH the player's
+   * click marker already drawn on it by the browser's Canvas 2D. The server
+   * forwards this straight to the vision LLM as an OpenAI-compatible
+   * image_url.
+   *
+   * Annotation lives client-side so the engine has no Node-native image
+   * dependency (sharp doesn't run on Cloudflare Workers) and we save a
+   * server-side image re-fetch per click.
    */
-  prevImageUrl: string;
-  click: { x: number; y: number };
+  annotatedImageBase64: string;
 };
 
 export type VisionResponse = {

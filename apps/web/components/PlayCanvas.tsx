@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Beat, BeatChoice } from "@infiplot/types";
 
 export type Phase =
@@ -170,6 +170,8 @@ export function PlayCanvas({
   onAdvance,
   onSelectChoice,
   fullViewport = false,
+  aboveCanvas,
+  aboveCanvasLeft,
 }: {
   imageUrl: string | null;
   audioBase64: string | null;
@@ -182,10 +184,13 @@ export function PlayCanvas({
   onAdvance: () => void;
   onSelectChoice: (choice: BeatChoice) => void;
   fullViewport?: boolean;
+  // 渲染在图片正上方、右对齐的 slot（画面外、紧贴右上角）。
+  aboveCanvas?: ReactNode;
+  // 渲染在图片正上方、左对齐的 slot（画面外、紧贴左上角），与 aboveCanvas 水平镜像。
+  aboveCanvasLeft?: ReactNode;
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const [audioDurationMs, setAudioDurationMs] = useState<number | undefined>(
     undefined,
   );
@@ -282,12 +287,6 @@ export function PlayCanvas({
     ? "min(100vw, calc(100dvh * 16 / 9))"
     : "min(96vw, calc((100dvh - 200px) * 16 / 9))";
 
-  const footerHint =
-    phase === "ready"
-      ? isChoiceBeat
-        ? "选 · 择 · 一 · 项"
-        : "点 · 击 · 推 · 进"
-      : "···";
 
   return (
     <div
@@ -318,10 +317,6 @@ export function PlayCanvas({
             src={imageUrl}
             alt="Generated scene"
             onClick={handleImageClick}
-            onLoad={(e) => {
-              const img = e.currentTarget;
-              setDims({ w: img.naturalWidth, h: img.naturalHeight });
-            }}
             draggable={false}
             className={`block w-auto h-auto select-none animate-fade-in transition-opacity duration-700 ease-out ${
               interactive ? "cursor-pointer" : "cursor-wait"
@@ -331,6 +326,18 @@ export function PlayCanvas({
 
           {!fullViewport && (
             <div className="absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-clay-900/12 to-transparent pointer-events-none" />
+          )}
+
+          {/* 画面正上方右对齐的 slot —— 用 bottom-full + right-0 让它整体浮在图片之外、紧贴右上角 */}
+          {!fullViewport && aboveCanvas && (
+            <div className="absolute bottom-full right-0 mb-2 flex items-center gap-2">
+              {aboveCanvas}
+            </div>
+          )}
+          {!fullViewport && aboveCanvasLeft && (
+            <div className="absolute bottom-full left-0 mb-2 flex items-center gap-2">
+              {aboveCanvasLeft}
+            </div>
           )}
 
           {beat && (
@@ -470,20 +477,20 @@ export function PlayCanvas({
           <p className="text-[9px] smallcaps text-clay-500 animate-slow-pulse">
             正 · 在 · 绘 · 制 · 第 · 一 · 幕
           </p>
+          {/* 加载占位也挂同一对 slot，让右上 / 左上的操作按钮在第一帧就出现 */}
+          {!fullViewport && aboveCanvas && (
+            <div className="absolute bottom-full right-0 mb-2 flex items-center gap-2">
+              {aboveCanvas}
+            </div>
+          )}
+          {!fullViewport && aboveCanvasLeft && (
+            <div className="absolute bottom-full left-0 mb-2 flex items-center gap-2">
+              {aboveCanvasLeft}
+            </div>
+          )}
         </div>
       )}
 
-      {!fullViewport && (
-        <div
-          className="flex items-center justify-between mt-3 px-1 w-full"
-          style={{ maxWidth: "96vw" }}
-        >
-          <span className="text-[9px] smallcaps text-clay-400 num">
-            {dims ? `${dims.w} × ${dims.h} · png` : "—"}
-          </span>
-          <span className="text-[9px] smallcaps text-clay-400">{footerHint}</span>
-        </div>
-      )}
     </div>
   );
 }

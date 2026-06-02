@@ -15,7 +15,6 @@
     "@infiplot/ai-client": "workspace:*",
     "@infiplot/tts-client": "workspace:*",
     "@infiplot/types": "workspace:*",
-    "jsonrepair": "^3.14.0",
-    "sharp": "^0.33.5"
+    "jsonrepair": "^3.14.0"
   }
 }

@@ -60,74 +60,94 @@ const OPTS: Opt[] = [
   { label: "内容节奏", items: ["慢热细腻", "紧凑爽快"], defaultIndex: 1 },
 ];
 
-type StoryContent = { title: string; outline: string };
+type StoryContent = { title: string; outline: string; style: string };
 
-/* 每个性向 30 篇预设剧情，与图片 /home/{m|f}{i}.webp 按索引一一对应。
+const STYLE_MAP: Record<string, string> = {
+  二次元: "唯美二次元动漫插画，日系 galgame 精致质感，柔和温暖的自然光照。",
+  吉卜力: "吉卜力工作室风格，手绘动画质感，柔和水彩底色，温暖治愈的氛围。",
+  真实系: "真实电影感，柔和自然光照，胶片颗粒。",
+  超写实: "超写实人像与场景，电影级布光，皮肤与材质细节精致。",
+  水彩: "水彩插画，湿润晕染笔触，纸纹底色。",
+  像素风: "像素风格，复古游戏 16-bit 调色，方块化几何造型。",
+  日系动画: "现代日系动画 cel-shading，硬光阴影分层，赛璐璐风。",
+  "3D 渲染": "3D 渲染卡通风格，柔和次表面散射，干净的电影级布光。",
+  蒸汽朋克: "蒸汽朋克美学，铜色齿轮与蒸汽，工业革命氛围。",
+  玄幻: "国风玄幻插画，仙气缭绕，群山烟雨与神兽萦绕。",
+  国风水墨: "国潮唯美古风插画，水墨微晕渲染，仙侠浪漫色彩，极具东方神韵。",
+  赛博朋克: "赛博朋克都市，霓虹反射湿润街道，电子义体高光。",
+};
+
+/* 每个性向 32 篇预设剧情（红果短视频式开场钩子）。与封面 /home/{m|f}{i}.webp 按索引
+   一一对应；style 字段决定点卡片进入 /play 时使用的画风（对应 styleMap 的 12 种风格）。
    男/女同索引共享画面尺寸，切性向 crossfade 时卡片高度不跳变。 */
 const STORIES: Record<Gender, StoryContent[]> = {
   男性向: [
-    { title: "樱の约定", outline: "樱花纷飞的黄昏，他终于鼓起勇气，向并肩走过六年的青梅竹马说出那句话……" },
-    { title: "锈色边境", outline: "漫天黄沙的废土，机械心脏在胸腔中沉重轰鸣。我从钢铁山中挖出一个完好的休眠舱……" },
-    { title: "云海仙踪", outline: "凡骨少年偶得神秘残碑，登顶云海仙山，神魔同修之路自此开启。" },
-    { title: "六月雨季", outline: "南方县城的多雨六月，转学第一天，注意到那个总在天台读诗的同学。雨水打湿了未送出的伞……" },
-    { title: "雨夜霓虹", outline: "2087 年东亚特区的酸雨之夜，丢失了三天记忆的我，手腕终端响起一通匿名警告：「他们来找你了」。" },
-    { title: "学院秘闻", outline: "深夜图书馆地下密室，清冷孤僻的班长跪在圆环阵法前，吟诵着不属于人类的咒词。" },
-    { title: "异界召唤", outline: "再睁眼，没有班主任，只有昏暗的魔法阵与一位哭得梨花带雨的圣女：「勇者大人，请拯救这个世界。」" },
-    { title: "花火之夜", outline: "夏祭的夜空下，浴衣女孩与你约定，今晚最后一发烟火，要一起看完。" },
-    { title: "霓虹之外", outline: "漂浮的飞车与古老方块字的全息广告——这是赛博东亚的另一种黎明。" },
-    { title: "放学后的车站", outline: "夕阳染红的乡间月台，无人列车迟迟未来，你和她沉默并立。" },
-    { title: "星辰咒语", outline: "古老图书馆深处，星纹长袍下的法师女孩低声念出禁咒。" },
-    { title: "战姬启动", outline: "紧急警报红光中，少女握紧操纵杆——决战时刻已到。" },
-    { title: "街灯之下", outline: "午夜独行的女侦探，雨雾中藏着尚未揭晓的真相。" },
-    { title: "全息伞下", outline: "霓虹雨夜，两人共撑全息伞——这一次，是道别还是开始？" },
-    { title: "竹林之约", outline: "竹林深处的快意一战，落叶纷飞——谁先收剑？" },
-    { title: "暗夜王座", outline: "烛光摇曳的古老王座之上，公主等待着她唯一的回信。" },
-    { title: "放学独白", outline: "阳光斜射的空教室，最后一个学生在笔记本上写着什么？" },
-    { title: "第七封信", outline: "樱花树下展开的信纸，淡淡的笔迹，字字千钧。" },
-    { title: "月神降临", outline: "银发倾泻、极光环绕——传说中的月神，今夜降临凡间。" },
-    { title: "血月武士", outline: "血色满月之下，刀光与樱瓣同时落下。" },
-    { title: "森林女巫", outline: "烛光摇曳的森林小屋，女巫熬制着能改变命运的魔药。" },
-    { title: "夏日海岸", outline: "粉橙色的夕阳，两个挚友坐在海岸边，把秘密轻轻放进海风里。" },
-    { title: "屏幕之间", outline: "霓虹青光映在脸上，全屏代码下藏着被遗忘的真相。" },
-    { title: "雨夜客栈", outline: "雨夜投宿的破败客栈，邻桌蒙面女子的剑匣里，似乎封着一段江湖恩怨。" },
-    { title: "深空警报", outline: "殖民舰舰桥警报骤响，舷窗外那颗未知行星正泛起诡异的红光。" },
-    { title: "上海滩暗号", outline: "1936 年的上海滩，留声机旋律里，舞女递来一张写着暗号的牌。" },
-    { title: "三长两短", outline: "末世第 173 天，卷帘门外的抓挠声停了，取而代之的是规律的敲门——三长两短。" },
-    { title: "正午对决", outline: "正午烈日下的无人小镇，唯一的酒馆门口，一个陌生枪手正等着与我决斗。" },
-    { title: "万米之城", outline: "潜水钟沉入万米海沟，探照灯扫过的不是岩壁，而是一座沉睡的远古之城。" },
-    { title: "云上海盗", outline: "齿轮轰鸣的飞空艇甲板，云海之上，海盗的黑色气球正逼近舷侧。" },
+    { title: "战神归来", outline: "五年前我战死边境，灵柩送回家时她抱着儿子改嫁了。今天我站在他们的婚礼门口，新郎刚要骂人，跪在他面前的二十个保镖喊了我一声「上将」。", style: "真实系" },
+    { title: "神医归乡", outline: "在城里被嘲笑成「江湖野医生」的我，回了一趟老家。村口的老人见到我直接哭了：「您终于回来了，您当年的师父…病了。」其实他们不知道，我现在是国手第一。", style: "吉卜力" },
+    { title: "赘婿亮剑", outline: "岳父大寿，我端着茶被全场嫌弃，一句「废物」让我滚出去。门外停着九辆悬挂军牌的劳斯莱斯，下来的人朝我深深一鞠躬：「少爷，集团等您回去签字。」", style: "真实系" },
+    { title: "送外卖的少主", outline: "你以为我是给你送了三个月外卖的那个小哥？昨晚有人对我说：「少主，您隐姓埋名的三年，到了。」——而你昨天还笑我连一杯咖啡都买不起。", style: "二次元" },
+    { title: "兵王食言", outline: "退役那天我答应过队长：「这辈子不再开枪。」但你今天在我面前打了她一巴掌，那我食言一次。", style: "真实系" },
+    { title: "重生分手前夜", outline: "凌晨四点，我醒在我们分手的那个夜晚——她正打开门要走。这一次，我先把戒指递了出去：「分手，但戒指你拿好，下个月你会用到它。」", style: "日系动画" },
+    { title: "重生回到高考前", outline: "我重生回到高考前一周。这一次，我提前知道了每一道压轴题，也知道了——三天后，她会在天台上跳下去。", style: "吉卜力" },
+    { title: "墓前签到", outline: "我每天去亡妻的墓地签到，第七天，系统弹出一行字：「奖励到账：未亡人 × 1。」墓碑后走出一个长得和她一模一样的姑娘：「你是…谁？」", style: "二次元" },
+    { title: "凌晨四点抽卡", outline: "凌晨三点，我十连抽 SSR 出货，光柱从屏幕里溢出来。客厅响起脚步声，一个穿着我 T 恤的女人揉着眼睛走出来：「老公，你也太晚了。」", style: "3D 渲染" },
+    { title: "系统选妃", outline: "系统给了我七个未婚妻候选，每错一个，地图上就有一座城被抹掉。倒计时 30 秒，她们七个同时朝我看过来。", style: "二次元" },
+    { title: "穿成废柴皇子", outline: "睁眼是冷宫废柴皇子，太监正在念赐死圣旨。我笑了——上辈子读的那本《这就是大唐》，是我自己写的。", style: "国风水墨" },
+    { title: "穿成乙游男配", outline: "我穿成了乙游里第一章就被处刑的反派男配。倒计时三个月。可女主她…昨天竟然主动来找我了。", style: "二次元" },
+    { title: "毒酒之后", outline: "睁眼是 1928 年，我刚被亲弟弟下毒，倒在少帅府的红毯上。门外军靴声逼近——他来确认我是不是真死了。", style: "真实系" },
+    { title: "九重雷劫", outline: "修了三百年，今夜九重雷劫降下。第八道劫雷劈开时，我看见劫云之上，那个一直在偷偷护我的人，竟是她。", style: "玄幻" },
+    { title: "山门扫地僧", outline: "我在山门扫地三十年，谁都看不起我。今日魔尊踏破山门，宗主跪地求饶。我抬头：「让一让，我去扫他。」", style: "国风水墨" },
+    { title: "末世第一夜", outline: "同寝的兄弟开始啃我的脖子。我抬手将他甩开——指尖滴下的血珠悬在半空，凝结成了一柄银白小剑。", style: "真实系" },
+    { title: "雷霆觉醒", outline: "雷劈不死的第七天，我握紧了拳头。掌心炸开一道闪电，把面前的丧尸群一齐劈成了灰。", style: "赛博朋克" },
+    { title: "家宴镇压", outline: "家宴上岳父冷笑：「你也敢上桌？」我手机震了一下，是父亲发来的：「儿，神州七大家主，已到楼下。」", style: "真实系" },
+    { title: "买葱归来", outline: "二十年前那场天工大会上消失的人——今天回菜市场买葱，被小贩多收了两毛。他笑了：「这二十年的利息，连本带利，今晚一起还。」", style: "国风水墨" },
+    { title: "红盖头之下", outline: "敌对家族送来一个新娘，遮着红盖头。我掀开那一刻，下面是和我死去的妹妹一模一样的脸。她抬眼：「哥…你别杀我。」", style: "超写实" },
+    { title: "上海双面谍", outline: "1936 年。军统让我潜入日方，日方让我潜入军统。今晚——他们要见面，而我必须同时出现在两间房里。", style: "真实系" },
+    { title: "比武场的茶博士", outline: "比武大会上，我端着茶水路过，宗主们的剑突然全都举不起来了。我抬眼：「老衲只是看不下去你们吵架。」", style: "国风水墨" },
+    { title: "高考前夜", outline: "全市模考垫底的我，高考前夜被四个西装男按在桌前：「这次，你必须考第一。」原来——我爸是教育部的人。", style: "日系动画" },
+    { title: "失踪一年", outline: "我被宣告死亡 12 个月后，背着血迹斑斑的包，站在了她婚礼现场的门口。新郎认出我，杯子摔到了地上。", style: "真实系" },
+    { title: "天台堵她", outline: "学校最不好惹的那位转学生，第一天就堵了我的天台。我把她书包一扯——里面掉出来一沓我从小写的情书。", style: "日系动画" },
+    { title: "转学第一天", outline: "转学第一天，年级第一坐我后桌。下课她把试卷拍在我面前：「这道题，你为什么写得和我答案一字不差？」", style: "二次元" },
+    { title: "无职觉醒", outline: "成年礼上全班觉醒职业，只有我天命「无职」。所有人嘲笑我的时候，光柱从我身上炸开——觉醒结果：「神」。", style: "玄幻" },
+    { title: "草稿纸里的我", outline: "睁眼发现自己是一张草稿纸上的火柴小人，住在 16-bit 的网格世界里。橡皮擦从天而降，正在抹掉这一行字——也包括我。", style: "像素风" },
+    { title: "云上的国家", outline: "齿轮轰鸣的飞艇甲板上，独眼船长把望远镜递到我手里：「云的那一头有个国家，专门关像你这样的人。」", style: "蒸汽朋克" },
+    { title: "舰桥上的少年", outline: "殖民母舰只剩 30 秒，主炮指挥官的椅子是空的。舰长抬眼看着 17 岁的我：「上去。整个人类，就交给你了。」", style: "赛博朋克" },
+    { title: "末节队长服", outline: "全联盟都骂我废柴，机甲赛决赛末节，教练把队长徽章按在我手里：「上去，把这局赢回来——这一台，是人类最后的机甲。」", style: "赛博朋克" },
+    { title: "学长的真面目", outline: "三年青梅当众接过富二代的玫瑰，转身扑进他怀里。我笑了笑——明天，是我接手父亲那个上市公司的日子。", style: "真实系" },
   ],
   女性向: [
-    { title: "摄政王独宠", outline: "穿越成将军府的废物嫡女，冷面摄政王却把整个京城最名贵的红玉镯，亲手戴在了我的腕上……" },
-    { title: "重生前夕", outline: "重生回到分手前夜，他还没说出那句「对不起」。这一次，让我先转身。" },
-    { title: "恶役千金", outline: "一觉醒来，竟成了乙游里被命运钦点的恶役千金，要躲开所有 BAD END……" },
-    { title: "天台之上", outline: "南方多雨的六月，转学第一天，我把伞悄悄递给了那个在天台读诗的少年。" },
-    { title: "登基之夜", outline: "登基大典上群臣俯首，而我只想看那个一直立在阴影里的人，今夜会不会上前一步。" },
-    { title: "江湖玉颜", outline: "江湖传言，那位执剑女侠从不动情。可那个雨夜，她为他收剑而立。" },
-    { title: "学长的告白", outline: "夕阳染红了天台，那个总在篮球场被全校女生围观的学长，第一次叫住了我。" },
-    { title: "夏祭灯影", outline: "夏祭的夜空下，他替你挡开人潮，低声说：最后一发烟火，只想和你一起看完。" },
-    { title: "雨夜车站", outline: "末班电车迟迟未至，他脱下外套披在你肩上，霓虹在积水里碎成星河。" },
-    { title: "黄昏并肩", outline: "夕阳染红的乡间月台，他终于停下脚步回头看你——那句话堵在喉咙里很久了。" },
-    { title: "禁书之约", outline: "图书馆最深处，清冷的学生会长合上禁书，抬眼时眸色温柔得不像他。" },
-    { title: "骑士誓约", outline: "红色警报响彻舰桥，他单膝跪在你面前：以剑起誓，此生只为你出鞘。" },
-    { title: "雨巷追影", outline: "午夜雨巷，他撑伞追上独行的你：这条路太黑，我送你回去。" },
-    { title: "共伞之间", outline: "霓虹雨夜，他把全息伞偏向你这侧，自己半边肩膀已被雨打湿。" },
-    { title: "竹影收剑", outline: "竹林深处刀光骤停，他为你收剑而立，落叶落在你们之间。" },
-    { title: "深宫回眸", outline: "烛影摇红的宫宴上，冷面摄政王越过群臣，只朝你伸出了手。" },
-    { title: "空教室", outline: "夕照斜斜铺满空教室，他把写满字的笔记本推到你面前，耳尖泛红。" },
-    { title: "樱下情书", outline: "樱花树下，他递来第七封信，这一次落款不再是匿名。" },
-    { title: "月下倾心", outline: "银发垂落、极光环绕，传说中的月神俯身，指尖轻触你的脸颊。" },
-    { title: "血月相护", outline: "血色满月之下，他挡在你身前，刀光与樱瓣同时落下。" },
-    { title: "魔药之约", outline: "森林小屋烛火摇曳，他为你熬一剂改写命运的魔药，只求换你一笑。" },
-    { title: "海岸絮语", outline: "粉橙色夕阳里，他和你并肩坐在堤岸，把没说出口的心事交给海风。" },
-    { title: "屏光之后", outline: "幽蓝屏光映在他脸上，敲下最后一行代码，他转头：我找到你了。" },
-    { title: "龙王契约", outline: "古龙巢穴深处，化为人形的银发龙王单膝跪地，将一枚龙鳞戒指推到我面前。" },
-    { title: "洋场先生", outline: "1936 年的上海公馆，那位留洋先生替我挡下流弹，西装袖口洇开一片猩红。" },
-    { title: "最后一颗子弹", outline: "末世第 173 天，他用最后一颗子弹打穿破门的丧尸，转身把我护在身后。" },
-    { title: "古堡伯爵", outline: "雾锁古堡的舞会上，苍白俊美的伯爵俯身吻过我的手背，唇下却没有一丝温度。" },
-    { title: "鞍前", outline: "黄沙漫天的西部小镇，沉默的赏金猎人翻身上马，伸手把我拉上他的鞍前。" },
-    { title: "深海王子", outline: "潜入万米海沟的遗迹，发光的人鱼王子环住我的腰，带我穿过沉睡的古城。" },
-    { title: "只属于我们的航线", outline: "飞空艇甲板上，独眼船长把望远镜递到我眼前：「看，那是只属于我们的航线。」" },
+    { title: "废柴嫡女", outline: "穿成将军府众人嫌弃的废柴嫡女，第一天就被打了一巴掌。门外冷面摄政王翻身下马，「我夫人的脸，谁敢动？」", style: "国风水墨" },
+    { title: "乙游恶役", outline: "睁眼是乙游里五分钟必死的恶役千金，所有男主都恨我。我合上剧本笑了——上一世我是这游戏的主笔。", style: "二次元" },
+    { title: "白月光归来", outline: "穿成男主念念不忘的白月光，但全书她只有死亡这一种结局。我捏着男主送的玉佩走进祠堂——这一次，我不躲了。", style: "玄幻" },
+    { title: "凤袍之下", outline: "穿越来就是当朝皇后，三千佳丽看我笑话。皇上掀开龙袍跪在我面前：「皇后，朕想她想了三十年了。」", style: "国风水墨" },
+    { title: "嫁错重生", outline: "嫁错了人毁了一辈子，重生回到婚礼前夜。这一次新娘休书我先写。新郎的弟弟突然走进来：「嫂子，要换人，换我。」", style: "二次元" },
+    { title: "那杯咖啡", outline: "重生回到他亲手把我送进车祸的前夜。我笑着接过他递来的咖啡——这是一杯我前世死前最想泼他脸上的咖啡。", style: "真实系" },
+    { title: "雨中撑伞", outline: "重生回到我亲手要了她命的前一天。她正抱着公文包路过我的车——这一次，我下车撑伞。", style: "真实系" },
+    { title: "三十亿合同", outline: "重生回到我被父亲扫地出门的那个清晨。这一次，扫地出门前我把家族 30 亿的合同提前签了。", style: "真实系" },
+    { title: "替嫁霸总", outline: "替姐姐嫁给那个传说眼瞎心冷的总裁。新婚夜他俯身在我耳边：「你姐没告诉你？我等了你三年了。」", style: "二次元" },
+    { title: "错嫁那一夜", outline: "醉酒夜我闯进了错的酒店房间，醒来戒指已在手上。他穿好西装回头：「夫人，签字仪式三小时后。」", style: "真实系" },
+    { title: "撕了离婚书", outline: "为了避税，我和那个最讨厌我的总裁假结婚一年。半年后他突然把离婚协议撕了——「续约。」", style: "真实系" },
+    { title: "死对头跪了", outline: "天天和我互掐的死对头，今天跪在我面前。他递上戒指：「再吵下去要影响我们的孩子。」——什么孩子？！", style: "二次元" },
+    { title: "抽到的霸总", outline: "凌晨四点抽到 UR 卡——画面里是城里那个传说没人见过脸的盛家总裁。第二天他敲我家门：「我来报到。」", style: "3D 渲染" },
+    { title: "攻略任务", outline: "系统说：「攻略他，否则你死。」可他是这本书里唯一恨我入骨的人。今天他亲手把我堵在了墙角。", style: "二次元" },
+    { title: "商城上架", outline: "系统商城上架了「市值 800 亿盛总 × 1」。我咬牙刷光积蓄。下一秒，他出现在我家门口：「夫人，我已购入。」", style: "二次元" },
+    { title: "老公赞助", outline: "直播间打赏榜第一名连续 30 天，备注写着「老公赞助」。我点开他的资料——城里那位传说从不出门的盛少。", style: "日系动画" },
+    { title: "门外的他", outline: "末世第一夜，门外是丧尸群的撕咬声。隔壁刚搬来的男人撞开我家门：「我能进来吗？我有一把枪。」", style: "真实系" },
+    { title: "末世空间", outline: "末世爆发的第一天，我意外觉醒了储物空间。屯了三车物资回家，发现那个总欺负我的高冷邻居跪在我门口。", style: "真实系" },
+    { title: "异能撒娇", outline: "末世里所有男人都怕的那位 S 级异能者，今天蹲在我家门口：「姐姐，能让我进去吗？外面…丧尸太可怕了。」", style: "二次元" },
+    { title: "末世重生", outline: "重生回到末世爆发前一周。这一次，那个抛弃我的男人——我先把他赶出门，把上一世救我的人接回家。", style: "真实系" },
+    { title: "课桌里的纸条", outline: "隔壁班那个高冷年级第一，今天把一本日记塞进我课桌。第一页写着：「她笑起来的时候，三角函数都没那么复杂。」", style: "二次元" },
+    { title: "校草八年", outline: "暗恋了八年的校草，今天突然走到我面前：「跟我走，我已经查清楚了——把你妹妹接走的那个人在哪。」", style: "吉卜力" },
+    { title: "班长的秘密", outline: "天天和我同桌的班长，今天被四个保镖按在校门口接走。临走前他回头喊：「老婆，我先回总部一趟。」", style: "二次元" },
+    { title: "走廊的手腕", outline: "走廊上人最多的时候，全校最不好惹的学长抓住了我的手腕：「我等了你三年，今天给我一个回应。」", style: "日系动画" },
+    { title: "上海公馆", outline: "1936，我是父亲遗产的唯一继承人，全上海都在等看我嫁谁。今晚我推开门——那个传说不要女人的留洋先生，在喝我父亲的茶。", style: "超写实" },
+    { title: "书店里的他", outline: "我是租界一家书店的老板娘。今晚穿西装的他第三次坐在窗边，第一次开口：「小姐，可以借您的店…藏一个东西吗？」", style: "真实系" },
+    { title: "炼丹意外", outline: "我是仙门最废柴的炼丹弟子，三年没炼出一颗丹。今天偶然撞翻师尊的丹炉——一道光柱直冲云霄，惊动了三大长老。", style: "玄幻" },
+    { title: "江湖归人", outline: "我一个人闯江湖三年，今天回到那座小镇。门口的少年抬头：「师姐，你说过五年就回，我等了三年又两个月。」", style: "国风水墨" },
+    { title: "顶流的西瓜", outline: "顶流男星上节目被问感情，他笑了笑：「我老婆？她现在大概在家里啃我刚买的西瓜。」全网爆炸——我正趴在沙发上看直播。", style: "真实系" },
+    { title: "同居一年", outline: "和合租室友同居一年了，今晚他突然把我堵在门口：「你说，我们…要不要别再装陌生人了？」", style: "日系动画" },
+    { title: "机甲撞门", outline: "丧尸潮第七夜，全城断电。地下室的门被撞开，一架满是弹痕的机甲低下头，舱门弹开——里面坐着我那个失联三年的他。", style: "赛博朋克" },
+    { title: "三分绝杀", outline: "决赛最后一秒，他在场边看了我一眼，转身投出那一记三分。哨声响时，他把奖杯举过头顶，朝我跑来。", style: "日系动画" },
   ],
 };
 
@@ -183,54 +203,49 @@ function StoryCard({
   title,
   outline,
   image,
-  placeholderRatio = 4 / 5,
   onClick,
 }: {
   title: string;
   outline: string;
   image: string;
-  placeholderRatio?: number;
   onClick: () => void;
 }) {
-  // 卡片高度 = 图片真实宽高比。加载前先用 placeholderRatio 占好位（按该类卡片
-  // 的典型比例），加载后用 naturalWidth/Height 锁死真实比例——绝不塌成 0、也绝不
-  // 在 lazy 图加载或性向换图时跳变高度。运行时读取，故换任意图都自动适配。
-  const [ratio, setRatio] = useState<number>();
+  // 全卡片统一 4:5 portrait 比例。原来按图片真实 naturalWidth/Height 动态设 aspectRatio
+  // 会跟懒加载顺序耦合：视口下方还没加载的卡停在 placeholder 比例，上方已加载的卡变成
+  // 图片真实比例（可能是 1.6 横图或 0.75 竖图），视觉差异巨大；刷新后图从缓存读，
+  // onLoad 几乎同步触发，看起来又恢复正常 —— 用户感知到的「偶尔尺寸不一样」就是这个。
+  // 改为固定比例后所有卡片视觉一致，object-cover 让不同长宽比的图自动裁切适配。
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{ aspectRatio: ratio ?? placeholderRatio }}
+      style={{ aspectRatio: "4 / 5" }}
       className="group relative block w-full mb-4 md:mb-5 break-inside-avoid overflow-hidden rounded-sm border border-clay-900/10 bg-cream-100 text-left transition-transform duration-300 ease-out hover:-translate-y-1"
     >
       <img
         src={image}
         alt={title}
         loading="lazy"
-        onLoad={(e) => {
-          const el = e.currentTarget;
-          if (el.naturalWidth && el.naturalHeight) {
-            setRatio(el.naturalWidth / el.naturalHeight);
-          }
-        }}
         className="absolute inset-0 h-full w-full object-cover"
       />
-      {/* hover 浮层：卡片高度已由图片比例锁定，磨砂带占比恒定，hover 前后零回流。 */}
-      <div className="absolute inset-x-0 bottom-0">
-        <div className="relative px-4 pt-10 pb-4">
-          {/* 毛玻璃底：backdrop-blur 0→md（不走 opacity，避免比文字慢半拍）；上沿 mask 羽化，避免生硬分界 */}
-          <div className="absolute inset-0 backdrop-blur-0 transition-[backdrop-filter] duration-300 ease-out group-hover:backdrop-blur-md [mask-image:linear-gradient(to_top,black_62%,transparent)] [-webkit-mask-image:linear-gradient(to_top,black_62%,transparent)]" />
-          {/* 暗色渐变：opacity 淡入（自带 to-transparent 上沿，无需额外 mask） */}
-          <div className="absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 bg-gradient-to-t from-clay-900/92 via-clay-900/60 to-transparent" />
-          <div className="relative opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100">
-            <h4 className="font-serif text-cream-50 text-base md:text-lg leading-snug mb-1 [text-shadow:0_1px_8px_rgba(20,10,4,0.6)]">
-              {title}
-            </h4>
-            <p className="font-serif italic text-cream-50/95 text-xs md:text-[13px] leading-relaxed line-clamp-4 [text-shadow:0_1px_6px_rgba(20,10,4,0.55)]">
-              {outline}
-            </p>
-          </div>
-        </div>
+      {/* hover 浮层：照参考项目（yunmeng0530/yume）的写法——满卡片单元素，纯 rgba
+          黑色 linear-gradient + opacity 过渡。完全不用 backdrop-filter / mask-image，
+          从根上消除 Chromium 上「矩形磨砂 → 渐变磨砂」的跳变（这两个属性的合成顺序
+          是真正的元凶；只要不用它们，就不会有这个 bug）。
+          - bottom 0.9 → 45% 处 0.45 → top 0：自然羽化，底部聚焦文字、顶部完全透出图。 */}
+      <div
+        className="absolute inset-0 opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 flex flex-col justify-end p-4 md:p-5"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.45) 45%, rgba(0,0,0,0) 100%)",
+        }}
+      >
+        <h4 className="font-serif text-cream-50 text-base md:text-lg leading-snug mb-1 [text-shadow:0_1px_8px_rgba(20,10,4,0.7)]">
+          {title}
+        </h4>
+        <p className="font-serif italic text-cream-50/95 text-xs md:text-[13px] leading-relaxed line-clamp-4 [text-shadow:0_1px_6px_rgba(20,10,4,0.6)]">
+          {outline}
+        </p>
       </div>
     </button>
   );
@@ -471,20 +486,6 @@ export default function HomePage() {
       .filter(Boolean)
       .join("\n");
 
-    const styleMap: Record<string, string> = {
-      二次元: "唯美二次元动漫插画，日系 galgame 精致质感，柔和温暖的自然光照。",
-      吉卜力: "吉卜力工作室风格，手绘动画质感，柔和水彩底色，温暖治愈的氛围。",
-      真实系: "真实电影感，柔和自然光照，胶片颗粒。",
-      超写实: "超写实人像与场景，电影级布光，皮肤与材质细节精致。",
-      水彩: "水彩插画，湿润晕染笔触，纸纹底色。",
-      像素风: "像素风格，复古游戏 16-bit 调色，方块化几何造型。",
-      日系动画: "现代日系动画 cel-shading，硬光阴影分层，赛璐璐风。",
-      "3D 渲染": "3D 渲染卡通风格，柔和次表面散射，干净的电影级布光。",
-      蒸汽朋克: "蒸汽朋克美学，铜色齿轮与蒸汽，工业革命氛围。",
-      玄幻: "国风玄幻插画，仙气缭绕，群山烟雨与神兽萦绕。",
-      国风水墨: "国潮唯美古风插画，水墨微晕渲染，仙侠浪漫色彩，极具东方神韵。",
-      赛博朋克: "赛博朋克都市，霓虹反射湿润街道，电子义体高光。",
-    };
     // 「自动」→ fall back to 二次元 (project default). Plain prompts like
     // "由模型自动判断画风" are not understood by FLUX — it just paints them
     // literally, so we'd rather lock in a sensible default.
@@ -492,7 +493,7 @@ export default function HomePage() {
     // 选出最合适的画风，再映射到对应风格提示词，而非固定回退到二次元。届时
     // 同步更新风格弹窗副标题（「由模型根据 prompt 判断风格」）使文案与行为一致。
     const effectiveStyle = artStyle === "自动" ? "二次元" : artStyle;
-    const styleGuide = styleMap[effectiveStyle] ?? styleMap["二次元"]!;
+    const styleGuide = STYLE_MAP[effectiveStyle] ?? STYLE_MAP["二次元"]!;
     const audioEnabled = voice === "开启";
 
     sessionStorage.setItem(
@@ -502,13 +503,27 @@ export default function HomePage() {
     router.push("/play?custom=1");
   };
 
-  const onCardClick = (seed?: string) => {
-    if (seed) setPrompt(seed);
-    inputRef.current?.focus();
-  };
-
   const stories = STORIES[galleryGender];
   const imgPrefix = galleryGender === "女性向" ? "f" : "m";
+
+  // 点卡片 = 直接开始这张卡的故事，零等待：跳 /play?card=m0/f0... 由 /play
+  // 页面从 /home/firstact/{name}.json 静态文件加载预烘焙好的首幕（含 scene /
+  // 角色 / 图片 URL / storyState），整张图都已在 FLUX 上画好且 URL 缓存命中。
+  // 「语音配音」选择仍然生效：把 audioEnabled 留在 sessionStorage 里，/play 的
+  // useState 初始化器会读它来设 muted 初值。其余选项（剧情风格 / 内容节奏）
+  // 在预烘焙时已锁成「多线转折 / 紧凑爽快」的红果默认基调，对精选卡不再生效。
+  const onCardClick = (idx: number, card: StoryContent) => {
+    const voice = OPTS[3]!.items[sel[3] ?? 1]!;
+    const audioEnabled = voice === "开启";
+    // 复用 infiplot:custom 这个 key 只为传递 audioEnabled —— ws/sg 在 ?card= 路径
+    // 上不会被读取（/play 里 cardName 优先级高于 sessionStorage）。这样实现量最小，
+    // 不必另起一个 audio-only 的 storage key。
+    sessionStorage.setItem(
+      "infiplot:custom",
+      JSON.stringify({ worldSetting: "", styleGuide: "", audioEnabled }),
+    );
+    router.push(`/play?card=${imgPrefix}${idx}`);
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -645,7 +660,7 @@ export default function HomePage() {
                 title={c.title}
                 outline={c.outline}
                 image={`/home/${imgPrefix}${i}.webp`}
-                onClick={() => onCardClick(c.outline)}
+                onClick={() => onCardClick(i, c)}
               />
             ))}
           </div>
@@ -707,8 +722,17 @@ export default function HomePage() {
 
           <div>
             <p className="text-[10px] smallcaps text-clay-500 mb-3">内 测 用 户 群</p>
-            <p className="font-serif italic text-clay-500 text-base leading-relaxed">
-              群二维码 / 邀请链接（待补充）
+            <img
+              src="/qq-group.webp"
+              alt="InfiPlot 内测交流群 QQ 群二维码（群号 575404333）"
+              width={760}
+              height={760}
+              loading="lazy"
+              className="mx-auto mb-3 w-32 max-w-full rounded-sm border border-clay-900/10 shadow-sm shadow-clay-900/5"
+            />
+            <p className="font-serif text-clay-700 text-base leading-relaxed">
+              QQ群号：
+              <span className="font-sans text-sm text-clay-900">575404333</span>
             </p>
           </div>
         </div>

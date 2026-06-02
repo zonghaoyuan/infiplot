@@ -10,7 +10,6 @@ const config: NextConfig = {
     "@infiplot/types",
     "@infiplot/tts-client",
   ],
-  serverExternalPackages: ["sharp"],
   turbopack: {
     root: path.join(__dirname, "..", ".."),
   },

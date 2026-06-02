@@ -13,7 +13,6 @@ import type {
   VisionResponse,
 } from "@infiplot/types";
 import { runArchitect } from "./agents/architect";
-import { annotateClick } from "./annotate";
 import { directInsertBeat, directScene } from "./director";
 import { synthesizeBeat } from "./voice";
 import { interpret } from "./vision";
@@ -109,9 +108,8 @@ export async function visionDecide(
   config: EngineConfig,
   req: VisionRequest,
 ): Promise<VisionResponse> {
-  const annotated = await annotateClick(req.prevImageUrl, req.click);
   const current = req.session.history.at(-1)?.scene ?? null;
-  return interpret(config.vision, annotated, current);
+  return interpret(config.vision, req.annotatedImageBase64, current);
 }
 
 // ──────────────────────────────────────────────────────────────────────
