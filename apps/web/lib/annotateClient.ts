@@ -59,7 +59,9 @@ function loadImage(
   return new Promise((resolve, reject) => {
     const img = new Image();
     const timer = setTimeout(() => {
-      img.src = "";
+      // removeAttribute, not `src = ""` — setting empty string can trigger
+      // a navigation to the current document URL in some browsers.
+      img.removeAttribute("src");
       reject(new Error(`Image load timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     img.crossOrigin = "anonymous";
