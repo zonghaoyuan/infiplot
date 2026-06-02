@@ -37,6 +37,14 @@ Free to play, no setup required: [infiplot.com](https://infiplot.com)
 
 ---
 
+## One-click deploy
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&root-directory=apps/web&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%20uses%20MiMo%27s%20own%20protocol.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide)
+
+After deploy, set your environment variables in the Vercel project — see the [Configuration guide](#configuration-guide) below. The Vercel project's **Root Directory** must be `apps/web` (the deploy button passes this automatically; if you configure manually, set it in Project Settings).
+
+---
+
 ## 📸 Screenshots
 
 <table>
@@ -109,14 +117,6 @@ While you're reading one scene, the engine speculatively generates the scenes yo
 Clicking the background itself (not a button) routes through a vision model: it reads where you tapped and decides whether you're exploring the current scene (it inserts a beat — no new image) or moving on (a new scene). This builds on a valuable lesson we learned from flipbook, and we believe it will become one of InfiPlot's defining features — taking the experience to the next level.
 
 There is no traditional game UI baked into the art. The AI paints the world in whatever style you pick — "stick figure on grid paper" or "cyberpunk noir" — and the dialogue panel and choice buttons are a light HTML layer drawn on top, tuned to sit over the scene. In other words, the UI fits the story of each playthrough, rather than staying the same every time.
-
----
-
-## One-click deploy
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&root-directory=apps/web&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%20uses%20MiMo%27s%20own%20protocol.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide)
-
-After deploy, set your environment variables in the Vercel project — see the [Configuration guide](#configuration-guide) below. The Vercel project's **Root Directory** must be `apps/web` (the deploy button passes this automatically; if you configure manually, set it in Project Settings).
 
 ---
 
