@@ -77,20 +77,9 @@ We call each complete playthrough a **story**.
 
 A story unfolds as a sequence of scenes. Each scene is one AI-painted background plus a short tree of beats — moments of narration, dialogue, and the occasional choice. You tap through a scene's beats and the image stays put; only when a choice leads somewhere genuinely new — another place, a new point of view, a jump in time — does the AI paint the next scene.
 
-```mermaid
-flowchart TD
-    U["Your input: world setting + art style"] --> A["Architect<br/>parses input → full story structure (first step)"]
-    A --> W["Writer<br/>directs this scene's beats: narration · dialogue · choices"]
-    subgraph SCENE["Generating one scene"]
-        direction TB
-        W --> C["Character Designer<br/>portrait + voice (parallel, per new character)"]
-        W --> S["Cinematographer<br/>shot composition + background prompt"]
-        C --> P["Painter<br/>renders the 16:9 background using portraits as reference"]
-        S --> P
-    end
-    P --> SC["One scene: background image + beat tree"]
-    SC -. speculatively pre-generate the next scene .-> W
-```
+<div align="center">
+  <img src="docs/pipeline.en.svg" alt="InfiPlot story generation pipeline" width="680">
+</div>
 
 While you're reading one scene, the engine speculatively generates the scenes your choices could lead to — and, for unavoidable next steps, the scene after that. By the time you pick a direction, its image is usually already painted, so the cut feels instant. If you still notice some lag today, don't worry — we're working hard to bring it down.
 

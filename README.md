@@ -77,20 +77,9 @@ InfiPlot 同时支持部署到 Vercel 与 Cloudflare Workers。Cloudflare 部署
 
 故事以一连串场景（scene）的形式展开。每个场景由一张 AI 绘制的背景图，加上一棵简短的节拍（beat）树组成 —— 也就是旁白、对话和偶尔出现的选项。你逐拍点过一个场景时，画面始终不变；只有当某个选项把你带到真正全新的地方 —— 换了空间、换了视角、跳跃了时间 —— AI 才会绘制下一幕场景。
 
-```mermaid
-flowchart TD
-    U["你的输入：世界设定 + 画风"] --> A["架构师 / Architect<br/>解析输入 → 完整剧情结构（第一步）"]
-    A --> W["编剧 / Writer<br/>生成本幕节拍：旁白 · 对话 · 选项"]
-    subgraph SCENE["每一幕场景的生成"]
-        direction TB
-        W --> C["角色设计师 / Character Designer<br/>立绘 + 音色（每个新角色并行）"]
-        W --> S["场景布置师 / Cinematographer<br/>镜头编排 + 背景提示词"]
-        C --> P["画家 / Painter<br/>以立绘为参考渲染 16:9 背景"]
-        S --> P
-    end
-    P --> SC["一幕场景：背景图 + 节拍树"]
-    SC -. 预测式预生成下一幕 .-> W
-```
+<div align="center">
+  <img src="docs/pipeline.zh.svg" alt="InfiPlot 生成流水线流程图" width="680">
+</div>
 
 当你正在阅读一幕场景时，引擎会预测式地生成你的选项可能通向的那些场景 —— 对于无法回避的下一步，还会再往前生成一幕。等你真正选定方向时，那一幕的图通常已经画好了，于是切换瞬间完成、毫无停顿。如果你现在仍然感到有些延迟，别担心，我们正在努力优化它。
 
