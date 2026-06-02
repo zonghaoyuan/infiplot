@@ -39,7 +39,7 @@ Free to play, no setup required: [infiplot.com](https://infiplot.com)
 
 ## One-click deploy
 
-InfiPlot deploys to both Vercel and Cloudflare Workers — pick whichever you prefer.
+InfiPlot deploys to both Vercel and Cloudflare Workers. Cloudflare deployment requires the Workers Paid Plan because the scene pipeline needs longer CPU time; for personal use, the one-click Vercel deploy is recommended.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&root-directory=apps/web&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%20uses%20MiMo%27s%20own%20protocol.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide) &nbsp; [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zonghaoyuan/infiplot/tree/main/apps/web)
 
