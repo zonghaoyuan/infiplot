@@ -2,7 +2,7 @@
 /**
  * Post-process for prebake-firstacts: each first-act JSON has imageUrl pointing
  * at https://im.runware.ai/... which adds ~1-2s of remote-CDN download on first
- * click. This script downloads every imageUrl to apps/web/public/home/firstscene/
+ * click. This script downloads every imageUrl to public/home/firstscene/
  * (webp, compressed) and rewrites the JSON's imageUrl to the local /home/...
  * path, so click-to-play is bottlenecked only by JSON parse + local image
  * decode (sub-100ms).
@@ -11,7 +11,7 @@
  * skipped. Pass --force to re-download everything.
  *
  * Run once after prebake-firstacts.mjs completes:
- *   node apps/web/scripts/localize-firstact-images.mjs
+ *   node scripts/localize-firstact-images.mjs
  */
 
 import { fileURLToPath } from "node:url";

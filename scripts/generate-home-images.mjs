@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * One-off generator: produces the InfiPlot homepage story cards via Runware
- * FLUX.2 and writes them as PNGs under apps/web/public/home/.
+ * FLUX.2 and writes them as PNGs under public/home/.
  *
  * Flat per-gender layout: 32 male-oriented (m0..m31) + 32 female-oriented
  * (f0..f31). All cards are 832x1024 (≈4:5) to match the homepage StoryCard
@@ -11,10 +11,10 @@
  * ink / cyberpunk / steampunk / pixel / etc.) so the homepage feels visually
  * varied rather than uniformly anime. Stories are 红果-short-drama framed.
  *
- * Reads IMAGE_BASE_URL / IMAGE_API_KEY / IMAGE_MODEL from apps/web/.env.local.
+ * Reads IMAGE_BASE_URL / IMAGE_API_KEY / IMAGE_MODEL from .env.local.
  *
  * Run once:
- *   node apps/web/scripts/generate-home-images.mjs
+ *   node scripts/generate-home-images.mjs
  *
  * Idempotent: skips any card whose .png or .webp already exists. Pass --force
  * to regenerate everything.
@@ -71,7 +71,7 @@ const BASE_QUALITY =
 const W = 832;
 const H = 1024;
 
-// Style suffixes — kept in sync with apps/web/app/page.tsx STYLE_MAP so the
+// Style suffixes — kept in sync with app/page.tsx STYLE_MAP so the
 // homepage cover and the in-game styleGuide land on the same aesthetic.
 const S = {
   二次元: "anime visual novel illustration, japanese galgame aesthetic, soft warm natural light",

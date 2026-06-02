@@ -2,7 +2,7 @@
 /**
  * One-off generator: produces the InfiPlot homepage "instant-play" first-act
  * JSONs by driving each curated card through the live engine (POST /api/start)
- * and saving the full StartResponse under apps/web/public/home/firstact/.
+ * and saving the full StartResponse under public/home/firstact/.
  *
  * The /play page detects ?card=<name> and hydrates Session from the JSON
  * instead of calling /api/start, so click-to-play feels instant — only the
@@ -13,7 +13,7 @@
  * Pass --force to regenerate all 64.
  *
  * Run once:
- *   node apps/web/scripts/prebake-firstacts.mjs
+ *   node scripts/prebake-firstacts.mjs
  *
  * Concurrency 4 to avoid LLM/Runware/MiMo provider rate limits.
  */
@@ -30,7 +30,7 @@ const FORCE = process.argv.includes("--force");
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const CONCURRENCY = 4;
 
-// Mirror of apps/web/app/page.tsx STYLE_MAP — keep these in sync. The engine
+// Mirror of app/page.tsx STYLE_MAP — keep these in sync. The engine
 // only needs the prose styleGuide string; this script maps card.style → that.
 const STYLE_MAP = {
   二次元: "唯美二次元动漫插画，日系 galgame 精致质感，柔和温暖的自然光照。",
@@ -47,7 +47,7 @@ const STYLE_MAP = {
   赛博朋克: "赛博朋克都市，霓虹反射湿润街道，电子义体高光。",
 };
 
-// Mirror of apps/web/app/page.tsx STORIES, flat with name + gender. Indexes
+// Mirror of app/page.tsx STORIES, flat with name + gender. Indexes
 // match the m0..m31 / f0..f31 cover filenames.
 const CARDS = [
   // 男性向 m0..m31

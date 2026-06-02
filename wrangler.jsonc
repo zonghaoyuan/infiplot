@@ -11,7 +11,7 @@
   "observability": {
     "enabled": true
   },
-  // 60s mirrors apps/web/vercel.json maxDuration for the scene pipeline tail
+  // 60s mirrors vercel.json maxDuration for the scene pipeline tail
   // (multi-agent LLM, ~30-45s p95). Requires Workers Paid — Free is capped
   // at 10ms CPU. I/O wait does not count against this budget.
   "limits": {

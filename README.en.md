@@ -41,9 +41,9 @@ Free to play, no setup required: [infiplot.com](https://infiplot.com)
 
 InfiPlot deploys to both Vercel and Cloudflare Workers — pick whichever you prefer.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&root-directory=apps/web&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%20uses%20MiMo%27s%20own%20protocol.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide) &nbsp; [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zonghaoyuan/infiplot/tree/main/apps/web)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%20uses%20MiMo%27s%20own%20protocol.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide) &nbsp; [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zonghaoyuan/infiplot)
 
-After deploy, fill in the environment variables — see the [Configuration guide](#configuration-guide) below. Both platforms need `apps/web` as the project root (Vercel's button passes this automatically; on Cloudflare, set the build root to `apps/web` and the build command to `pnpm --filter @infiplot/web build:cf`).
+After deploy, fill in the environment variables — see the [Configuration guide](#configuration-guide) below. The repo root is the app itself: Vercel needs no special root directory; on Cloudflare, just set the build command to `pnpm build:cf`.
 
 ---
 
@@ -118,7 +118,7 @@ Get in touch: hi@infiplot.com
 
 Scan to join our **beta community on QQ** (group ID `575404333`) to share feedback and help shape the project:
 
-<img src="apps/web/public/qq-group.webp" alt="InfiPlot beta community QQ group QR code" width="200" />
+<img src="public/qq-group.webp" alt="InfiPlot beta community QQ group QR code" width="200" />
 
 ---
 
@@ -143,11 +143,11 @@ Nine variables are required; TTS is optional (leave blank to run silently). Ther
 |---|---|
 | `MOCK_IMAGE=true` | Skip image generation; the renderer returns a static placeholder. Story, voice, and choices still run normally. Great for iterating on TTS without burning Runware credits. |
 
-Where to set them (see `apps/web/.env.example` for the exact shape):
+Where to set them (see `.env.example` for the exact shape):
 
-- **Local dev** — `apps/web/.env.local`
+- **Local dev** — `.env.local`
 - **Vercel** — Project Settings → Environment Variables
-- **Cloudflare Workers** — from `apps/web/`, run `wrangler secret put <NAME>` for each variable, or set them in the dashboard (Workers → infiplot → Settings → Variables and Secrets). For a private staging instance, gate the Worker behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) — zero-code email-whitelist auth in front of the Worker.
+- **Cloudflare Workers** — from the repo root, run `wrangler secret put <NAME>` for each variable, or set them in the dashboard (Workers → infiplot → Settings → Variables and Secrets). For a private staging instance, gate the Worker behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) — zero-code email-whitelist auth in front of the Worker.
 
 **3. Mind the cost**
 

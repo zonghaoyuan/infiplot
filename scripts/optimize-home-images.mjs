@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Compresses the freshly generated apps/web/public/home/*.png into much
+ * Compresses the freshly generated public/home/*.png into much
  * smaller .webp files alongside them, then deletes the originals.
  * Output webps target ~1200px on the long edge and quality 78.
  */
