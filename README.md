@@ -21,7 +21,7 @@ In one line: what we're building is an AI-generated, real-time take on *Love Is 
 
 Whether you're a six-year-old, a twenty-something, thirty-five, or sixty, there's a fantasy here that belongs to you and you alone:
 
-Learn magic in the world of Harry Potter; become the one everyone at school adores and confesses to; land paper after paper in top journals and conferences with grant money to spare; step into *Empresses in the Palace* and live out the court intrigue; or return to your younger self and make a different choice about something you regret…
+Learn magic in the world of Harry Potter; become the one everyone at school adores and confesses to; publish paper after paper in top journals and conferences with grant money to spare; step into *Empresses in the Palace* and live out the court intrigue; or return to your younger self and make a different choice about something you regret…
 
 ---
 
