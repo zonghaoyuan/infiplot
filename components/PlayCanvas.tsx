@@ -310,11 +310,19 @@ export function PlayCanvas({
           className="relative inline-block"
           style={{ boxShadow: fullViewport ? "none" : SHADOW }}
         >
-          {/* Background image — Runware CDN URL or data URI (mock mode) */}
+          {/* Background image — Runware CDN URL or data URI (mock mode).
+              The width/height attributes are NOT rendered dimensions (w-auto
+              h-auto + the maxWidth/maxHeight in sizeStyle still drive the
+              final layout); they give the browser an intrinsic aspect ratio
+              so that, while the bytes are still arriving from the CDN, the
+              <img> reserves a 1792:1024 box instead of collapsing to a
+              one-pixel sliver — fixes the "等很久 → 一根线 → 突然出图" jank. */}
           <img
             key={imageUrl.slice(-48)}
             ref={imgRef}
             src={imageUrl}
+            width={1792}
+            height={1024}
             alt="Generated scene"
             onClick={handleImageClick}
             draggable={false}

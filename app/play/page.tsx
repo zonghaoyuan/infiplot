@@ -30,10 +30,14 @@ import type {
 const MUTED_STORAGE_KEY = "infiplot:muted";
 
 // Cap how long we wait for the browser to download + decode a scene image
-// before giving up and rendering anyway. Runware's CDN is normally <2s for a
-// 1792×1024 PNG; tolerate up to 8s before the typewriter starts so a slow
-// download can't strand the player on a blank screen forever.
-const IMAGE_PRELOAD_TIMEOUT_MS = 8000;
+// before giving up and rendering anyway. Runware's CDN is usually <2s for a
+// 1792×1024 PNG, but over slow links / VPN / strict corp networks the same
+// download can stretch to 10-20s. The previous 8s ceiling fired in that
+// window, and because the rendered <img> has no aspect-ratio occupation, the
+// layout collapsed to a one-pixel-tall sliver until the bytes actually
+// finished arriving — "等了很久 → 一根线 → 突然出图" of the original report.
+// 20s + the <img> aspect-video fallback together remove that failure mode.
+const IMAGE_PRELOAD_TIMEOUT_MS = 20000;
 
 // ──────────────────────────────────────────────────────────────────────
 //  Image preload — decode the Runware URL in memory before committing to
