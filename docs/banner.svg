@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320" role="img" aria-label="InfiPlot — real-time AI story game">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBF7F0"/>
+      <stop offset="1" stop-color="#F5EFE3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="34%" r="62%">
+      <stop offset="0" stop-color="#E89B5C" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#E89B5C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="320" fill="url(#bg)"/>
+  <rect width="1280" height="320" fill="url(#glow)"/>
+
+  <!-- wordmark: Infi (clay-900) + Plot (ember-500, italic light) -->
+  <text x="640" y="166" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-size="120" letter-spacing="-2">
+    <tspan fill="#2D1810" font-weight="600">Infi</tspan><tspan fill="#D97A2E" font-style="italic" font-weight="400">Plot</tspan>
+  </text>
+
+  <!-- editorial kicker -->
+  <line x1="592" y1="206" x2="688" y2="206" stroke="#C68B5C" stroke-width="1.5"/>
+  <text x="640" y="244" text-anchor="middle"
+        font-family="'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="500"
+        letter-spacing="6" fill="#A8693B">REAL-TIME AI STORY GAME</text>
+</svg>
