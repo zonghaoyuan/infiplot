@@ -733,21 +733,32 @@ const STORIES: Record<Gender, StoryContent[]> = {
 
 /* ---------- typewriter ---------- */
 
-function Typewriter({ phrases }: { phrases: string[] }) {
+// 父组件持有当前 phrase 的索引（这样 start() 不输入时能用当前闪动的那句
+// 作为默认故事种子，所见即所玩）。Typewriter 只负责单句的打字+删除动画，
+// 删完后通过 onCycle 回调让父组件切到下一句。
+function Typewriter({
+  phrase,
+  onCycle,
+}: {
+  phrase: string;
+  onCycle: () => void;
+}) {
   const [txt, setTxt] = useState("");
+  const onCycleRef = useRef(onCycle);
+  useEffect(() => {
+    onCycleRef.current = onCycle;
+  });
 
   useEffect(() => {
-    let p = 0;
     let i = 0;
     let del = false;
     let timer: ReturnType<typeof setTimeout>;
     setTxt("");
     const tick = () => {
-      const full = phrases[p] ?? "";
       if (!del) {
         i++;
-        setTxt(full.slice(0, i));
-        if (i >= full.length) {
+        setTxt(phrase.slice(0, i));
+        if (i >= phrase.length) {
           del = true;
           timer = setTimeout(tick, 1700);
           return;
@@ -755,11 +766,9 @@ function Typewriter({ phrases }: { phrases: string[] }) {
         timer = setTimeout(tick, 70);
       } else {
         i--;
-        setTxt(full.slice(0, i));
+        setTxt(phrase.slice(0, i));
         if (i <= 0) {
-          del = false;
-          p = (p + 1) % phrases.length;
-          timer = setTimeout(tick, 450);
+          timer = setTimeout(() => onCycleRef.current(), 450);
           return;
         }
         timer = setTimeout(tick, 28);
@@ -767,7 +776,7 @@ function Typewriter({ phrases }: { phrases: string[] }) {
     };
     timer = setTimeout(tick, 500);
     return () => clearTimeout(timer);
-  }, [phrases]);
+  }, [phrase]);
 
   return (
     <>
@@ -992,6 +1001,12 @@ export default function HomePage() {
   const genderIndex = sel[0] ?? 0;
   const gender = (OPTS[0]!.items[genderIndex] as Gender) ?? "男性向";
   const phrases = EXAMPLE_PHRASES[gender];
+  // 当前 Typewriter 闪动到第几句——start() 空输入时会拿它做默认故事种子，
+  // 实现「所见即所玩」。切性向时重置，否则索引可能越界。
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  useEffect(() => {
+    setPhraseIdx(0);
+  }, [gender]);
 
   // 性向切换时，整片瀑布流做淡出→换图→淡入的过渡（而非瞬切）。
   const [galleryGender, setGalleryGender] = useState<Gender>(gender);
@@ -1042,20 +1057,33 @@ export default function HomePage() {
   };
 
   const start = () => {
-    const userPrompt = prompt.trim();
+    // 空输入时落回 Typewriter 当前闪动的示例——用户看到啥就玩啥，
+    // 不会再出现「点开始 → 剧情和占位文字毫无关系」的体验断层。
+    const userPrompt =
+      prompt.trim() || (phrases[phraseIdx] ?? "").trim();
     const artStyle = OPTS[1]!.items[sel[1] ?? 0]!;
     const plotStyle = OPTS[2]!.items[sel[2] ?? 1]!;
     const voice = OPTS[3]!.items[sel[3] ?? 1]!;
     const pace = OPTS[4]!.items[sel[4] ?? 1]!;
 
-    const worldSetting = [
-      `这是一款面向【${gender}】观众的 AI 交互剧情游戏。`,
-      `剧情风格：${plotStyle}。内容节奏：${pace}。`,
-      userPrompt ? `玩家给出的故事种子：「${userPrompt}」。` : "",
-      `请依据上述设定，以极致的戏剧张力与细腻的情感起伏，为玩家编织精彩的故事分支与对话。`,
-    ]
-      .filter(Boolean)
-      .join("\n");
+    // worldSetting 顺序很重要：玩家输入若存在，必须放在最前面、单独成段、
+    // 用强指令包住，否则模型会把它当成夹在风格说明里的背景参考、扩写出
+    // 完全无关的剧情。Architect 看 worldSetting 时第一段权重最高。
+    const worldSetting = (
+      userPrompt
+        ? [
+            `【玩家给出的故事内核 — 必须以此为剧情主线，全篇紧扣，不要偏离到其他题材】`,
+            `「${userPrompt}」`,
+            ``,
+            `面向：${gender}观众。剧情风格：${plotStyle}。内容节奏：${pace}。`,
+            `请在上述故事内核之上，以极致的戏剧张力与细腻的情感起伏，为玩家编织精彩的故事分支与对话。`,
+          ]
+        : [
+            `这是一款面向【${gender}】观众的 AI 交互剧情游戏。`,
+            `剧情风格：${plotStyle}。内容节奏：${pace}。`,
+            `请依据上述设定，以极致的戏剧张力与细腻的情感起伏，为玩家编织精彩的故事分支与对话。`,
+          ]
+    ).join("\n");
 
     // 「自动」→ fall back to Galgame CG (project default). Plain prompts like
     // "由模型自动判断画风" are not understood by FLUX — it just paints them
@@ -1156,7 +1184,12 @@ export default function HomePage() {
               />
               {!prompt && (
                 <div className="pointer-events-none absolute left-0 right-0 top-0 overflow-hidden whitespace-nowrap py-3 md:py-4 pr-28 font-serif text-lg md:text-2xl text-clay-400">
-                  <Typewriter phrases={phrases} />
+                  <Typewriter
+                    phrase={phrases[phraseIdx] ?? ""}
+                    onCycle={() =>
+                      setPhraseIdx((i) => (i + 1) % phrases.length)
+                    }
+                  />
                 </div>
               )}
               <button
