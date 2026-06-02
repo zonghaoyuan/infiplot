@@ -56,6 +56,10 @@ The project is still very early and many features are far from polished. We'd lo
 
 Get in touch: hi@infiplot.com
 
+Scan to join our **beta community on QQ** (group ID `575404333`) to share feedback and help shape the project:
+
+<img src="apps/web/public/qq-group.webp" alt="InfiPlot beta community QQ group QR code" width="200" />
+
 ---
 
 ## How it works

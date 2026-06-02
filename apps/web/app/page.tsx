@@ -722,8 +722,17 @@ export default function HomePage() {
 
           <div>
             <p className="text-[10px] smallcaps text-clay-500 mb-3">内 测 用 户 群</p>
-            <p className="font-serif italic text-clay-500 text-base leading-relaxed">
-              群二维码 / 邀请链接（待补充）
+            <img
+              src="/qq-group.webp"
+              alt="InfiPlot 内测交流群 QQ 群二维码（群号 575404333）"
+              width={760}
+              height={760}
+              loading="lazy"
+              className="mx-auto mb-3 w-32 max-w-full rounded-sm border border-clay-900/10 shadow-sm shadow-clay-900/5"
+            />
+            <p className="font-serif text-clay-700 text-base leading-relaxed">
+              <i className="fa-brands fa-qq text-[15px] text-clay-500" /> 扫码加入，或搜索群号{" "}
+              <span className="font-sans text-sm text-clay-900">575404333</span>
             </p>
           </div>
         </div>
