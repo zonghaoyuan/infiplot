@@ -2,20 +2,39 @@
   "name": "infiplot",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "AI 实时交互剧情游戏",
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@9.12.0",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @infiplot/web dev",
-    "build": "pnpm --filter @infiplot/web build",
-    "start": "pnpm --filter @infiplot/web start",
-    "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "build:cf": "opennextjs-cloudflare build",
+    "preview:cf": "opennextjs-cloudflare preview",
+    "deploy:cf": "opennextjs-cloudflare deploy"
+  },
+  "dependencies": {
+    "jsonrepair": "^3.14.0",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "@opennextjs/cloudflare": "^1.19.11",
+    "@types/node": "^22.9.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "sharp": "^0.33.5",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.96.0"
   }
 }
