@@ -1,4 +1,4 @@
-English · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+[English](/) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 # InfiPlot
 
@@ -47,7 +47,7 @@ Built on text, image, and audio models, we've assembled a multi-agent framework 
 
 We call each complete playthrough a **story**.
 
-A story unfolds as a sequence of **scenes**. Each scene is one AI-painted background plus a short tree of **beats** — moments of narration, dialogue, and the occasional choice. You tap through a scene's beats and the image stays put; only when a choice leads somewhere genuinely new — another place, a new point of view, a jump in time — does the AI paint the next scene.
+A story unfolds as a sequence of scenes. Each scene is one AI-painted background plus a short tree of beats — moments of narration, dialogue, and the occasional choice. You tap through a scene's beats and the image stays put; only when a choice leads somewhere genuinely new — another place, a new point of view, a jump in time — does the AI paint the next scene.
 
 ```mermaid
 flowchart TD
@@ -64,9 +64,9 @@ flowchart TD
     SC -. speculatively pre-generate the next scene .-> W
 ```
 
-While you're reading one scene, the engine **speculatively generates the scenes your choices could lead to** — and, for unavoidable next steps, the scene after that. By the time you pick a direction, its image is usually already painted, so the cut feels instant. If you still notice some lag today, don't worry — we're working hard to bring it down.
+While you're reading one scene, the engine speculatively generates the scenes your choices could lead to — and, for unavoidable next steps, the scene after that. By the time you pick a direction, its image is usually already painted, so the cut feels instant. If you still notice some lag today, don't worry — we're working hard to bring it down.
 
-Clicking the background itself (not a button) routes through a **vision** model: it reads where you tapped and decides whether you're exploring the current scene (it inserts a beat — no new image) or moving on (a new scene). This builds on a valuable lesson we learned from flipbook, and we believe it will become one of InfiPlot's defining features — taking the experience to the next level.
+Clicking the background itself (not a button) routes through a vision model: it reads where you tapped and decides whether you're exploring the current scene (it inserts a beat — no new image) or moving on (a new scene). This builds on a valuable lesson we learned from flipbook, and we believe it will become one of InfiPlot's defining features — taking the experience to the next level.
 
 There is no traditional game UI baked into the art. The AI paints the world in whatever style you pick — "stick figure on grid paper" or "cyberpunk noir" — and the dialogue panel and choice buttons are a light HTML layer drawn on top, tuned to sit over the scene. In other words, the UI fits the story of each playthrough, rather than staying the same every time.
 
@@ -82,7 +82,7 @@ After deploy, set your environment variables in the Vercel project — see the [
 
 ## Configuration guide
 
-InfiPlot talks to four kinds of model providers. **Text and Vision use any OpenAI-compatible endpoint** (OpenAI, Anthropic via an OpenAI-compat proxy, Gemini, OpenRouter, DeepSeek, local Ollama, …), so you can mix and match freely. **Image** currently goes to **Runware** (its own task-array protocol, not OpenAI-compatible), chosen for its combination of latency and cost. **TTS** uses **Xiaomi MiMo**'s own voice design / clone protocol (also not OpenAI-compatible) — per-character voice design, clone, and per-line delivery direction.
+InfiPlot talks to four kinds of model providers. **Text and Vision use any OpenAI-compatible endpoint**, so you can mix and match freely. **Image** currently goes to **Runware** (its own task-array protocol, not OpenAI-compatible). **TTS** uses **Xiaomi MiMo**'s own voice design / clone protocol — per-character voice design, clone, and per-line delivery direction.
 
 **1. Choose your providers**
 
@@ -91,7 +91,7 @@ InfiPlot talks to four kinds of model providers. **Text and Vision use any OpenA
 | Text · story director  | `TEXT_BASE_URL` `TEXT_API_KEY` `TEXT_MODEL`        | ✅ | `deepseek-v4-flash` via DeepSeek |
 | Image · scene renderer  | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL`     | ✅ | `runware:400@6` (FLUX.2 [klein] 9B KV) via [Runware](https://runware.ai) |
 | Vision · click reader  | `VISION_BASE_URL` `VISION_API_KEY` `VISION_MODEL`  | ✅ | `gemini-3.5-flash` via Google |
-| TTS · per-character voice | `TTS_BASE_URL` `TTS_API_KEY` `TTS_SPEECH_MODEL` | optional — leave blank to run silently | `mimo-v2.5-tts` via Xiaomi MiMo (own protocol, not OpenAI-compat) |
+| TTS · per-character voice | `TTS_BASE_URL` `TTS_API_KEY` `TTS_SPEECH_MODEL` | optional — leave blank to run silently | `mimo-v2.5-tts` via Xiaomi MiMo |
 
 **2. Set the environment variables**
 
@@ -105,20 +105,20 @@ See `apps/web/.env.example` for the exact shape.
 
 **3. Mind the cost**
 
-With the recommended trio, each **scene** is dominated by the text-LLM call. The FLUX.2 [klein] 9B KV image is roughly **\$0.00078** per scene (1792×1024, 4 steps, sub-second); the text call is the rest (very cheap with deepseek-v4-flash). Tapping through a scene's beats is free. To keep transitions instant, the engine also **pre-generates scenes you might pick but don't** — so real spend runs somewhat higher than the scenes you actually see. There is no rate limiting or auth out of the box — if you make your deployment public, your bill will reflect that. Add limits (and consider lowering the prefetch depth) before sharing widely.
+With the recommended trio, each scene's cost comes mainly from the image generation model. The FLUX.2 [klein] 9B KV image is roughly **\$0.00078** per scene (1792×1024, 4 steps, sub-second); the text model uses `deepseek-v4-flash`, so text costs are negligible by comparison. Tapping through a scene's beats is free. To keep transitions instant, the engine also pre-generates scenes you might pick but ultimately don't — so real spend runs somewhat higher than the scenes you actually see.
 
 ---
 
 ## Roadmap
 
-- [ ] Latency you can't perceive
+- [ ] Make generation latency imperceptible
+- [ ] Compatibility with more model providers
+- [ ] Free-form player input mid-story
 - [ ] Mobile browser support
-- [ ] Compatibility with most providers
 - [ ] User accounts and login
 - [ ] Upgrade from static images to motion video
-- [ ] Free-form player input mid-story
 - [ ] Voice interaction
-- [ ] Story sharing
+- [ ] Share the story you're playing
 - [ ] Mobile app
 
 ---
@@ -140,9 +140,3 @@ By contributing, you agree that your contributions are licensed under the AGPL-3
 ## Star history
 
 [![Star History Chart](https://api.star-history.com/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.com/#zonghaoyuan/infiplot&Date)
-
----
-
-## License
-
-[AGPL-3.0](LICENSE) © InfiPlot. The core is fully open source. AGPL's "network use is distribution" clause means anyone who runs a modified version as a network service must also publish their source — this keeps the core open while leaving room for a future hosted or commercial edition.
