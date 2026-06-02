@@ -9,7 +9,7 @@
 [![Forks](https://img.shields.io/github/forks/zonghaoyuan/infiplot?style=flat-square)](https://github.com/zonghaoyuan/infiplot/network)
 [![Issues](https://img.shields.io/github/issues/zonghaoyuan/infiplot?style=flat-square)](https://github.com/zonghaoyuan/infiplot/issues)
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-infiplot.com-D97A2E?style=flat-square&logo=vercel&logoColor=white)](https://infiplot.com)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-D97A2E?style=flat-square&logo=vercel&logoColor=white)](https://infiplot.com)
 [![License](https://img.shields.io/github/license/zonghaoyuan/infiplot?style=flat-square)](LICENSE)
 [![LINUX DO](https://img.shields.io/badge/LINUX-DO-FFB003?style=flat-square&logo=data:image/svg%2bxml;base64,DQo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPjxwYXRoIGQ9Ik00Ni44Mi0uMDU1aDYuMjVxMjMuOTY5IDIuMDYyIDM4IDIxLjQyNmM1LjI1OCA3LjY3NiA4LjIxNSAxNi4xNTYgOC44NzUgMjUuNDV2Ni4yNXEtMi4wNjQgMjMuOTY4LTIxLjQzIDM4LTExLjUxMiA3Ljg4NS0yNS40NDUgOC44NzRoLTYuMjVxLTIzLjk3LTIuMDY0LTM4LjAwNC0yMS40M1EuOTcxIDY3LjA1Ni0uMDU0IDUzLjE4di02LjQ3M0MxLjM2MiAzMC43ODEgOC41MDMgMTguMTQ4IDIxLjM3IDguODE3IDI5LjA0NyAzLjU2MiAzNy41MjcuNjA0IDQ2LjgyMS0uMDU2IiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZWNlY2VjO2ZpbGwtb3BhY2l0eToxIi8+PHBhdGggZD0iTTQ3LjI2NiAyLjk1N3EyMi41My0uNjUgMzcuNzc3IDE1LjczOGE0OS43IDQ5LjcgMCAwIDEgNi44NjcgMTAuMTU3cS00MS45NjQuMjIyLTgzLjkzIDAgOS43NS0xOC42MTYgMzAuMDI0LTI0LjM4N2E2MSA2MSAwIDAgMSA5LjI2Mi0xLjUwOCIgc3R5bGU9InN0cm9rZTpub25lO2ZpbGwtcnVsZTpldmVub2RkO2ZpbGw6IzE5MTkxOTtmaWxsLW9wYWNpdHk6MSIvPjxwYXRoIGQ9Ik03Ljk4IDcwLjkyNmMyNy45NzctLjAzNSA1NS45NTQgMCA4My45My4xMTNRODMuNDI2IDg3LjQ3MyA2Ni4xMyA5NC4wODZxLTE4LjgxIDYuNTQ0LTM2LjgzMi0xLjg5OC0xNC4yMDMtNy4wOS0yMS4zMTctMjEuMjYyIiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZjlhZjAwO2ZpbGwtb3BhY2l0eToxIi8+PC9zdmc+)](https://linux.do)
 
@@ -67,28 +67,6 @@ After deploy, set your environment variables in the Vercel project — see the [
 
 ---
 
-## Team & Vision
-
-We're a group of young people from Tsinghua University and other schools.
-
-On one hand, we're longtime, devoted players of galgames, otome games, FMV, and AI role-play games. Even while enjoying them, we kept imagining how much more delightful and thrilling it would be if the story choices weren't fixed in advance — or if you could truly interact with an AI character in depth, instead of just texting it through a chat app.
-
-On the other hand, we happen to know a little about large-model technology: enough to turn ideas into working software quickly with AI, and to have formed some modest views on the technical paths available and the limits of what today's tech can build.
-
-The spark came on April 22, 2026, when [@zan2434](https://x.com/zan2434) and others released [flipbook](https://flipbook.page/). We were stunned and delighted by this entirely new form of interaction.
-
-So one day in May, we agreed on the spot to build something like this — both to help people live out the fantasies they'd once set aside, and to explore the new modes of interaction that multimodal models make possible.
-
-The project is still very early and many features are far from polished. We'd love your feedback — open an [issue](https://github.com/zonghaoyuan/infiplot/issues), or join our dev team and explore the new possibilities with us, and satisfy your own curiosity.
-
-Get in touch: hi@infiplot.com
-
-Scan to join our **beta community on QQ** (group ID `575404333`) to share feedback and help shape the project:
-
-<img src="apps/web/public/qq-group.webp" alt="InfiPlot beta community QQ group QR code" width="200" />
-
----
-
 ## How it works
 
 Built on text, image, and audio models, we've assembled a multi-agent framework to deliver on InfiPlot's goal. We split the agents into five roles — **Architect, Writer, Character Designer, Cinematographer, and Painter** — that work together to keep the plot coherent, the characters consistent, and the scenes continuous, all while making the story as compelling as we can.
@@ -117,6 +95,28 @@ While you're reading one scene, the engine speculatively generates the scenes yo
 Clicking the background itself (not a button) routes through a vision model: it reads where you tapped and decides whether you're exploring the current scene (it inserts a beat — no new image) or moving on (a new scene). This builds on a valuable lesson we learned from flipbook, and we believe it will become one of InfiPlot's defining features — taking the experience to the next level.
 
 There is no traditional game UI baked into the art. The AI paints the world in whatever style you pick — "stick figure on grid paper" or "cyberpunk noir" — and the dialogue panel and choice buttons are a light HTML layer drawn on top, tuned to sit over the scene. In other words, the UI fits the story of each playthrough, rather than staying the same every time.
+
+---
+
+## Team & Vision
+
+We're a group of young people from Tsinghua University and other schools.
+
+On one hand, we're longtime, devoted players of galgames, otome games, FMV, and AI role-play games. Even while enjoying them, we kept imagining how much more delightful and thrilling it would be if the story choices weren't fixed in advance — or if you could truly interact with an AI character in depth, instead of just texting it through a chat app.
+
+On the other hand, we happen to know a little about large-model technology: enough to turn ideas into working software quickly with AI, and to have formed some modest views on the technical paths available and the limits of what today's tech can build.
+
+The spark came on April 22, 2026, when [@zan2434](https://x.com/zan2434) and others released [flipbook](https://flipbook.page/). We were stunned and delighted by this entirely new form of interaction.
+
+So one day in May, we agreed on the spot to build something like this — both to help people live out the fantasies they'd once set aside, and to explore the new modes of interaction that multimodal models make possible.
+
+The project is still very early and many features are far from polished. We'd love your feedback — open an [issue](https://github.com/zonghaoyuan/infiplot/issues), or join our dev team and explore the new possibilities with us, and satisfy your own curiosity.
+
+Get in touch: hi@infiplot.com
+
+Scan to join our **beta community on QQ** (group ID `575404333`) to share feedback and help shape the project:
+
+<img src="apps/web/public/qq-group.webp" alt="InfiPlot beta community QQ group QR code" width="200" />
 
 ---
 
