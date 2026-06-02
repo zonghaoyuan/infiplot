@@ -1,4 +1,4 @@
-[English](/ "Back to homepage") · 简体中文 · [日本語](README.ja.md)
+[English](https://github.com/zonghaoyuan/infiplot "Back to homepage") · 简体中文 · [日本語](README.ja.md)
 
 # ⚡ 概览
 

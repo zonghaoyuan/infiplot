@@ -1,4 +1,4 @@
-[English](/) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+[English](https://github.com/zonghaoyuan/infiplot) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 # ⚡ Overview
 
