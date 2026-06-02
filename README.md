@@ -51,19 +51,32 @@ InfiPlot 同时支持部署到 Vercel 与 Cloudflare Workers。Cloudflare 部署
 
 <table>
   <tr>
-    <td><a href="docs/screenshots/4.webp"><img src="docs/screenshots/4.webp" width="280" alt="高中天台黄昏对话"></a></td>
-    <td><a href="docs/screenshots/c3.webp"><img src="docs/screenshots/c3.webp" width="280" alt="夕阳下的告白"></a></td>
-    <td><a href="docs/screenshots/c5.webp"><img src="docs/screenshots/c5.webp" width="280" alt="天台上的选择"></a></td>
+    <td><a href="docs/screenshots/1.webp"><img src="docs/screenshots/1.webp" width="420" alt="InfiPlot 游戏截图 1"></a></td>
+    <td><a href="docs/screenshots/2.webp"><img src="docs/screenshots/2.webp" width="420" alt="InfiPlot 游戏截图 2"></a></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/c7.webp"><img src="docs/screenshots/c7.webp" width="280" alt="近景特写镜头"></a></td>
-    <td><a href="docs/screenshots/a4.webp"><img src="docs/screenshots/a4.webp" width="280" alt="校园暮色"></a></td>
-    <td><a href="docs/screenshots/5.webp"><img src="docs/screenshots/5.webp" width="280" alt="城市夜景"></a></td>
+    <td><a href="docs/screenshots/3.webp"><img src="docs/screenshots/3.webp" width="420" alt="InfiPlot 游戏截图 3"></a></td>
+    <td><a href="docs/screenshots/4.webp"><img src="docs/screenshots/4.webp" width="420" alt="InfiPlot 游戏截图 4"></a></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/d2.webp"><img src="docs/screenshots/d2.webp" width="280" alt="赛博朋克霓虹巷"></a></td>
-    <td><a href="docs/screenshots/f2.webp"><img src="docs/screenshots/f2.webp" width="280" alt="日系夜街相遇"></a></td>
-    <td><a href="docs/screenshots/f5.webp"><img src="docs/screenshots/f5.webp" width="280" alt="深夜街角邂逅"></a></td>
+    <td><a href="docs/screenshots/5.webp"><img src="docs/screenshots/5.webp" width="420" alt="InfiPlot 游戏截图 5"></a></td>
+    <td><a href="docs/screenshots/6.webp"><img src="docs/screenshots/6.webp" width="420" alt="InfiPlot 游戏截图 6"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/7.webp"><img src="docs/screenshots/7.webp" width="420" alt="InfiPlot 游戏截图 7"></a></td>
+    <td><a href="docs/screenshots/8.webp"><img src="docs/screenshots/8.webp" width="420" alt="InfiPlot 游戏截图 8"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/9.webp"><img src="docs/screenshots/9.webp" width="420" alt="InfiPlot 游戏截图 9"></a></td>
+    <td><a href="docs/screenshots/10.webp"><img src="docs/screenshots/10.webp" width="420" alt="InfiPlot 游戏截图 10"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/11.webp"><img src="docs/screenshots/11.webp" width="420" alt="InfiPlot 游戏截图 11"></a></td>
+    <td><a href="docs/screenshots/12.webp"><img src="docs/screenshots/12.webp" width="420" alt="InfiPlot 游戏截图 12"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/13.webp"><img src="docs/screenshots/13.webp" width="420" alt="InfiPlot 游戏截图 13"></a></td>
+    <td><a href="docs/screenshots/14.webp"><img src="docs/screenshots/14.webp" width="420" alt="InfiPlot 游戏截图 14"></a></td>
   </tr>
 </table>
 

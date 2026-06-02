@@ -51,19 +51,32 @@ After deploy, fill in the environment variables — see the [Configuration guide
 
 <table>
   <tr>
-    <td><a href="docs/screenshots/4.webp"><img src="docs/screenshots/4.webp" width="280" alt="School rooftop scene"></a></td>
-    <td><a href="docs/screenshots/c3.webp"><img src="docs/screenshots/c3.webp" width="280" alt="Golden hour rooftop dialogue"></a></td>
-    <td><a href="docs/screenshots/c5.webp"><img src="docs/screenshots/c5.webp" width="280" alt="Sunset rooftop confession"></a></td>
+    <td><a href="docs/screenshots/1.webp"><img src="docs/screenshots/1.webp" width="420" alt="InfiPlot screenshot 1"></a></td>
+    <td><a href="docs/screenshots/2.webp"><img src="docs/screenshots/2.webp" width="420" alt="InfiPlot screenshot 2"></a></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/c7.webp"><img src="docs/screenshots/c7.webp" width="280" alt="Rooftop close-up choice"></a></td>
-    <td><a href="docs/screenshots/a4.webp"><img src="docs/screenshots/a4.webp" width="280" alt="Twilight rooftop drama"></a></td>
-    <td><a href="docs/screenshots/5.webp"><img src="docs/screenshots/5.webp" width="280" alt="Cityscape evening scene"></a></td>
+    <td><a href="docs/screenshots/3.webp"><img src="docs/screenshots/3.webp" width="420" alt="InfiPlot screenshot 3"></a></td>
+    <td><a href="docs/screenshots/4.webp"><img src="docs/screenshots/4.webp" width="420" alt="InfiPlot screenshot 4"></a></td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/d2.webp"><img src="docs/screenshots/d2.webp" width="280" alt="Cyberpunk neon alley"></a></td>
-    <td><a href="docs/screenshots/f2.webp"><img src="docs/screenshots/f2.webp" width="280" alt="Night street anime scene"></a></td>
-    <td><a href="docs/screenshots/f5.webp"><img src="docs/screenshots/f5.webp" width="280" alt="Late-night encounter"></a></td>
+    <td><a href="docs/screenshots/5.webp"><img src="docs/screenshots/5.webp" width="420" alt="InfiPlot screenshot 5"></a></td>
+    <td><a href="docs/screenshots/6.webp"><img src="docs/screenshots/6.webp" width="420" alt="InfiPlot screenshot 6"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/7.webp"><img src="docs/screenshots/7.webp" width="420" alt="InfiPlot screenshot 7"></a></td>
+    <td><a href="docs/screenshots/8.webp"><img src="docs/screenshots/8.webp" width="420" alt="InfiPlot screenshot 8"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/9.webp"><img src="docs/screenshots/9.webp" width="420" alt="InfiPlot screenshot 9"></a></td>
+    <td><a href="docs/screenshots/10.webp"><img src="docs/screenshots/10.webp" width="420" alt="InfiPlot screenshot 10"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/11.webp"><img src="docs/screenshots/11.webp" width="420" alt="InfiPlot screenshot 11"></a></td>
+    <td><a href="docs/screenshots/12.webp"><img src="docs/screenshots/12.webp" width="420" alt="InfiPlot screenshot 12"></a></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/13.webp"><img src="docs/screenshots/13.webp" width="420" alt="InfiPlot screenshot 13"></a></td>
+    <td><a href="docs/screenshots/14.webp"><img src="docs/screenshots/14.webp" width="420" alt="InfiPlot screenshot 14"></a></td>
   </tr>
 </table>
 
