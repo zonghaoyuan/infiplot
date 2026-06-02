@@ -485,48 +485,74 @@ function PlayInner() {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    let payload: { worldSetting: string; styleGuide: string } | null = null;
+    // 三条进入路径：
+    //   ?card=<m0..f31>      → 首页精选卡，直接从 /home/firstact/{name}.json
+    //                          静态文件加载（已在构建期 prebake，免一切引擎调用）
+    //   ?preset=<id>         → 内置 PRESETS（仍走 /api/start 现场生成）
+    //   ?custom=1            → 用户自定义 prompt，sessionStorage 取 ws/sg
+    //                          后走 /api/start 现场生成
+    const cardName = params.get("card");
     const presetId = params.get("preset");
+    const isCustom = params.get("custom") === "1";
 
-    if (presetId) {
-      const p = PRESETS.find((x) => x.id === presetId);
-      if (p) payload = { worldSetting: p.worldSetting, styleGuide: p.styleGuide };
-    } else if (params.get("custom") === "1") {
-      const stored = sessionStorage.getItem("infiplot:custom");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as {
-            worldSetting: string;
-            styleGuide: string;
-            audioEnabled?: boolean;
-          };
-          payload = { worldSetting: parsed.worldSetting, styleGuide: parsed.styleGuide };
-          // audioEnabled 已在 useState 初始化时反向投射到 muted；这里无需再额外存。
-        } catch {
-          payload = null;
+    let livePayload: { worldSetting: string; styleGuide: string } | null = null;
+    if (!cardName) {
+      if (presetId) {
+        const p = PRESETS.find((x) => x.id === presetId);
+        if (p) livePayload = { worldSetting: p.worldSetting, styleGuide: p.styleGuide };
+      } else if (isCustom) {
+        const stored = sessionStorage.getItem("infiplot:custom");
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored) as {
+              worldSetting: string;
+              styleGuide: string;
+              audioEnabled?: boolean;
+            };
+            livePayload = { worldSetting: parsed.worldSetting, styleGuide: parsed.styleGuide };
+            // audioEnabled 已在 useState 初始化时反向投射到 muted；这里无需再额外存。
+          } catch {
+            livePayload = null;
+          }
         }
       }
     }
 
-    if (!payload) {
+    if (!cardName && !livePayload) {
       router.replace("/");
       return;
     }
 
-    const finalPayload = payload;
+    type PrebakedFirstAct = StartResponse & {
+      worldSetting: string;
+      styleGuide: string;
+      cardName?: string;
+      cardTitle?: string;
+      cardGender?: string;
+    };
 
-    fetch("/api/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(finalPayload),
-    })
-      .then(async (r) => {
-        if (!r.ok) {
-          const j = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error ?? r.statusText);
-        }
-        return (await r.json()) as StartResponse;
-      })
+    const fetchStart: Promise<PrebakedFirstAct> = cardName
+      ? fetch(`/home/firstact/${encodeURIComponent(cardName)}.json`).then(
+          async (r) => {
+            if (!r.ok) throw new Error(`找不到精选剧情：${cardName}`);
+            return (await r.json()) as PrebakedFirstAct;
+          },
+        )
+      : fetch("/api/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(livePayload),
+        }).then(async (r) => {
+          if (!r.ok) {
+            const j = (await r.json().catch(() => ({}))) as { error?: string };
+            throw new Error(j.error ?? r.statusText);
+          }
+          const data = (await r.json()) as StartResponse;
+          // Live /api/start doesn't echo ws/sg back — splice in what we sent.
+          return { ...data, worldSetting: livePayload!.worldSetting, styleGuide: livePayload!.styleGuide };
+        });
+
+    fetchStart
       .then(async (data) => {
         // Decode the Runware image in memory before committing to state, so
         // the <img> renders instantly when it mounts (same rationale as the
@@ -536,8 +562,8 @@ function PlayInner() {
         const initial: Session = {
           id: data.sessionId,
           createdAt: Date.now(),
-          worldSetting: finalPayload.worldSetting,
-          styleGuide: finalPayload.styleGuide,
+          worldSetting: data.worldSetting,
+          styleGuide: data.styleGuide,
           history: [
             {
               scene: data.scene,

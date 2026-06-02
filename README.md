@@ -18,6 +18,28 @@ Free to play, no setup required: [infiplot.com](https://infiplot.com)
 
 ---
 
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/4.webp" width="280" alt="School rooftop scene"></td>
+    <td><img src="docs/screenshots/c3.webp" width="280" alt="Golden hour rooftop dialogue"></td>
+    <td><img src="docs/screenshots/c5.webp" width="280" alt="Sunset rooftop confession"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/c7.webp" width="280" alt="Rooftop close-up choice"></td>
+    <td><img src="docs/screenshots/a4.webp" width="280" alt="Twilight rooftop drama"></td>
+    <td><img src="docs/screenshots/5.webp" width="280" alt="Cityscape evening scene"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/d2.webp" width="280" alt="Cyberpunk neon alley"></td>
+    <td><img src="docs/screenshots/f2.webp" width="280" alt="Night street anime scene"></td>
+    <td><img src="docs/screenshots/f5.webp" width="280" alt="Late-night encounter"></td>
+  </tr>
+</table>
+
+---
+
 ## Team & Vision
 
 We're a group of young people from Tsinghua University and other schools.

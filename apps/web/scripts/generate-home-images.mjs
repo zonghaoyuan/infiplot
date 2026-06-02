@@ -3,9 +3,13 @@
  * One-off generator: produces the InfiPlot homepage story cards via Runware
  * FLUX.2 and writes them as PNGs under apps/web/public/home/.
  *
- * Flat per-gender layout: 30 male-oriented (m0..m29) + 30 female-oriented
- * (f0..f29). Same index shares aspect ratio across genders so the 性向
- * crossfade never jumps card height.
+ * Flat per-gender layout: 32 male-oriented (m0..m31) + 32 female-oriented
+ * (f0..f31). All cards are 832x1024 (≈4:5) to match the homepage StoryCard
+ * aspect — m{i} and f{i} share dimensions so 性向 crossfade never jumps.
+ *
+ * Each prompt bakes its per-card art style (anime / cinematic-real / xianxia
+ * ink / cyberpunk / steampunk / pixel / etc.) so the homepage feels visually
+ * varied rather than uniformly anime. Stories are 红果-short-drama framed.
  *
  * Reads IMAGE_BASE_URL / IMAGE_API_KEY / IMAGE_MODEL from apps/web/.env.local.
  *
@@ -64,435 +68,96 @@ if (!BASE_URL.includes("runware.ai")) {
 const BASE_QUALITY =
   "masterpiece, best quality, highly detailed, cinematic lighting, soft warm color grading, intricate background, no text, no watermark";
 
-// 30 male-oriented cards (m0..m29). m0..m6 flagship moods, m7..m22 broad
-// genre sweep, m23..m29 added range (wuxia / space opera / republican-era /
-// apocalypse / western / deep sea / steampunk).
+const W = 832;
+const H = 1024;
+
+// Style suffixes — kept in sync with apps/web/app/page.tsx STYLE_MAP so the
+// homepage cover and the in-game styleGuide land on the same aesthetic.
+const S = {
+  二次元: "anime visual novel illustration, japanese galgame aesthetic, soft warm natural light",
+  吉卜力: "studio ghibli watercolor style, hand-drawn animation, soft watercolor washes, warm healing tones",
+  真实系: "cinematic photorealism, soft natural lighting, subtle film grain",
+  超写实: "hyperrealistic portrait, cinematic studio lighting, perfect skin and fabric detail",
+  水彩: "watercolor illustration, wet bleeding brushstrokes, paper texture",
+  像素风: "16-bit pixel art, retro game palette, blocky geometric style",
+  日系动画: "modern japanese anime cel-shading, hard shadow layers, cel anime style",
+  "3D 渲染": "3D rendered toon style, soft subsurface scattering, clean cinematic lighting",
+  蒸汽朋克: "steampunk aesthetic, brass gears and steam, industrial revolution atmosphere",
+  玄幻: "chinese xianxia illustration, ethereal qi mist, distant misty mountains and mythic beasts",
+  国风水墨: "chinese ink wash illustration, romantic xianxia colors, eastern aesthetic",
+  赛博朋克: "cyberpunk city, neon reflections on wet streets, glowing cybernetic accents",
+};
+
+// 32 male-oriented cards (m0..m31), 红果 short-drama framing.
 const MALE = [
-  {
-    name: "m0",
-    prompt:
-      "anime visual novel cover art, two high school students standing under cherry blossom petals at dusk, warm golden sunset light, soft watercolor texture, japanese galgame illustration, widescreen composition",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m1",
-    prompt:
-      "post-apocalyptic wasteland anime, lone scavenger silhouette against rusted mecha mountain, golden dust storm sweeping across the dunes, cinematic widescreen, anime concept art, dramatic backlight",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m2",
-    prompt:
-      "anime xianxia cultivator boy in flowing white robes standing on a floating mountain peak above a sea of clouds, vermillion banners fluttering, vertical poster composition, chinese mythology, galgame illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m3",
-    prompt:
-      "anime visual novel scene, southern chinese small town in june rain, a transfer student looking back from a rainy classroom window, ceiling fan in background, soft warm afternoon tones, slice of life galgame illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "m4",
-    prompt:
-      "cyberpunk anime portrait, amnesiac detective standing in neon-soaked rainy alley of an east-asian metropolis in 2087, holographic signs reflecting on wet pavement, vertical composition, blade runner palette, anime illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m5",
-    prompt:
-      "anime mystery scene, late-night high school library underground chamber, flickering candlelight, a class president kneeling before a glowing rune circle on the stone floor, gothic galgame style, mysterious teal-green glow",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m6",
-    prompt:
-      "anime isekai cathedral scene, silver-haired holy maiden with tearful eyes kneeling before a glowing magic summoning circle, golden cathedral light streaming through stained glass, summoned hero just appearing in modern school uniform, warm galgame illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m7",
-    prompt:
-      "anime girl in summer yukata watching fireworks at a japanese festival night, warm bokeh lanterns, vertical composition, soft watercolor, slice of life galgame",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m8",
-    prompt:
-      "cyberpunk neon city skyline at rainy night, flying vehicles, holographic billboards in chinese characters, anime widescreen, cinematic",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m9",
-    prompt:
-      "anime two students standing on empty rural train platform after school, golden hour, slice of life galgame illustration, cinematic widescreen, warm tones",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "m10",
-    prompt:
-      "anime mage girl in star-embroidered robes casting starlight spell, ancient fantasy library, vertical composition, magical particles, painterly illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m11",
-    prompt:
-      "anime mecha pilot girl strapped in cockpit, holographic interfaces around her, dramatic red emergency lighting, intense expression, mecha anime style",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m12",
-    prompt:
-      "anime detective girl in long trench coat under a flickering streetlamp at midnight, noir mood, vertical composition, rain mist, cinematic anime",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m13",
-    prompt:
-      "anime cyberpunk couple sharing a quiet moment in a neon-lit rainy alley, holographic umbrella, electric blue and pink reflections, romantic galgame illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "m14",
-    prompt:
-      "anime sword duel between two xianxia cultivators in a bamboo grove, motion blur on swords, falling bamboo leaves, dynamic action composition",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m15",
-    prompt:
-      "anime princess in ornate eastern gown seated on an ancient carved throne, candlelight, intricate background tapestries, vertical poster composition, fantasy galgame",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m16",
-    prompt:
-      "anime classroom afternoon, sun streaming through windows onto empty desks, a single uniformed student writing in a notebook, slice of life watercolor, nostalgic",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m17",
-    prompt:
-      "anime girl reading a folded letter under a cherry blossom tree, melancholic expression, petals drifting, soft warm watercolor, slice of life galgame",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "m18",
-    prompt:
-      "anime moon goddess descending from a starlit sky, silver hair flowing, ethereal aurora glow, dreamy painterly illustration, vertical composition",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m19",
-    prompt:
-      "anime samurai standing alone under a blood red full moon, sakura petals carried on the wind, katana drawn, dramatic backlight, cinematic widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m20",
-    prompt:
-      "anime witch girl brewing a glowing potion in a candlelit forest hut, hanging dried herbs, magical sparks rising from the cauldron, vertical composition",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m21",
-    prompt:
-      "anime beach summer scene, two girlfriends sitting on the sand watching a pink-orange sunset, gentle waves, slice of life galgame illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m22",
-    prompt:
-      "anime hacker girl in a dim apartment surrounded by glowing screens, neon cyan reflections on her face, intense focus, cyberpunk galgame style",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "m23",
-    prompt:
-      "anime wuxia scene, a lone swordsman in a rundown rainy-night tavern, a mysterious masked woman at the next table with a sword case beside her, warm lantern light, jianghu atmosphere, vertical composition, galgame illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m24",
-    prompt:
-      "anime space opera scene, the bridge of a deep-space colony ship with red alert lights flashing, an unknown planet glowing ominous crimson through the viewport, sci-fi galgame illustration, cinematic widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m25",
-    prompt:
-      "anime 1930s old Shanghai bund scene, art deco ballroom, a dancer handing a coded playing card to the viewer, gramophone and warm amber lighting, republican era China, cinematic galgame illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "m26",
-    prompt:
-      "anime post-apocalyptic survival scene, interior of a barricaded convenience store at night, a lone survivor tense at the rolling shutter door listening to a rhythmic knock, dim emergency light, vertical composition, galgame illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m27",
-    prompt:
-      "anime wild west scene, a deserted frontier town at high noon, a lone gunslinger standing outside the saloon ready for a duel, dust and harsh sunlight, cinematic widescreen, anime illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "m28",
-    prompt:
-      "anime deep sea exploration scene, a diving bell descending into an abyssal trench, searchlight revealing an ancient sunken city, eerie blue glow, bioluminescence, vertical composition, galgame illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "m29",
-    prompt:
-      "anime steampunk airship deck scene, brass gears and billowing steam above a sea of clouds, a black pirate balloon approaching the starboard side, dramatic adventure mood, cinematic widescreen, anime illustration",
-    w: 1024,
-    h: 832,
-  },
+  { name: "m0", prompt: `front gates of a glass-walled chinese wedding hall at dusk, a stoic man in a worn military overcoat standing alone outside facing the camera, behind him twenty black-suited bodyguards kneeling in two perfect rows on the marble steps, soft rain and faint smoke on the road, ${S["真实系"]}`, w: W, h: H },
+  { name: "m1", prompt: `a young man in a clean grey shirt walking back into a small chinese mountain village at golden hour, an elderly farmer at the village entrance crying tears of joy and reaching out to him, terraced fields and warm cooking smoke from low houses, ${S["吉卜力"]}`, w: W, h: H },
+  { name: "m2", prompt: `interior of a lavish chinese family banquet hall, a young man holding a teapot center frame surrounded by dozens of disdainful relatives glaring at him, through the open french doors behind him nine black rolls-royces lined up at the curb with chauffeurs bowing in unison, ${S["真实系"]}`, w: W, h: H },
+  { name: "m3", prompt: `a young food delivery courier in a yellow uniform on a midnight neon-lit chinese street, his phone held up showing an incoming call labelled 'father', behind him a sleek black bentley pulling silently alongside the curb, ${S["二次元"]}`, w: W, h: H },
+  { name: "m4", prompt: `a stoic ex-soldier in a dark hoodie standing protectively in front of a frightened young woman on a rainy small-town chinese street, a struck thug recoiling and falling back into a puddle behind, cold tense atmosphere, ${S["真实系"]}`, w: W, h: H },
+  { name: "m5", prompt: `a young man kneeling on his bedroom floor at 4 am holding an open ring box, his girlfriend frozen in the half-open doorway with her suitcase, dawn light filtering through curtains, ${S["日系动画"]}`, w: W, h: H },
+  { name: "m6", prompt: `a high school boy in summer uniform standing on a school rooftop at golden hour holding a folded exam paper, a girl in another uniform leaning over the far railing in the distance, summer cicadas and warm light, ${S["吉卜力"]}`, w: W, h: H },
+  { name: "m7", prompt: `a young man kneeling at a stone grave in a chinese cemetery at twilight, soft white petals drifting around him, a barefoot young woman with the same face as the photo on the headstone standing behind the grave looking confused, ${S["二次元"]}`, w: W, h: H },
+  { name: "m8", prompt: `a young man at 3 am in front of his bright phone screen flooded with an SSR character pull animation in his messy bedroom, a girl in his oversized T-shirt walking out of his bathroom rubbing sleepy eyes, ${S["3D 渲染"]}`, w: W, h: H },
+  { name: "m9", prompt: `a young man at center frame surrounded by a holographic semicircle of seven beautiful women all turning to look at him in unison, a glowing red 30-second countdown floating overhead, ${S["二次元"]}`, w: W, h: H },
+  { name: "m10", prompt: `interior of a dim chinese palace cold harem chamber, a thin young prince in disheveled white silk robes seated cross-legged on a stone floor, an old eunuch standing before him reading a death decree from a yellow imperial scroll, candlelight, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "m11", prompt: `a stylish silver-haired bishounen anime villain in a black school uniform standing in a cathedral school courtyard, the otome heroine timidly approaching him with a hand-written letter, falling petals, ${S["二次元"]}`, w: W, h: H },
+  { name: "m12", prompt: `interior of a 1928 republican-era warlord mansion entrance hall, a young man in a dark military uniform lying on a red carpet with a slim trail of blood from his lips beside a half-drained porcelain cup, polished military boots and a shadowed figure approaching from the doorway, ${S["真实系"]}`, w: W, h: H },
+  { name: "m13", prompt: `a young xianxia cultivator in tattered white robes standing atop a cloud-wreathed mountain peak, nine layers of crimson heavenly tribulation lightning crashing down, a silhouetted female figure standing inside the lightning clouds above shielding him, ${S["玄幻"]}`, w: W, h: H },
+  { name: "m14", prompt: `a humble grey-robed temple sweeper holding a broom standing calmly in a chinese mountain monastery courtyard, an ornately armored demon lord recoiling backward from him while terrified senior monks kneel behind, swept leaves drifting between them, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "m15", prompt: `interior of a dim chinese college dormitory room at night, a young man recoiling on his bunk holding back another student whose pale veined face is biting at him, a single floating silver-blade-shaped droplet of blood suspended in mid-air between them, ${S["真实系"]}`, w: W, h: H },
+  { name: "m16", prompt: `a soaked young man in a torn jacket standing on a rooftop of a ruined neon-lit asian metropolis during a thunderstorm, electricity arcing wildly between his clenched fist and the air, a horde of glowing-eyed infected silhouetted below, ${S["赛博朋克"]}`, w: W, h: H },
+  { name: "m17", prompt: `interior of a luxurious dim-lit family banquet room, the protagonist seated calmly at the corner of a long table while seven imposing men in dark suits enter the doorway behind him and bow deeply in his direction, his father-in-law freezing mid-sentence at the head of the table, ${S["真实系"]}`, w: W, h: H },
+  { name: "m18", prompt: `a quiet elderly chinese gentleman in a simple grey changshan standing in a noisy outdoor wet market holding a bunch of green onions, the vendor at his stall trembling and dropping the change, distant grey mountain ranges in the background, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "m19", prompt: `interior of a dim-lit luxurious chinese-style mansion at night, a man in a black silk shirt slowly lifting a red wedding veil to reveal the face of a young woman identical to his late sister, her eyes wide with fear, soft red lantern light, ${S["超写实"]}`, w: W, h: H },
+  { name: "m20", prompt: `a 1930s republican-era man in a tailored grey suit and fedora standing in a smoke-filled shanghai bund alley between two doors marked in chinese characters, cigarette smoke and distant gramophone music, art deco neon glow, ${S["真实系"]}`, w: W, h: H },
+  { name: "m21", prompt: `a humble grey-clothed sweeper carrying a tea tray walking through a chinese martial arts grand tournament hall, dozens of jianghu sect leaders frozen mid-strike with their raised swords trembling in the air around him, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "m22", prompt: `a tense high school senior in school uniform sitting at a desk under harsh fluorescent light, four serious men in dark suits standing behind him exchanging a sealed envelope across the desk, chalkboard with college entrance exam dates visible, ${S["日系动画"]}`, w: W, h: H },
+  { name: "m23", prompt: `the wide marble entry of a luxury chinese wedding hall, a gaunt young man in a blood-stained hiking jacket and dusty backpack standing motionless at the doorway, a champagne glass shattering on the floor near a stunned tuxedoed groom in the background, ${S["真实系"]}`, w: W, h: H },
+  { name: "m24", prompt: `a high school rooftop at golden hour, a fierce female transfer student in dishevelled uniform pinned with her bag torn open at her feet spilling a thick stack of pale blue love letters, the protagonist standing over her with a steady amused expression, ${S["日系动画"]}`, w: W, h: H },
+  { name: "m25", prompt: `a sun-filled japanese classroom after school, a top student girl with neat braids slamming an exam paper down on the desk of the boy sitting behind her, his identical answers visible on his desk, soft afternoon dust rays, ${S["二次元"]}`, w: W, h: H },
+  { name: "m26", prompt: `a grand fantasy hall during a class awakening ceremony, all classmates around in colored qi auras laughing and pointing at the protagonist who stands alone at center frame, a sudden blinding pillar of golden divine light bursting from him obliterating their auras, ${S["玄幻"]}`, w: W, h: H },
+  { name: "m27", prompt: `a tiny stick-figure protagonist standing on lined notebook paper as a giant pink eraser descends from above, half of his pixel body already smudged and erased, blocky 16-bit world, ${S["像素风"]}`, w: W, h: H },
+  { name: "m28", prompt: `a brass-and-wood airship deck above an endless sea of clouds, a one-eyed steampunk captain in a long coat handing a telescope to a young man whose hand is reaching out to take it, a distant black pirate balloon visible through the lens, ${S["蒸汽朋克"]}`, w: W, h: H },
+  { name: "m29", prompt: `interior of a battered colony starship bridge, a 17-year-old protagonist in a torn pilot uniform climbing into a glowing main-cannon command chair, dozens of officers behind him saluting, a crimson alien planet glowing through the cracked viewport, ${S["赛博朋克"]}`, w: W, h: H },
+  { name: "m30", prompt: `a young pilot in a worn flight suit standing on a brightly-lit mech arena platform at night, his stern coach pressing a captain's badge into his palm, the cockpit of a battered humanoid mech opening behind him, a holographic crowd fills the arena overhead, ${S["赛博朋克"]}`, w: W, h: H },
+  { name: "m31", prompt: `a modern college campus plaza at golden hour, a beautiful girl standing opposite a wealthy young man holding flowers receiving her embrace, the protagonist watching from a few steps away with one hand in his coat pocket and a quiet smile, faint reflection of a black bentley parked at the curb behind him, ${S["真实系"]}`, w: W, h: H },
 ];
 
-// 30 female-oriented cards (f0..f29). Same index + aspect ratio as MALE so the
-// 女性向 masonry mirrors slot heights; otome / josei love-interest framing.
+// 32 female-oriented cards (f0..f31), same trope categories — love-interest framing.
 const FEMALE = [
-  {
-    name: "f0",
-    prompt:
-      "anime josei otome game illustration, beautiful female protagonist in ornate eastern hanfu silk robes, behind her a tall stoic regent prince in dark embroidered robes leaning down to clasp a red jade bracelet on her wrist, ancient chinese palace interior, soft candlelight, romantic widescreen composition",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f1",
-    prompt:
-      "anime modern romance scene, young woman in pajamas sitting on a bed at dawn, golden light through curtains, looking at her phone in shock as if she has just been pulled back in time, soft warm tones, melancholic otome illustration, widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f2",
-    prompt:
-      "anime villainess otome game character, beautiful young noblewoman with elaborate golden ringlet hair and crimson ballgown, standing alone in a baroque royal academy ballroom while other noble girls glare from the background, dramatic chandelier light, vertical poster composition, otome game cover art",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f3",
-    prompt:
-      "anime visual novel scene, female high school transfer student standing on a rainy southern chinese town rooftop, sharing her umbrella with a moody boy reading poetry on the railing, soft warm afternoon palette, slice of life otome illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "f4",
-    prompt:
-      "anime josei coronation scene, beautiful young empress in ornate ceremonial robes seated on a high eastern throne, head turned to glance at a handsome attendant standing in the shadowed pillars below, vertical composition, opulent silks and gold, otome game illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f5",
-    prompt:
-      "anime wuxia swordswoman in flowing light hanfu, jade hairpin, white sword raised mid-stance, cherry blossoms swirling around her, mountain pavilion in the background at golden hour, dynamic widescreen otome wuxia illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f6",
-    prompt:
-      "anime visual novel scene, female high school student standing on a sunset rooftop looking up at a tall handsome senior in school uniform, warm orange sky, golden hour, romantic galgame otome cover art, widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f7",
-    prompt:
-      "anime otome game illustration, handsome boy in summer yukata shielding a girl from the festival crowd, both watching the last firework bloom in the night sky, warm lantern bokeh, vertical composition, soft watercolor, romantic galgame",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f8",
-    prompt:
-      "anime josei romance, handsome young man draping his coat over a girl's shoulders on a rainy train platform at night, neon signs shattering into reflections in the puddles, cinematic widescreen, warm melancholic tones, otome illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f9",
-    prompt:
-      "anime otome scene, a boy stopping and turning back to look at the girl on an empty rural train platform at golden hour dusk, unspoken words between them, slice of life galgame illustration, warm tones, cinematic widescreen",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "f10",
-    prompt:
-      "anime otome game, cold aloof student council president closing a forbidden tome in the depths of an old library, lifting his gaze with unexpectedly gentle eyes toward the viewer, dust motes in candlelight, vertical composition, painterly illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f11",
-    prompt:
-      "anime otome romance, a handsome knight kneeling on one knee swearing an oath with his sword before the viewer, red emergency alert lighting on a starship bridge, dramatic devotion, otome game illustration, widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f12",
-    prompt:
-      "anime otome scene, handsome young man catching up under a single umbrella to a girl walking alone in a midnight rainy alley, offering to walk her home, noir streetlamp glow, rain mist, vertical composition, romantic galgame",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f13",
-    prompt:
-      "anime otome romance, a boy tilting a glowing holographic umbrella toward the girl while his own shoulder gets soaked in the neon rain, electric blue and pink reflections, intimate quiet moment, galgame illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "f14",
-    prompt:
-      "anime wuxia otome, a handsome swordsman sheathing his blade to stand protectively before a girl in a bamboo grove, falling bamboo leaves drifting between them, golden light, dynamic romantic composition, widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f15",
-    prompt:
-      "anime otome game, a cold regent prince crossing a candlelit ancient palace banquet hall, reaching out his hand only toward the viewer while courtiers bow, opulent silks and gold, vertical poster composition, fantasy otome illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f16",
-    prompt:
-      "anime otome scene, a boy with reddened ears shyly pushing his notebook across a desk toward the girl in a sunset-lit empty classroom, warm orange light, tender romantic moment, slice of life galgame, widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f17",
-    prompt:
-      "anime otome romance, a handsome boy handing a love letter to the viewer under a cherry blossom tree, petals drifting in the air, tender expression, soft warm watercolor, slice of life galgame illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "f18",
-    prompt:
-      "anime otome fantasy, a silver-haired ethereal moon god leaning down, fingertip gently touching the viewer's cheek, aurora glow and drifting starlight, dreamy painterly illustration, vertical composition",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f19",
-    prompt:
-      "anime otome wuxia, a handsome swordsman shielding the girl with his body under a blood red full moon, sword light and sakura petals falling together, dramatic backlight, cinematic widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f20",
-    prompt:
-      "anime otome fantasy, a handsome young sorcerer brewing a glowing fate-changing potion for the viewer in a candlelit forest hut, hanging dried herbs, magical sparks rising, warm romantic mood, vertical composition",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f21",
-    prompt:
-      "anime otome scene, a boy sitting beside the girl on a seaside embankment under a pink-orange sunset, sharing unspoken feelings carried off on the sea breeze, gentle waves, slice of life galgame illustration, widescreen",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f22",
-    prompt:
-      "anime otome cyberpunk, a handsome hacker boy bathed in blue screen glow turning to look at the viewer after typing the last line of code, neon cyan reflections on his face, intense tender gaze, galgame illustration",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "f23",
-    prompt:
-      "anime otome fantasy, a silver-haired dragon king in humanoid form kneeling on one knee deep in an ancient dragon lair, offering a dragon-scale ring toward the viewer, glowing treasure hoard, vertical composition, otome game illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f24",
-    prompt:
-      "anime otome josei, 1930s old Shanghai mansion, an elegant refined young gentleman in a western suit shielding the viewer from a stray bullet, crimson blooming on his sleeve cuff, warm amber lighting, cinematic widescreen, otome illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f25",
-    prompt:
-      "anime otome apocalypse, a handsome rugged survivor firing his last bullet at a zombie breaking through a door, then turning to shield the girl behind him, dim ruined interior, dramatic devotion, otome game illustration, widescreen",
-    w: 1024,
-    h: 832,
-  },
-  {
-    name: "f26",
-    prompt:
-      "anime otome gothic romance, a pale handsome vampire count bowing to kiss the back of the viewer's hand at a candlelit masquerade ball in a fog-shrouded castle, cold elegant beauty, vertical composition, otome illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f27",
-    prompt:
-      "anime otome wild west, a silent handsome bounty hunter on horseback in a dusty frontier town reaching down to pull the girl up onto his saddle, golden dust and harsh sunlight, cinematic widescreen, otome illustration",
-    w: 1024,
-    h: 640,
-  },
-  {
-    name: "f28",
-    prompt:
-      "anime otome fantasy, a luminous handsome merman prince wrapping his arm around the girl's waist, guiding her through a sleeping ancient underwater city, glowing bioluminescent ruins, vertical composition, otome game illustration",
-    w: 768,
-    h: 1024,
-  },
-  {
-    name: "f29",
-    prompt:
-      "anime otome steampunk, a dashing one-eyed airship captain on the deck handing a telescope to the viewer, brass gears and a sea of clouds behind, adventurous romantic mood, cinematic widescreen, otome illustration",
-    w: 1024,
-    h: 832,
-  },
+  { name: "f0", prompt: `interior of an ornate ancient chinese general's manor courtyard, a delicate young noblewoman with a fresh red mark on her cheek kneeling on a stone tile, a stern handsome regent prince in dark silk court robes dismounting his horse outside the gate and striding toward her with murder in his eyes, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "f1", prompt: `a glamorous blonde-curl-haired villainess in a crimson ballgown sitting alone in a sun-drenched academy library reading an open game-design notebook with a faint smug smile, three handsome male love interests glaring at her in the background, ${S["二次元"]}`, w: W, h: H },
+  { name: "f2", prompt: `a delicate hanfu-clad young woman holding a jade pendant standing alone at the entrance of an ancient ancestral hall under moonlight, the silhouette of the male protagonist watching from afar between distant cherry trees, ${S["玄幻"]}`, w: W, h: H },
+  { name: "f3", prompt: `interior of an opulent imperial chinese palace throne hall, a regal young empress in gold-embroidered phoenix robes seated at the head, the emperor stepping down from the dragon throne and kneeling before her while three thousand court ladies gasp, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "f4", prompt: `a young bride in a white wedding dress writing a divorce paper at a vanity, her husband's handsome younger brother stepping into the bridal suite holding a fresh bouquet, both shocked, gilded chandelier above, ${S["二次元"]}`, w: W, h: H },
+  { name: "f5", prompt: `a young woman calmly accepting a paper coffee cup from her boyfriend on a sunny city street with a small composed smile, her reflection in his sunglasses showing a streak of dark blood, ${S["真实系"]}`, w: W, h: H },
+  { name: "f6", prompt: `a young woman in business attire holding a black umbrella stepping out from a luxury car onto a rainy city sidewalk and offering shelter to a startled young woman with a briefcase, neon shop reflections in the puddle, ${S["真实系"]}`, w: W, h: H },
+  { name: "f7", prompt: `a poised young woman in a sharp white pantsuit standing in a glass-walled corporate boardroom signing a heavy contract while her surprised father watches from the doorway, downtown chinese skyline through the windows, ${S["真实系"]}`, w: W, h: H },
+  { name: "f8", prompt: `interior of a luxurious dim-lit penthouse bridal suite at night, a delicate young bride in a white silk dress sitting on the edge of an enormous bed, a tall handsome man in an open black suit leaning down close to whisper into her ear, ${S["二次元"]}`, w: W, h: H },
+  { name: "f9", prompt: `a young woman waking in an enormous luxury hotel bed clutching a gold-banded ring on her finger, the silhouette of a tall handsome man already fully dressed in a tailored suit standing at the floor-to-ceiling window adjusting his cufflinks, ${S["真实系"]}`, w: W, h: H },
+  { name: "f10", prompt: `interior of a sleek modern penthouse kitchen at morning, a young woman in a silk robe holds half of a freshly torn-up divorce paper, her composed husband in a crisp white shirt holding the other half with a quiet smile, soft sunrise light, ${S["真实系"]}`, w: W, h: H },
+  { name: "f11", prompt: `a school courtyard at twilight, a girl gaping in shock as her arch-rival classmate kneels on one knee before her offering a ring box, the rest of the class peeking around the corner in disbelief, ${S["二次元"]}`, w: W, h: H },
+  { name: "f12", prompt: `a young woman at 4 am holding her phone bright with a UR-rarity gacha card showing the silhouette of a faceless CEO, behind her the same CEO from the card standing the next morning at her apartment doorway in a tailored suit holding a bouquet, ${S["3D 渲染"]}`, w: W, h: H },
+  { name: "f13", prompt: `a tense high school hallway, the female protagonist pinned against a row of lockers by the school's coldest male character glaring down at her, a faint holographic system task panel hovering at the edge of her vision, ${S["二次元"]}`, w: W, h: H },
+  { name: "f14", prompt: `a young woman standing at her open apartment doorway looking up in shock at a tall handsome CEO standing politely at her threshold holding a single suitcase, a faint holographic receipt with chinese characters floating above her shoulder, ${S["二次元"]}`, w: W, h: H },
+  { name: "f15", prompt: `a young female streamer alone in her cozy bedroom at night facing her ring-light camera, a glowing top-donor badge with chinese characters floating prominently on the screen behind her, faint holographic image of a reclusive handsome CEO above the badge, ${S["日系动画"]}`, w: W, h: H },
+  { name: "f16", prompt: `interior of a dim apartment at night, a frightened young woman gripping a chair backward against her front door while bloody hand-prints smear the door's glass panel from outside, a tense handsome man in a leather jacket with a pistol just inside her doorway looking back at her, ${S["真实系"]}`, w: W, h: H },
+  { name: "f17", prompt: `the female protagonist standing in her apartment doorway hauling three large supply duffel bags, a tall standoffish handsome neighbor kneeling on the hallway floor in front of her holding up a half-eaten ration bar, ${S["真实系"]}`, w: W, h: H },
+  { name: "f18", prompt: `a feared S-rank male esper in a long dark coat crouched on a girl's apartment doormat with puppy-dog eyes asking to be let in, faint flashes of supernatural ability suppressed at his fingertips, ${S["二次元"]}`, w: W, h: H },
+  { name: "f19", prompt: `the female protagonist standing in her apartment doorway calmly closing it on a man frantically pounding from the outside, a different handsome man waiting calmly in her brightly-lit kitchen behind her holding two cups of coffee, ${S["真实系"]}`, w: W, h: H },
+  { name: "f20", prompt: `a high school classroom at lunch, the female protagonist sitting at her desk opening her textbook to find a handwritten note slipped inside, a cold-faced top-of-class boy from the neighboring class watching from the doorway, ${S["二次元"]}`, w: W, h: H },
+  { name: "f21", prompt: `a sun-flecked school hallway at golden hour, the long-admired campus prince walking up to the female protagonist with serious determination in his eyes, holding out a folded piece of paper with an address, ${S["吉卜力"]}`, w: W, h: H },
+  { name: "f22", prompt: `a school's front gate at sunset, the female protagonist watching speechless as her ordinary-seeming class president is escorted into a black bentley by four men in dark suits, the class president turning back smiling and waving at her, ${S["二次元"]}`, w: W, h: H },
+  { name: "f23", prompt: `a crowded school hallway between classes, the female protagonist's wrist firmly held by the school's coldest senior in a black uniform staring straight at her with quiet intensity, students freezing and watching, ${S["日系动画"]}`, w: W, h: H },
+  { name: "f24", prompt: `interior of a 1930s republican-era shanghai mansion drawing room at dusk, a beautiful young woman in an embroidered cheongsam entering through a curtain doorway, a refined foreign-educated gentleman in a tailored grey suit calmly seated at the rosewood table pouring her father's tea, ${S["超写实"]}`, w: W, h: H },
+  { name: "f25", prompt: `a 1930s shanghai bookshop interior at night, the female protagonist behind the counter looking up as a foreign-educated gentleman in a sharp tailored suit places a small wrapped parcel on the counter and meets her eyes with quiet urgency, ${S["真实系"]}`, w: W, h: H },
+  { name: "f26", prompt: `interior of an ancient xianxia alchemy chamber, a female apprentice in pale robes accidentally tipping a master's bronze pill furnace as a brilliant pillar of golden qi erupts toward the ceiling, three elder masters bursting through the doorway in shock, ${S["玄幻"]}`, w: W, h: H },
+  { name: "f27", prompt: `the entrance of a small chinese town at dusk, the female protagonist in dust-worn jianghu travel robes walking past the wooden archway, a tall young swordsman with a sealed letter in his hand kneeling at the foot of the gate looking up at her with three years of waiting in his eyes, ${S["国风水墨"]}`, w: W, h: H },
+  { name: "f28", prompt: `a cozy modern apartment living room at night, a young woman sprawled on the sofa eating watermelon while watching a tv variety show on which a famous male celebrity smiles ambiguously about his wife, her phone exploding with thousands of incoming notifications, ${S["真实系"]}`, w: W, h: H },
+  { name: "f29", prompt: `the doorway of a shared modern apartment at night, the female protagonist standing speechless as her year-long roommate places one hand on the doorframe beside her head leaning down with quiet sincerity, ${S["日系动画"]}`, w: W, h: H },
+  { name: "f30", prompt: `interior of a dim underground bunker, the female protagonist crouched as a battered humanoid mech crashes through the metal door behind her, the cockpit opens and a young handsome man in pilot armor inside extends his hand toward her, sparks and emergency red light, ${S["赛博朋克"]}`, w: W, h: H },
+  { name: "f31", prompt: `a brightly lit indoor basketball stadium overflowing with confetti at championship victory, a victorious handsome male player in jersey number 3 running across the court toward the camera holding up the gold trophy, the female protagonist standing courtside with hands over her mouth in tears of joy, ${S["日系动画"]}`, w: W, h: H },
 ];
 
 const ALL = [...MALE, ...FEMALE];
