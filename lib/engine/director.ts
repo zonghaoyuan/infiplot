@@ -405,7 +405,7 @@ export async function directInsertBeat(
         content: buildInsertBeatUserMessage(session, freeformAction),
       },
     ],
-    { temperature: 0.9, responseFormat: "json_object" },
+    { temperature: 0.9, responseFormat: "json_object", tag: "insert-beat" },
   );
 
   const parsed = parseJsonLoose<InsertBeatPartial>(raw);

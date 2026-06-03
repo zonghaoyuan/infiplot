@@ -56,7 +56,7 @@ async function runDesignLLM(
         content: buildCharacterDesignerUserMessage(charName, session),
       },
     ],
-    { temperature: 0.7, responseFormat: "json_object" },
+    { temperature: 0.7, responseFormat: "json_object", tag: "character-designer" },
   );
   return parseJsonLoose<CharacterDesignOutput>(raw);
 }

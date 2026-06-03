@@ -53,7 +53,7 @@ export async function runArchitect(
         { role: "system", content: ARCHITECT_SYSTEM },
         { role: "user", content: buildArchitectUserMessage(session) },
       ],
-      { temperature: 0.85, responseFormat: "json_object" },
+      { temperature: 0.85, responseFormat: "json_object", tag: "architect" },
     );
 
     const parsed = parseJsonLoose<RawStoryState>(raw);

@@ -369,7 +369,7 @@ export async function runWriter(
       { role: "system", content: WRITER_SYSTEM },
       { role: "user", content: buildWriterUserMessage(session) },
     ],
-    { temperature: 0.9, responseFormat: "json_object" },
+    { temperature: 0.9, responseFormat: "json_object", tag: "writer" },
   );
 
   const parsed = parseJsonLoose<RawScene>(raw);
