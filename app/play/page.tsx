@@ -938,10 +938,6 @@ function PlayInner() {
           <span>第 · {String(sceneCount).padStart(3, "0")} · 幕</span>
           <span className="text-clay-300">·</span>
           <span>{String(beatCount).padStart(3, "0")} · 拍</span>
-          <span className="text-clay-300">·</span>
-          <span className="hidden sm:inline truncate max-w-[180px]">
-            {session?.id.slice(2, 14) ?? "—"}
-          </span>
         </div>
       </header>
 
@@ -999,11 +995,6 @@ function PlayInner() {
           )}
         </div>
       </main>
-
-      <footer className="px-5 md:px-12 pb-6 flex items-center justify-center">
-        {/* 演示 / 静音入口已搬到画面正上方左右两侧；footer 仅留中间的「Ⅰ · Ⅰ」标记 */}
-        <div className="text-[9px] smallcaps text-clay-400 num">Ⅰ · Ⅰ</div>
-      </footer>
     </div>
   );
 }
