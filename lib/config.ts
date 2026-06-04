@@ -3,6 +3,7 @@ import type {
   ProviderProtocol,
   TtsConfig,
 } from "@infiplot/types";
+import { isPublicUrl } from "./validateUrl";
 
 const VALID_PROTOCOLS = [
   "openai_compatible",
@@ -49,6 +50,20 @@ function loadTtsConfig(): TtsConfig | undefined {
   return { baseUrl, apiKey, speechModel };
 }
 
+function safeEndpoint(v: unknown): string | undefined {
+  if (typeof v !== "string" || v.length === 0) return undefined;
+  if (!isPublicUrl(v)) {
+    console.error(`BYO endpoint rejected (not a public HTTPS URL): ${v.slice(0, 100).replace(/[\r\n]/g, "")}`);
+    return undefined;
+  }
+  return v;
+}
+
+function safeString(v: unknown, max: number): string | undefined {
+  if (typeof v !== "string" || v.length === 0) return undefined;
+  return v.slice(0, max);
+}
+
 export function loadEngineConfig(headers?: Headers): EngineConfig {
   const config: EngineConfig = {
     text: {
@@ -75,25 +90,30 @@ export function loadEngineConfig(headers?: Headers): EngineConfig {
 
   const byoHeader = headers?.get("x-byo-api");
   if (byoHeader) {
-    try {
-      const byo = JSON.parse(byoHeader);
-      if (byo.llm?.enabled) {
-        if (byo.llm.endpoint) config.text.baseUrl = byo.llm.endpoint;
-        if (byo.llm.apiKey) config.text.apiKey = byo.llm.apiKey;
-        if (byo.llm.model) config.text.model = byo.llm.model;
-
-        // Also override vision if llm is enabled
-        if (byo.llm.endpoint) config.vision.baseUrl = byo.llm.endpoint;
-        if (byo.llm.apiKey) config.vision.apiKey = byo.llm.apiKey;
-        if (byo.llm.model) config.vision.model = byo.llm.model;
+    if (byoHeader.length > 2048) {
+      console.error("x-byo-api header exceeds 2 KB limit, ignoring");
+    } else {
+      try {
+        const byo = JSON.parse(byoHeader);
+        if (byo.llm?.enabled) {
+          const ep = safeEndpoint(byo.llm?.endpoint);
+          const key = safeString(byo.llm?.apiKey, 256);
+          const model = safeString(byo.llm?.model, 128);
+          if (ep) { config.text.baseUrl = ep; config.vision.baseUrl = ep; }
+          if (key) { config.text.apiKey = key; config.vision.apiKey = key; }
+          if (model) { config.text.model = model; config.vision.model = model; }
+        }
+        if (byo.painter?.enabled) {
+          const ep = safeEndpoint(byo.painter?.endpoint);
+          const key = safeString(byo.painter?.apiKey, 256);
+          const model = safeString(byo.painter?.model, 128);
+          if (ep) config.image.baseUrl = ep;
+          if (key) config.image.apiKey = key;
+          if (model) config.image.model = model;
+        }
+      } catch (e) {
+        console.error("Failed to parse x-byo-api header:", e);
       }
-      if (byo.painter?.enabled) {
-        if (byo.painter.endpoint) config.image.baseUrl = byo.painter.endpoint;
-        if (byo.painter.apiKey) config.image.apiKey = byo.painter.apiKey;
-        if (byo.painter.model) config.image.model = byo.painter.model;
-      }
-    } catch (e) {
-      console.error("Failed to parse x-byo-api header in loadEngineConfig:", e);
     }
   }
 

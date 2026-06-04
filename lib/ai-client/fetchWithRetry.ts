@@ -5,6 +5,7 @@ export async function fetchWithRetry(
   init: RetryInit,
 ): Promise<Response> {
   const { retries = 2, retryDelayMs = 1500, ...fetchInit } = init;
+  if (!fetchInit.redirect) fetchInit.redirect = "manual";
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {

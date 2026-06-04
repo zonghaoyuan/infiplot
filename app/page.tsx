@@ -11,6 +11,7 @@ import {
   type Gender,
 } from "@/lib/options";
 import { readStoredTtsConfig } from "@/lib/clientTtsConfig";
+import { BYO_STORAGE_KEY, getByoHeaders } from "@/lib/byoHeaders";
 import { TtsKeyModal } from "@/components/TtsKeyModal";
 
 /* ============================================================================
@@ -749,8 +750,6 @@ const DEFAULT_BYO: ByoApiConfig = {
   },
 };
 
-const BYO_STORAGE_KEY = "infiplot:byoApi";
-
 function normalizeByoSection(
   s: unknown,
   providers: Record<string, ByoProvider>,
@@ -786,22 +785,6 @@ function loadByoConfig(): ByoApiConfig {
   } catch {
     return DEFAULT_BYO;
   }
-}
-
-function getByoHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(BYO_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed.llm?.enabled || parsed.painter?.enabled) {
-        return { "x-byo-api": raw };
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return {};
 }
 
 /* ---------- typewriter ---------- */
