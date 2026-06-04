@@ -26,7 +26,10 @@ export async function POST(req: Request) {
     // See StartRequest.clientTts — BYO clients synth in-browser, so drop server TTS.
     const config = body.clientTts === true ? { ...base, tts: undefined } : base;
     const result = await requestInsertBeat(config, body);
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      characters: result.characters.map((c) => ({ ...c, voice: undefined })),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
