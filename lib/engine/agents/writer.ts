@@ -497,6 +497,15 @@ export async function runWriterBeats(
     beats = renameBeatId(beats, beats[0]!.id, plan.entryBeatId);
   }
 
+  // 把入场 beat 的 roster 钉成 plan 的：画师合成进帧的正是
+  // plan.entryActiveCharacters，运行时入场 beat 必须显示同一批人（与上面钉
+  // id 同理）。speaker 故意不钉——它和 line/TTS 耦合，强行覆盖会错配台词。
+  const entryRoster =
+    plan.entryActiveCharacters.length > 0 ? plan.entryActiveCharacters : undefined;
+  beats = beats.map((b) =>
+    b.id === plan.entryBeatId ? { ...b, activeCharacters: entryRoster } : b,
+  );
+
   return {
     beats,
     storyStatePatch: coerceStoryStatePatch(parsed.storyStatePatch),
