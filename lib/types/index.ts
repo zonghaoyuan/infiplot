@@ -268,10 +268,41 @@ export type VisionClassify = "insert-beat" | "change-scene";
 //  Provider config
 // ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Wire protocol used to talk to a model provider. Which values are valid
+ * depends on the model role — each ai-client adapter accepts its own subset
+ * and falls back to a sensible default for anything else:
+ *
+ *   openai_compatible  text / vision / image  — OpenAI Chat Completions +
+ *                      `/images/generations` (self-implemented fetch; the
+ *                      default for text/vision when unset)
+ *   anthropic          text / vision          — native Anthropic Messages (AI SDK)
+ *   google             text / vision / image  — native Gemini (AI SDK); image
+ *                      uses the Nano Banana family
+ *   openai             image only             — OpenAI gpt-image via AI SDK,
+ *                      unlocks reference-image editing (for text/vision use
+ *                      openai_compatible, which already speaks OpenAI's format)
+ *   runware            image only             — Runware task-array protocol
+ *                      (self-implemented; the default for runware.ai URLs)
+ */
+export type ProviderProtocol =
+  | "openai_compatible"
+  | "anthropic"
+  | "google"
+  | "openai"
+  | "runware";
+
 export type ProviderConfig = {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /**
+   * Wire protocol. When unset, callers apply a role-specific default:
+   * text/vision → "openai_compatible"; image → inferred from baseUrl
+   * (runware.ai → "runware", otherwise "openai_compatible") so existing
+   * deployments keep working without setting *_PROVIDER.
+   */
+  provider?: ProviderProtocol;
 };
 
 export type TtsConfig = {

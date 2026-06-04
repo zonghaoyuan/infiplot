@@ -125,7 +125,7 @@ InfiPlot 同时支持部署到 Vercel 与 Cloudflare Workers。Cloudflare 部署
 
 ## 配置教程
 
-InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Vision）都使用 OpenAI 兼容的接口**，可以自由搭配。**图像（Image）**目前接入 **Runware**（其自有的 task-array 协议，并非 OpenAI 兼容）。**语音（TTS）**使用**小米 MiMo** 自有的音色设计/克隆协议——支持角色级音色设计、克隆与逐行演绎指导。
+InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Vision）** 默认使用 OpenAI 兼容接口，也可原生切换到 **Anthropic** 或 **Google Gemini**。**图像（Image）** 支持 **Runware**（其自有 task-array 协议）、**OpenAI**（`gpt-image`）与 **Google Gemini**（Nano Banana）。**语音（TTS）**使用**小米 MiMo** 自有的音色设计/克隆协议——支持角色级音色设计、克隆与逐行演绎指导。
 
 **1. 选择你的供应商**
 
@@ -135,6 +135,18 @@ InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Visio
 | Image · 场景渲染  | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL`     | ✅ | [Runware](https://runware.ai) 的 `runware:400@6`（FLUX.2 [klein] 9B KV） |
 | Vision · 点击解读  | `VISION_BASE_URL` `VISION_API_KEY` `VISION_MODEL`  | ✅ | Google 的 `gemini-3.5-flash` |
 | TTS · 角色配音 | `TTS_BASE_URL` `TTS_API_KEY` `TTS_SPEECH_MODEL` | 可选 —— 留空则静音运行 | 小米 MiMo 的 `mimo-v2.5-tts` |
+
+> **可选 · 指定接口协议**：每类模型都可加一个 `*_PROVIDER` 变量（`TEXT_PROVIDER` / `VISION_PROVIDER` / `IMAGE_PROVIDER`）显式选择接口协议。**不设则保持向后兼容**——文本/视觉默认走 OpenAI 兼容接口，图像按 `*_BASE_URL` 自动判断（`runware.ai` → Runware，否则 OpenAI 兼容；个别在 `runware.ai` 上以 OpenAI 协议提供的模型——如 `image-2-vip`——会按 OpenAI 兼容处理，需要时用 `IMAGE_PROVIDER` 显式覆盖即可）。
+>
+> | 取值 | 适用 | 说明 |
+> |---|---|---|
+> | `openai_compatible`（默认） | Text · Vision · Image | OpenAI Chat Completions / `/images/generations` |
+> | `anthropic` | Text · Vision | 原生 Anthropic Messages 接口 |
+> | `google` | Text · Vision · Image | 原生 Gemini；图像用 Nano Banana 系（如 `gemini-2.5-flash-image`，**勿用 Imagen（已废弃，2026-06-24 停服）**） |
+> | `openai` | Image | OpenAI `gpt-image`，支持参考图编辑 |
+> | `runware` | Image | Runware task-array 协议 |
+>
+> 此外，`*_BASE_URL` 带不带 `/v1`（甚至末尾多写了 `/chat/completions`）都能正常工作——引擎会自动规范化。
 
 **2. 填写环境变量**
 
