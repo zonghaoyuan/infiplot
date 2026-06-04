@@ -35,7 +35,7 @@ import type {
   VisionResponse,
 } from "@infiplot/types";
 import { track } from "@/lib/analytics";
-import { BYO_STORAGE_KEY, getByoHeaders, isByoActive } from "@/lib/byoHeaders";
+import { getByoHeaders, isByoActive } from "@/lib/byoHeaders";
 
 const MUTED_STORAGE_KEY = "infiplot:muted";
 

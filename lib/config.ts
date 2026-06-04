@@ -52,16 +52,17 @@ function loadTtsConfig(): TtsConfig | undefined {
 
 function safeEndpoint(v: unknown): string | undefined {
   if (typeof v !== "string" || v.length === 0) return undefined;
-  if (!isPublicUrl(v)) {
+  const trimmed = v.trim();
+  if (!trimmed || !isPublicUrl(trimmed)) {
     console.error(`BYO endpoint rejected (not a public HTTPS URL): ${v.slice(0, 100).replace(/[\r\n]/g, "")}`);
     return undefined;
   }
-  return v;
+  return trimmed;
 }
 
 function safeString(v: unknown, max: number): string | undefined {
   if (typeof v !== "string" || v.length === 0) return undefined;
-  return v.slice(0, max);
+  return v.slice(0, max).replace(/[\x00-\x1f]/g, "");
 }
 
 export function loadEngineConfig(headers?: Headers): EngineConfig {
