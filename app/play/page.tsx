@@ -151,25 +151,28 @@ function proxiedImageUrl(originalUrl: string): string {
 async function fetchImageAsBlobUrl(url: string): Promise<string> {
   if (url.startsWith("data:")) return url;
 
-  // Try to fetch as blob first (direct if CORS-enabled, or through proxy if configured)
-  const targetUrl = shouldProxy(url) ? proxiedImageUrl(url) : url;
+  // Direct path (default): warm the cache + decode, hand back the original
+  // URL. No fetch() — im.runware.ai has no CORS, so fetch().blob() would throw.
+  if (!shouldProxy(url)) {
+    await preloadImage(url);
+    return url;
+  }
+
+  // Proxy path (opt-in): fetch through the Worker and materialize a blob: URL.
+  // On error / timeout fall back to the original URL so <img> still tries
+  // (possible progressive paint — same as the direct path, never worse).
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), IMAGE_PRELOAD_TIMEOUT_MS);
   try {
-    const r = await fetch(targetUrl, { signal: ctrl.signal });
-    if (r.ok) {
-      const blob = await r.blob();
-      return URL.createObjectURL(blob);
-    }
-  } catch (e) {
-    console.warn("Direct blob fetch failed (CORS or network), falling back to preload:", e);
+    const r = await fetch(proxiedImageUrl(url), { signal: ctrl.signal });
+    if (!r.ok) return url;
+    const blob = await r.blob();
+    return URL.createObjectURL(blob);
+  } catch {
+    return url;
   } finally {
     clearTimeout(timer);
   }
-
-  // Fallback: warm the cache + decode, return the original CDN URL (may load progressively)
-  await preloadImage(url);
-  return url;
 }
 
 // Module-level cache so speculative prefetches and the eventual commit share
