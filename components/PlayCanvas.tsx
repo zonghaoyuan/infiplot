@@ -501,7 +501,7 @@ export function PlayCanvas({
           }}
         >
           {teaserText ? (
-            <div className="max-w-[85%] md:max-w-[75%] flex flex-col items-center justify-center gap-3.5 md:gap-5 animate-fade-in">
+            <div className="w-full max-w-[85%] md:max-w-[75%] flex flex-col items-center justify-center gap-3.5 md:gap-5 animate-fade-in">
               <span className="text-[9px] smallcaps text-clay-400 tracking-[0.2em] font-sans">
                 ✦ 故 · 事 · 预 · 告 ✦
               </span>
