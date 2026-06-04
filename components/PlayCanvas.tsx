@@ -209,7 +209,7 @@ export function PlayCanvas({
       waitForAudio: Boolean(audioBase64),
     });
 
-  const { shown: typedTeaser, done: teaserDone } = useTypewriter(teaserText ?? "", "teaser_reset", {
+  const { shown: typedTeaser } = useTypewriter(teaserText ?? "", "teaser_reset", {
     waitForAudio: false,
   });
 
@@ -505,9 +505,15 @@ export function PlayCanvas({
               <span className="text-[9px] smallcaps text-clay-400 tracking-[0.2em] font-sans">
                 ✦ 故 · 事 · 预 · 告 ✦
               </span>
-              <p className={`font-serif leading-[2] text-clay-700 text-[13px] md:text-[15px] italic whitespace-pre-wrap text-left w-full ${teaserDone ? "animate-slow-pulse" : ""}`}>
+              <p className="font-serif leading-[2] text-clay-700 text-[13px] md:text-[15px] italic whitespace-pre-wrap text-left w-full">
                 {typedTeaser}
               </p>
+              <div className="mt-2 md:mt-4 flex items-center gap-2.5">
+                <span className="w-1.5 h-1.5 bg-ember-500 rounded-full animate-slow-pulse" />
+                <span className="text-[9px] smallcaps text-clay-400">
+                  正 · 在 · 绘 · 制 · 第 · 一 · 幕
+                </span>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-4">
