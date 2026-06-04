@@ -22,7 +22,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const config = loadEngineConfig(req.headers);
+    const base = loadEngineConfig(req.headers);
+    // See StartRequest.clientTts — BYO clients synth in-browser, so drop server TTS.
+    const config = body.clientTts ? { ...base, tts: undefined } : base;
     const result = await requestInsertBeat(config, body);
     return NextResponse.json(result);
   } catch (err) {

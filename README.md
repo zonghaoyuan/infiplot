@@ -158,6 +158,12 @@ InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Visio
 
 默认浏览器直连图片供应商，无需任何配置 —— 留空 `NEXT_PUBLIC_IMAGE_PROXY_URL` 即可，完全不受影响。只有当你遇到图片「层层加载」（Chrome 在某些网络下 `ERR_QUIC_PROTOCOL_ERROR` 导致 PNG 逐行渲染）时才需要它：部署一个极小的 Cloudflare Worker，把图片改为服务端转发 + HTTP/2 原子返回。一键部署见 **[infiplot-image-proxy](https://github.com/zonghaoyuan/infiplot-image-proxy)**，然后把它给出的 `workers.dev` 地址填进 `NEXT_PUBLIC_IMAGE_PROXY_URL`。
 
+**5. 玩家自带配音 Key（可选，推荐）**
+
+小米对 TTS 模型有 RPM/TPM 限额。当你的公共部署有多人同时游玩、共用同一把 `TTS_API_KEY` 时，很容易撞到限额，表现为**剧情、画面都正常，唯独没有声音**。为此，玩家可以在首页可选地填入**自己的**小米 MiMo Key（免费申请）——配音请求由**浏览器直连小米**完成，**Key 只存在玩家本地、绝不经过你的服务器**，从而获得稳定配音与更低延迟。这是纯增强：不填则照常使用你部署的服务器 Key，行为不变。
+
+申请与填写步骤见 [自带配音 Key 教程](docs/xiaomi-tts-key.md)。
+
 ---
 
 ## Roadmap

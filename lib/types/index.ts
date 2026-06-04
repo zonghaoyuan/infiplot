@@ -300,6 +300,12 @@ export type StartRequest = {
   styleGuide: string;
   /** Optional user-uploaded style reference image — see Session.styleReferenceImage. */
   styleReferenceImage?: string;
+  /**
+   * When true the client supplied its own Xiaomi TTS key and will provision +
+   * synth voices in the browser (key never touches our server). The route then
+   * drops `config.tts` so the engine skips all server-side TTS work.
+   */
+  clientTts?: boolean;
 };
 
 // /api/parse-style-image — vision LLM extracts a textual painting-style
@@ -332,6 +338,8 @@ export type StartResponse = {
 // (frontend synthesizes a speculative exit).
 export type SceneRequest = {
   session: Session;
+  /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
+  clientTts?: boolean;
 };
 
 export type SceneResponse = {
@@ -389,6 +397,8 @@ export type VisionResponse = {
 export type InsertBeatRequest = {
   session: Session;
   freeformAction: string;
+  /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
+  clientTts?: boolean;
 };
 
 /** Partial beat fields produced by the insert-beat director. */

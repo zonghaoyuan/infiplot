@@ -41,7 +41,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const config = loadEngineConfig(req.headers);
+    const base = loadEngineConfig(req.headers);
+    // BYO key: the browser provisions + synths voices directly against Xiaomi
+    // (key never reaches us), so strip server-side TTS so the engine skips all
+    // provisioning + synth. See StartRequest.clientTts.
+    const config = body.clientTts ? { ...base, tts: undefined } : base;
     const result = await startSession(config, body);
     return NextResponse.json(result);
   } catch (err) {

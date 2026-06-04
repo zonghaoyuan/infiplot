@@ -11,19 +11,25 @@ import {
   useState,
 } from "react";
 import { PlayCanvas, type Phase } from "@/components/PlayCanvas";
+import { TtsKeyModal } from "@/components/TtsKeyModal";
 import { annotateClick } from "@/lib/annotateClient";
+import { loadClientTtsConfig } from "@/lib/clientTtsConfig";
 import { PRESETS } from "@/lib/presets";
+import { provisionVoice, synthesize } from "@infiplot/tts-client";
 import type {
   Beat,
   BeatAudio,
   BeatAudioResponse,
   BeatChoice,
+  Character,
+  CharacterVoice,
   InsertBeatResponse,
   Scene,
   SceneExit,
   SceneResponse,
   Session,
   StartResponse,
+  TtsConfig,
   VisionResponse,
 } from "@infiplot/types";
 import { track } from "@/lib/analytics";
@@ -46,6 +52,11 @@ function getByoHeaders(): Record<string, string> {
   }
   return {};
 }
+
+// Consecutive silent (no-audio) beats before we surface the BYO-key nudge to a
+// non-BYO, unmuted player. Set high enough that one transient miss won't trip
+// it, low enough to catch a scene that's clearly being rate-limited.
+const SILENCE_NUDGE_THRESHOLD = 3;
 
 // Cap how long we wait for the browser to download + decode a scene image
 // before giving up and rendering anyway. Runware's CDN is usually <2s for a
@@ -274,6 +285,7 @@ function prefetchScenePath(
   baseSession: Session,
   steps: ScenePathStep[],
   depth: number,
+  clientTts: boolean,
 ): void {
   if (depth >= PREFETCH_MAX_DEPTH) return;
   const key = pathKey(steps);
@@ -288,7 +300,7 @@ function prefetchScenePath(
         "Content-Type": "application/json",
         ...getByoHeaders(),
       },
-      body: JSON.stringify({ session: specSession }),
+      body: JSON.stringify({ session: specSession, clientTts }),
       signal: abort.signal,
     });
     if (!res.ok) {
@@ -327,7 +339,13 @@ function prefetchScenePath(
           characters: data.characters,
           storyState: data.storyState,
         };
-        prefetchScenePath(pool, carriedBase, [...steps, nextStep], depth + 1);
+        prefetchScenePath(
+          pool,
+          carriedBase,
+          [...steps, nextStep],
+          depth + 1,
+          clientTts,
+        );
       }
     }
 
@@ -360,6 +378,44 @@ function consumeChoice(
 function clearPool(pool: Map<string, PrefetchEntry>): void {
   for (const e of pool.values()) e.abort.abort();
   pool.clear();
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  BYO voice resolution (client-direct Xiaomi TTS).
+//
+//  In BYO mode the server skips all TTS (clientTts:true), so the browser must
+//  obtain each speaker's reference audio itself. `cache` is keyed by character
+//  NAME and persists for the whole session, so a voice locked in on a
+//  character's first speaking beat stays identical across every later scene —
+//  even though /api/scene returns its characters without `.voice`. Storing the
+//  in-flight Promise (not the resolved value) dedupes the burst of concurrent
+//  beats by the same speaker into ONE voicedesign call, which matters because
+//  Xiaomi rate-limits voicedesign hard.
+// ──────────────────────────────────────────────────────────────────────
+
+async function resolveByoVoice(
+  cache: Map<string, Promise<CharacterVoice>>,
+  cfg: TtsConfig,
+  speaker: Character,
+): Promise<CharacterVoice | null> {
+  const cached = cache.get(speaker.name);
+  if (cached) return cached;
+  // Prebaked cards ship baked reference audio — reuse it directly (cross-key
+  // synth with the user's key works), keeping the prebaked voice identical.
+  if (speaker.voice) {
+    const ready = Promise.resolve(speaker.voice);
+    cache.set(speaker.name, ready);
+    return ready;
+  }
+  if (!speaker.voiceDescription) return null;
+  const p = provisionVoice(cfg, speaker.voiceDescription);
+  cache.set(speaker.name, p);
+  try {
+    return await p;
+  } catch (e) {
+    cache.delete(speaker.name); // failed provision — let a later beat retry
+    throw e;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -402,6 +458,16 @@ function PlayInner() {
   const [error, setError] = useState<string | null>(null);
   const [presentation, setPresentation] = useState(false);
   const [lastExitLabel, setLastExitLabel] = useState<string | null>(null);
+  // Consecutive server-side TTS misses (null audio / failed /api/beat-audio).
+  // Climbs when the shared server key is rate-limited by MiMo — the exact pain
+  // BYO fixes — so the play page can nudge non-BYO users to add their own key.
+  // Reset to 0 on any successful synth. Only the server path touches it.
+  const [silenceStrikes, setSilenceStrikes] = useState(0);
+  // Once the player dismisses the silence nudge, keep it gone for this session.
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  // The in-place BYO-key modal, opened from the silence nudge so the player can
+  // add a key without leaving the play page.
+  const [ttsModalOpen, setTtsModalOpen] = useState(false);
 
   const startedRef = useRef(false);
   const poolRef = useRef<Map<string, PrefetchEntry>>(new Map());
@@ -415,6 +481,21 @@ function PlayInner() {
   // 首页「语音配音 关闭」会把 muted 初值置为 true（见上方 useState 初始化），
   // 不再单独维护 audioEnabledRef —— 单一来源避免两个 flag 漂移。
   const mutedRef = useRef<boolean>(muted);
+
+  // Resolved bring-your-own Xiaomi TTS config (region preset + key), read once
+  // from localStorage. When non-null, the browser provisions + synths voices
+  // directly against Xiaomi — the key never touches our server — and every
+  // start/scene/insert-beat request carries clientTts:true so the engine skips
+  // server-side TTS. null = user hasn't opted in (server default / silent).
+  const [byoTtsConfig, setByoTtsConfig] = useState<TtsConfig | null>(() =>
+    loadClientTtsConfig(),
+  );
+  const byoTtsRef = useRef<TtsConfig | null>(byoTtsConfig);
+  // BYO voice cache (see resolveByoVoice). Keyed by character name; persists
+  // across scenes so each speaker is provisioned at most once per session.
+  const provisionedVoicesRef = useRef<Map<string, Promise<CharacterVoice>>>(
+    new Map(),
+  );
 
   // Mirrors for use inside async handlers (closure-stable)
   const sessionRef = useRef<Session | null>(null);
@@ -496,34 +577,72 @@ function PlayInner() {
       // 「首页选关闭」也走这条路：bootstrap 时 muted 已被初始化为 true。
       if (!beat.speaker || !beat.line) return;
       const speaker = sess.characters.find((c) => c.name === beat.speaker);
-      if (!speaker?.voice) return; // not yet provisioned — server can't synth anyway
+      if (!speaker) return;
+
+      const byo = byoTtsRef.current;
+      // Non-BYO relies on the server having provisioned speaker.voice. BYO
+      // skipped server TTS, so it needs a baked voice (prebaked card) or a
+      // voiceDescription to provision from in the browser.
+      if (!byo && !speaker.voice) return;
+      if (byo && !speaker.voice && !speaker.voiceDescription) return;
+
       if (beatAudioAbortRef.current.has(beat.id)) return;
       const abort = new AbortController();
       beatAudioAbortRef.current.set(beat.id, abort);
       try {
-        const res = await fetch("/api/beat-audio", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getByoHeaders(),
-          },
-          body: JSON.stringify({
-            beat: { id: beat.id, line: beat.line, lineDelivery: beat.lineDelivery },
-            voice: speaker.voice,
-          }),
-          signal: abort.signal,
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as BeatAudioResponse;
-        // Skip the state write if we've been aborted between the .ok check and
+        let audio: BeatAudio | null = null;
+        if (byo) {
+          // Client-direct: provision (once per speaker, cached) + synth against
+          // Xiaomi with the user's own key — no /api/beat-audio round-trip and
+          // the key never touches our server.
+          const voice = await resolveByoVoice(
+            provisionedVoicesRef.current,
+            byo,
+            speaker,
+          );
+          if (!voice || abort.signal.aborted) return;
+          const out = await synthesize(
+            byo,
+            voice,
+            beat.line,
+            beat.lineDelivery,
+            abort.signal,
+          );
+          audio = { base64: out.audioBase64, mime: out.mimeType };
+        } else {
+          const res = await fetch("/api/beat-audio", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...getByoHeaders(),
+            },
+            body: JSON.stringify({
+              beat: { id: beat.id, line: beat.line, lineDelivery: beat.lineDelivery },
+              voice: speaker.voice,
+            }),
+            signal: abort.signal,
+          });
+          if (!res.ok) {
+            setSilenceStrikes((n) => Math.min(n + 1, 99));
+            return;
+          }
+          const json = (await res.json()) as BeatAudioResponse;
+          audio = json.audio;
+          // Null audio usually means MiMo rate-limited or timed out the shared
+          // key — track the streak; a real clip resets it.
+          if (audio) setSilenceStrikes(0);
+          else setSilenceStrikes((n) => Math.min(n + 1, 99));
+        }
+        // Skip the state write if we've been aborted between the await and
         // here — beat ids are scene-local, so a late arrival from a prior
         // scene would otherwise overwrite the current scene's audio under the
         // same id.
-        if (json.audio && !abort.signal.aborted) {
-          setBeatAudioMap((m) => ({ ...m, [beat.id]: json.audio as BeatAudio }));
+        if (audio && !abort.signal.aborted) {
+          const settled = audio;
+          setBeatAudioMap((m) => ({ ...m, [beat.id]: settled }));
         }
       } catch {
-        // aborted or network error — silent fallback
+        // aborted / network / Xiaomi rate-limit — silent fallback (no audio)
       } finally {
         // Only clear the slot if it's still ours. An aborted prior fetch
         // running its finally late could otherwise delete the controller of a
@@ -597,6 +716,27 @@ function PlayInner() {
     setBeatAudioMap({});
     prefetchSceneAudio();
   }, [muted, prefetchSceneAudio]);
+
+  // ── BYO key enabled/disabled from the play page (silence nudge → modal) ─
+  // On enable: point the synth path at the user's key and immediately
+  // re-synthesize the current scene in-browser, so the voices the player just
+  // missed come back without a reload (their characters already carry
+  // server-provisioned `voice`, which resolveByoVoice reuses with the new key).
+  // On disable: just stop using it; later scenes fall back to the server.
+  const handleByoSaved = useCallback(
+    (configured: boolean) => {
+      const cfg = configured ? loadClientTtsConfig() : null;
+      byoTtsRef.current = cfg;
+      setByoTtsConfig(cfg);
+      if (cfg) {
+        setSilenceStrikes(0);
+        cancelBeatAudioFetches();
+        setBeatAudioMap({});
+        prefetchSceneAudio();
+      }
+    },
+    [prefetchSceneAudio],
+  );
 
   // ── Presentation mode toggle ─────────────────────────────────────────
   const togglePresentation = useCallback(async () => {
@@ -720,7 +860,10 @@ function PlayInner() {
             "Content-Type": "application/json",
             ...getByoHeaders(),
           },
-          body: JSON.stringify(livePayload),
+          body: JSON.stringify({
+            ...livePayload,
+            clientTts: !!byoTtsRef.current,
+          }),
         }).then(async (r) => {
           if (!r.ok) {
             const j = (await r.json().catch(() => ({}))) as { error?: string };
@@ -793,7 +936,7 @@ function PlayInner() {
           nextSceneSeed: choice.effect.nextSceneSeed,
         },
       };
-      prefetchScenePath(poolRef.current, s, [step], 0);
+      prefetchScenePath(poolRef.current, s, [step], 0, !!byoTtsRef.current);
     }
   }, [currentScene?.id, session?.id]);
 
@@ -948,7 +1091,10 @@ function PlayInner() {
           "Content-Type": "application/json",
           ...getByoHeaders(),
         },
-        body: JSON.stringify({ session: specSession }),
+        body: JSON.stringify({
+          session: specSession,
+          clientTts: !!byoTtsRef.current,
+        }),
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -995,6 +1141,7 @@ function PlayInner() {
           body: JSON.stringify({
             session,
             freeformAction: decision.intent.freeformAction,
+            clientTts: !!byoTtsRef.current,
           }),
         });
         if (!insertRes.ok) {
@@ -1075,7 +1222,10 @@ function PlayInner() {
               "Content-Type": "application/json",
               ...getByoHeaders(),
             },
-            body: JSON.stringify({ session: specSession }),
+            body: JSON.stringify({
+              session: specSession,
+              clientTts: !!byoTtsRef.current,
+            }),
           });
           if (!res.ok) {
             const j = (await res.json().catch(() => ({}))) as {
@@ -1163,6 +1313,16 @@ function PlayInner() {
   const sceneCount = session?.history.length ?? 0;
   const beatCount = visitedBeatsRef.current.length;
 
+  // Surface the BYO-key nudge only to an unmuted, non-BYO player whose last few
+  // beats came back silent (shared key rate-limited) — the exact pain BYO fixes.
+  // Dismissible for the session.
+  const showSilenceNudge =
+    phase === "ready" &&
+    !muted &&
+    !byoTtsConfig &&
+    !nudgeDismissed &&
+    silenceStrikes >= SILENCE_NUDGE_THRESHOLD;
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="px-5 md:px-12 pt-6 md:pt-8 flex items-center justify-between">
@@ -1207,18 +1367,46 @@ function PlayInner() {
             </button>
           }
           aboveCanvasLeft={
-            <button
-              type="button"
-              onClick={toggleMuted}
-              className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2"
-              aria-label={muted ? "取消静音" : "静音"}
-              title={muted ? "取消静音" : "静音"}
-            >
-              <i
-                className={`fa-solid ${muted ? "fa-volume-xmark" : "fa-volume-high"} text-[10px]`}
-              />
-              {muted ? "静 · 音" : "有 · 声"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={toggleMuted}
+                className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2"
+                aria-label={muted ? "取消静音" : "静音"}
+                title={muted ? "取消静音" : "静音"}
+              >
+                <i
+                  className={`fa-solid ${muted ? "fa-volume-xmark" : "fa-volume-high"} text-[10px]`}
+                />
+                {muted ? "静 · 音" : "有 · 声"}
+              </button>
+
+              {/* Silence nudge — a compact pill right beside the mute toggle.
+                  Clicking opens the BYO-key modal in place (no trip to the
+                  homepage). The × dismisses it for the session. */}
+              {showSilenceNudge && (
+                <span className="flex items-center gap-1 animate-fade-in">
+                  <button
+                    type="button"
+                    onClick={() => setTtsModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-ember-500/40 bg-ember-500/10 px-2.5 py-1 text-[10px] text-ember-500 hover:bg-ember-500/20 transition-colors"
+                    title="经常没声音？填入你自己的小米 MiMo Key（免费），配音更稳定"
+                  >
+                    <i className="fa-solid fa-volume-xmark text-[9px]" />
+                    经常没声音？自带 Key
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNudgeDismissed(true)}
+                    aria-label="关闭提示"
+                    title="关闭"
+                    className="text-clay-400 hover:text-clay-700 transition-colors"
+                  >
+                    <i className="fa-solid fa-xmark text-[10px]" />
+                  </button>
+                </span>
+              )}
+            </>
           }
         />
 
@@ -1235,7 +1423,16 @@ function PlayInner() {
             </p>
           )}
         </div>
+
       </main>
+
+      {ttsModalOpen && (
+        <TtsKeyModal
+          onClose={() => setTtsModalOpen(false)}
+          onSaved={handleByoSaved}
+          footerNote="保存后会立即用这把 Key 在你的浏览器里合成当前这一幕的配音；本设备后续游玩也会自动使用此 Key。"
+        />
+      )}
     </div>
   );
 }
