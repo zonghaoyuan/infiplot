@@ -162,8 +162,7 @@ function ChoiceButton({
 // ── Main component ─────────────────────────────────────────────────────
 export function PlayCanvas({
   imageUrl,
-  audioBase64,
-  audioMime,
+  audioSrc,
   muted,
   phase,
   beat,
@@ -177,8 +176,7 @@ export function PlayCanvas({
   aboveCanvasLeft,
 }: {
   imageUrl: string | null;
-  audioBase64: string | null;
-  audioMime: string | null;
+  audioSrc: string | null;
   muted: boolean;
   phase: Phase;
   beat: Beat | null;
@@ -209,7 +207,7 @@ export function PlayCanvas({
   const { shown: typedBody, done: typingDone, skip: skipTypewriter } =
     useTypewriter(displayBody, beat?.id ?? "", {
       targetDurationMs: audioDurationMs,
-      waitForAudio: Boolean(audioBase64),
+      waitForAudio: Boolean(audioSrc),
     });
 
   // ── Audio source change ──────────────────────────────────────────────
@@ -217,12 +215,12 @@ export function PlayCanvas({
   // unblock the typewriter via timeout so text doesn't stall.
   useEffect(() => {
     setAudioDurationMs(undefined);
-    if (!audioBase64) return;
+    if (!audioSrc) return;
     const timer = setTimeout(() => {
       setAudioDurationMs((prev) => prev ?? 0);
     }, AUDIO_WAIT_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [audioBase64]);
+  }, [audioSrc]);
 
   // ── Mute toggle ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -230,12 +228,12 @@ export function PlayCanvas({
     if (!el) return;
     el.muted = muted;
     el.playbackRate = SPEECH_RATE;
-    if (!muted && audioBase64 && el.paused) {
+    if (!muted && audioSrc && el.paused) {
       el.play().catch(() => {
         // autoplay blocked — silent until next interaction
       });
     }
-  }, [muted, audioBase64]);
+  }, [muted, audioSrc]);
 
   function handleAudioMetadata() {
     const el = audioRef.current;
@@ -341,11 +339,11 @@ export function PlayCanvas({
       className={`flex flex-col items-center ${fullViewport ? "w-full h-full justify-center" : "w-full"}`}
     >
       {/* Hidden audio element — voice playback for the current beat */}
-      {audioBase64 && (
+      {audioSrc && (
         <audio
-          key={audioBase64.slice(-48)}
+          key={audioSrc.slice(-48)}
           ref={audioRef}
-          src={`data:${audioMime ?? "audio/wav"};base64,${audioBase64}`}
+          src={audioSrc}
           preload="auto"
           onLoadedMetadata={handleAudioMetadata}
           onError={handleAudioError}

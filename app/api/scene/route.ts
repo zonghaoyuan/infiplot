@@ -1,7 +1,16 @@
 import { requestScene } from "@infiplot/engine";
-import type { SceneRequest } from "@infiplot/types";
+import type { Character, SceneRequest } from "@infiplot/types";
 import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
+
+function stripKnownVoices(
+  characters: Character[],
+  knownNames: Set<string>,
+): Character[] {
+  return characters.map((c) =>
+    knownNames.has(c.name) ? { ...c, voice: undefined } : c,
+  );
+}
 
 export const runtime = "nodejs";
 // Capped at 60 for Vercel Hobby (300 allowed on Pro). The scene pipeline is
@@ -27,7 +36,13 @@ export async function POST(req: Request) {
     // See StartRequest.clientTts — BYO clients synth in-browser, so drop server TTS.
     const config = body.clientTts === true ? { ...base, tts: undefined } : base;
     const result = await requestScene(config, body);
-    return NextResponse.json(result);
+    const knownNames = new Set(
+      (body.session.characters ?? []).map((c) => c.name),
+    );
+    return NextResponse.json({
+      ...result,
+      characters: stripKnownVoices(result.characters, knownNames),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

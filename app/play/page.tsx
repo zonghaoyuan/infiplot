@@ -19,8 +19,6 @@ import { PRESETS } from "@/lib/presets";
 import { provisionVoice, synthesize } from "@infiplot/tts-client";
 import type {
   Beat,
-  BeatAudio,
-  BeatAudioResponse,
   BeatChoice,
   Character,
   CharacterVoice,
@@ -38,6 +36,34 @@ import { track } from "@/lib/analytics";
 import { getByoHeaders, isByoActive } from "@/lib/byoHeaders";
 
 const MUTED_STORAGE_KEY = "infiplot:muted";
+
+// ── FOT reduction helpers ──────────────────────────────────────────────
+// Strip bulky voice.referenceAudioBase64 from the session before sending it to
+// the server. The engine only needs character names + visualDescriptions for
+// scene generation; voice data is only used by /api/beat-audio (which receives
+// the voice directly, not via session). The client retains voices locally and
+// re-merges them from the response via mergeCharactersPreserveVoice.
+function stripVoicesForTransport(session: Session): Session {
+  return {
+    ...session,
+    characters: session.characters.map((c) => ({ ...c, voice: undefined })),
+  };
+}
+
+// Merge server-returned characters with locally-held voices. The server strips
+// voice from already-known characters (P0), so only NEW characters carry voice.
+// For existing characters, re-attach the voice the client already holds.
+function mergeCharactersPreserveVoice(
+  local: Character[],
+  remote: Character[],
+): Character[] {
+  const localByName = new Map(local.map((c) => [c.name, c]));
+  return remote.map((c) => {
+    const prev = localByName.get(c.name);
+    if (!prev) return c;
+    return { ...c, voice: c.voice ?? prev.voice };
+  });
+}
 
 // Consecutive silent (no-audio) beats before we surface the BYO-key nudge to a
 // non-BYO, unmuted player. Set high enough that one transient miss won't trip
@@ -304,7 +330,7 @@ function prefetchScenePath(
         "Content-Type": "application/json",
         ...getByoHeaders(),
       },
-      body: JSON.stringify({ session: specSession, clientTts }),
+      body: JSON.stringify({ session: stripVoicesForTransport(specSession), clientTts }),
       signal: abort.signal,
     });
     if (!res.ok) {
@@ -318,6 +344,12 @@ function prefetchScenePath(
     // fresh CDN download. Don't await — let it run in the background; the
     // transition path awaits the same cached promise via getOrCreateBlobUrl.
     void getOrCreateBlobUrl(data.imageUrl);
+
+    // Re-attach locally-held voices the server stripped from known characters.
+    data.characters = mergeCharactersPreserveVoice(
+      baseSession.characters,
+      data.characters,
+    );
 
     // Recursive: if the resulting scene has exactly one change-scene exit,
     // it is a must-pass node — prefetch its child too.
@@ -435,7 +467,7 @@ function PlayInner() {
   const [currentScene, setCurrentScene] = useState<Scene | null>(null);
   const [currentBeatId, setCurrentBeatId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [beatAudioMap, setBeatAudioMap] = useState<Record<string, BeatAudio>>({});
+  const [beatAudioMap, setBeatAudioMap] = useState<Record<string, string>>({});
   // Lazy-initialize 优先级：本局选择(homepage 的「语音配音」存到 sessionStorage:infiplot:custom)
   // > 上次会话的粘性偏好(localStorage:infiplot:muted) > 默认非静音。
   // 这样首页选了「关闭」开始游戏，进来就是静音；选「开启」就不是静音；进入 play 页后用户自己
@@ -519,9 +551,7 @@ function PlayInner() {
     return currentScene.beats.find((b) => b.id === currentBeatId) ?? null;
   }, [currentScene, currentBeatId]);
 
-  const currentBeatAudio = currentBeat ? beatAudioMap[currentBeat.id] : undefined;
-  const audioBase64 = currentBeatAudio?.base64 ?? null;
-  const audioMime = currentBeatAudio?.mime ?? null;
+  const audioSrc = (currentBeat ? beatAudioMap[currentBeat.id] : undefined) ?? null;
 
   useEffect(() => {
     sessionRef.current = session;
@@ -597,7 +627,7 @@ function PlayInner() {
       const abort = new AbortController();
       beatAudioAbortRef.current.set(beat.id, abort);
       try {
-        let audio: BeatAudio | null = null;
+        let audioUrl: string | null = null;
         if (byo) {
           // Client-direct: provision (once per speaker, cached) + synth against
           // Xiaomi with the user's own key — no /api/beat-audio round-trip and
@@ -615,7 +645,7 @@ function PlayInner() {
             beat.lineDelivery,
             abort.signal,
           );
-          audio = { base64: out.audioBase64, mime: out.mimeType };
+          audioUrl = `data:${out.mimeType};base64,${out.audioBase64}`;
         } else {
           const res = await fetch("/api/beat-audio", {
             method: "POST",
@@ -629,24 +659,26 @@ function PlayInner() {
             }),
             signal: abort.signal,
           });
+          if (res.status === 204) {
+            setSilenceStrikes((n) => Math.min(n + 1, 99));
+            return;
+          }
           if (!res.ok) {
             setSilenceStrikes((n) => Math.min(n + 1, 99));
             return;
           }
-          const json = (await res.json()) as BeatAudioResponse;
-          audio = json.audio;
-          // Null audio usually means MiMo rate-limited or timed out the shared
-          // key — track the streak; a real clip resets it.
-          if (audio) setSilenceStrikes(0);
-          else setSilenceStrikes((n) => Math.min(n + 1, 99));
+          const blob = await res.blob();
+          audioUrl = URL.createObjectURL(blob);
+          setSilenceStrikes(0);
         }
         // Skip the state write if we've been aborted between the await and
         // here — beat ids are scene-local, so a late arrival from a prior
         // scene would otherwise overwrite the current scene's audio under the
         // same id.
-        if (audio && !abort.signal.aborted) {
-          const settled = audio;
-          setBeatAudioMap((m) => ({ ...m, [beat.id]: settled }));
+        if (audioUrl && !abort.signal.aborted) {
+          setBeatAudioMap((m) => ({ ...m, [beat.id]: audioUrl }));
+        } else if (audioUrl?.startsWith("blob:")) {
+          URL.revokeObjectURL(audioUrl);
         }
       } catch {
         // aborted / network / Xiaomi rate-limit — silent fallback (no audio)
@@ -685,7 +717,12 @@ function PlayInner() {
   // scenes) so a late arrival would land under the wrong beat otherwise.
   useEffect(() => {
     cancelBeatAudioFetches();
-    setBeatAudioMap({});
+    setBeatAudioMap((prev) => {
+      for (const url of Object.values(prev)) {
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+      }
+      return {};
+    });
     prefetchSceneAudio();
   }, [currentScene?.id, prefetchSceneAudio]);
 
@@ -720,7 +757,12 @@ function PlayInner() {
     if (prev === muted) return;
     cancelBeatAudioFetches();
     if (muted) return;
-    setBeatAudioMap({});
+    setBeatAudioMap((prev) => {
+      for (const url of Object.values(prev)) {
+        if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+      }
+      return {};
+    });
     prefetchSceneAudio();
   }, [muted, prefetchSceneAudio]);
 
@@ -738,7 +780,12 @@ function PlayInner() {
       if (cfg) {
         setSilenceStrikes(0);
         cancelBeatAudioFetches();
-        setBeatAudioMap({});
+        setBeatAudioMap((prev) => {
+          for (const url of Object.values(prev)) {
+            if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+          }
+          return {};
+        });
         prefetchSceneAudio();
       }
     },
@@ -1042,7 +1089,10 @@ function PlayInner() {
             visitedBeatIds: [result.scene.entryBeatId],
           },
         ],
-        characters: result.characters,
+        characters: mergeCharactersPreserveVoice(
+          base.characters,
+          result.characters,
+        ),
         storyState: result.storyState,
       };
       visitedBeatsRef.current = [result.scene.entryBeatId];
@@ -1121,7 +1171,7 @@ function PlayInner() {
           ...getByoHeaders(),
         },
         body: JSON.stringify({
-          session: specSession,
+          session: stripVoicesForTransport(specSession),
           clientTts: !!byoTtsRef.current,
         }),
       });
@@ -1148,7 +1198,7 @@ function PlayInner() {
           "Content-Type": "application/json",
           ...getByoHeaders(),
         },
-        body: JSON.stringify({ session, annotatedImageBase64 }),
+        body: JSON.stringify({ session: stripVoicesForTransport(session), annotatedImageBase64 }),
       });
       if (!visionRes.ok) {
         const j = (await visionRes.json().catch(() => ({}))) as {
@@ -1168,7 +1218,7 @@ function PlayInner() {
             ...getByoHeaders(),
           },
           body: JSON.stringify({
-            session,
+            session: stripVoicesForTransport(session),
             freeformAction: decision.intent.freeformAction,
             clientTts: !!byoTtsRef.current,
           }),
@@ -1206,7 +1256,10 @@ function PlayInner() {
           history: session.history.map((h, i, arr) =>
             i === arr.length - 1 ? { ...h, scene: patched } : h,
           ),
-          characters: insertChars,
+          characters: mergeCharactersPreserveVoice(
+            session.characters,
+            insertChars,
+          ),
         };
         setSession(nextSession);
         setCurrentScene(patched);
@@ -1252,7 +1305,7 @@ function PlayInner() {
               ...getByoHeaders(),
             },
             body: JSON.stringify({
-              session: specSession,
+              session: stripVoicesForTransport(specSession),
               clientTts: !!byoTtsRef.current,
             }),
           });
@@ -1321,8 +1374,7 @@ function PlayInner() {
       <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
         <PlayCanvas
           imageUrl={imageUrl}
-          audioBase64={audioBase64}
-          audioMime={audioMime}
+          audioSrc={audioSrc}
           muted={muted}
           phase={phase}
           beat={currentBeat}
@@ -1396,8 +1448,7 @@ function PlayInner() {
       <main className="flex-1 flex flex-col items-center justify-center px-4 md:px-8 py-6 md:py-10">
         <PlayCanvas
           imageUrl={imageUrl}
-          audioBase64={audioBase64}
-          audioMime={audioMime}
+          audioSrc={audioSrc}
           muted={muted}
           phase={phase}
           beat={currentBeat}
