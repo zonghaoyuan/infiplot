@@ -52,6 +52,42 @@
     text-transform: uppercase;
     letter-spacing: 0.32em;
   }
+
+  .vn-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(195, 155, 75, 0.58) rgba(20, 14, 8, 0.32);
+  }
+
+  .vn-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .vn-scrollbar::-webkit-scrollbar-track {
+    background:
+      linear-gradient(
+        to right,
+        transparent 0,
+        transparent 3px,
+        rgba(20, 14, 8, 0.46) 3px,
+        rgba(20, 14, 8, 0.46) 5px,
+        transparent 5px
+      );
+  }
+
+  .vn-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(195, 155, 75, 0.52);
+    border: 2px solid rgba(14, 10, 6, 0.88);
+    border-radius: 999px;
+  }
+
+  .vn-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(220, 180, 95, 0.76);
+  }
+
+  .vn-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @keyframes infiplot-ripple {

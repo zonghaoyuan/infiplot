@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  DialogueHistoryModal,
+  type DialogueHistoryItem,
+} from "@/components/DialogueHistoryModal";
 import type { Beat, BeatChoice, Orientation } from "@infiplot/types";
 
 export type Phase =
@@ -174,6 +178,7 @@ export function PlayCanvas({
   orientation = "landscape",
   aboveCanvas,
   aboveCanvasLeft,
+  dialogueHistory = [],
 }: {
   imageUrl: string | null;
   audioSrc: string | null;
@@ -191,9 +196,11 @@ export function PlayCanvas({
   aboveCanvas?: ReactNode;
   // 渲染在图片正上方、左对齐的 slot（画面外、紧贴左上角），与 aboveCanvas 水平镜像。
   aboveCanvasLeft?: ReactNode;
+  dialogueHistory?: DialogueHistoryItem[];
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [audioDurationMs, setAudioDurationMs] = useState<number | undefined>(
     undefined,
   );
@@ -404,11 +411,19 @@ export function PlayCanvas({
                   : undefined
               }
             >
+              {historyOpen && (
+                <DialogueHistoryModal
+                  items={dialogueHistory}
+                  portrait={portrait}
+                  onClose={() => setHistoryOpen(false)}
+                />
+              )}
+
               {choices.length > 0 && (
                 <div
                   className={`pointer-events-auto px-[3%] pb-[1.5%] flex items-stretch ${
                     portrait
-                      ? "flex-col gap-2 max-h-[45dvh] overflow-y-auto"
+                      ? "vn-scrollbar flex-col gap-2 max-h-[45dvh] overflow-y-auto"
                       : "gap-[1.5%]"
                   }`}
                 >
@@ -487,13 +502,26 @@ export function PlayCanvas({
 
                   {typingDone && beat.next.type === "continue" && (
                     <span
-                      className="absolute bottom-[6px] right-[10px] text-[10px] animate-slow-pulse"
+                      className="absolute bottom-[6px] right-[42px] text-[10px] animate-slow-pulse"
                       style={{ color: "rgba(195,155,75,0.7)" }}
                       aria-hidden
                     >
                       ▼
                     </span>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setHistoryOpen(true);
+                    }}
+                    className="absolute bottom-[6px] right-[8px] flex h-7 w-7 items-center justify-center text-[rgba(195,155,75,0.78)] transition-colors hover:text-[rgba(245,235,210,0.96)]"
+                    aria-label="打开剧情回溯"
+                    title="剧情回溯"
+                  >
+                    <i className="fa-solid fa-clock-rotate-left text-[12px]" />
+                  </button>
                 </div>
               )}
             </div>
