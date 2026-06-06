@@ -24,26 +24,35 @@ import { existsSync, mkdirSync, writeFileSync, statSync, readFileSync } from "no
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = resolve(__dirname, "..");
-const OUT_DIR = resolve(WEB_ROOT, "public", "home", "firstact");
 const PROMPTS_FILE = resolve(WEB_ROOT, "public", "home", "prompts.json");
 const PAGE_FILE = resolve(WEB_ROOT, "app", "page.tsx");
 
 const FORCE = process.argv.includes("--force");
+const PORTRAIT = process.argv.includes("--portrait");
+const ONLY = process.argv.find(a => a.startsWith("--only="))?.split("=")[1]?.split(",") ?? null;
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const CONCURRENCY = 1;
 
+const OUT_DIR = resolve(
+  WEB_ROOT, "public", "home",
+  PORTRAIT ? "firstact-portrait" : "firstact",
+);
+
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// Dynamically extract STYLE_MAP and STORIES from page.tsx to avoid code duplication
-console.log("[prebake] Parsing page.tsx to extract style map and card list...");
-const pageContent = readFileSync(PAGE_FILE, "utf8");
+// Dynamically extract STYLE_MAP from lib/options.ts and STORIES from page.tsx
+console.log("[prebake] Parsing lib/options.ts + page.tsx to extract style map and card list...");
 
-const styleMapMatch = pageContent.match(/const STYLE_MAP: Record<string, string> = (\{[\s\S]*?\n\});/m);
+const OPTIONS_FILE = resolve(WEB_ROOT, "lib", "options.ts");
+const optionsContent = readFileSync(OPTIONS_FILE, "utf8");
+const styleMapMatch = optionsContent.match(/export const STYLE_MAP: Record<string, string> = (\{[\s\S]*?\n\});/m);
 if (!styleMapMatch) {
-  console.error("Could not find STYLE_MAP in page.tsx!");
+  console.error("Could not find STYLE_MAP in lib/options.ts!");
   process.exit(1);
 }
 const STYLE_MAP = eval("(" + styleMapMatch[1] + ")");
+
+const pageContent = readFileSync(PAGE_FILE, "utf8");
 
 const storiesMatch = pageContent.match(/const STORIES: Record<Gender, StoryContent\[\]> = (\{[\s\S]*?\n\});/m);
 if (!storiesMatch) {
@@ -80,6 +89,13 @@ for (const [gender, list] of Object.entries(STORIES)) {
   });
 }
 
+if (ONLY) {
+  const keep = new Set(ONLY);
+  const removed = CARDS.length;
+  CARDS.splice(0, CARDS.length, ...CARDS.filter(c => keep.has(c.name)));
+  console.log(`[prebake] --only filter: ${removed} → ${CARDS.length} cards`);
+}
+
 function buildPayload(card) {
   const worldSetting = [
     `这是一款面向【${card.gender}】观众的 AI 交互剧情游戏，整体走红果短视频式的强戏剧冲突与快速反转。`,
@@ -94,7 +110,9 @@ function buildPayload(card) {
     COVER_PROMPTS[card.name] ??
     STYLE_MAP[card.style] ??
     STYLE_MAP["京阿尼细腻日常"];
-  return { worldSetting, styleGuide };
+  const payload = { worldSetting, styleGuide };
+  if (PORTRAIT) payload.orientation = "portrait";
+  return payload;
 }
 
 async function bakeOne(card) {
