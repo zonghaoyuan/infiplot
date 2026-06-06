@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const base = loadEngineConfig(req.headers);
+    const base = loadEngineConfig();
     // BYO key: the browser provisions + synths voices directly against Xiaomi
     // (key never reaches us), so strip server-side TTS so the engine skips all
     // provisioning + synth. See StartRequest.clientTts.

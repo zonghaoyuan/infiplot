@@ -3,7 +3,6 @@ import type {
   ProviderProtocol,
   TtsConfig,
 } from "@infiplot/types";
-import { isPublicUrl } from "./validateUrl";
 
 const VALID_PROTOCOLS = [
   "openai_compatible",
@@ -50,23 +49,8 @@ function loadTtsConfig(): TtsConfig | undefined {
   return { baseUrl, apiKey, speechModel };
 }
 
-function safeEndpoint(v: unknown): string | undefined {
-  if (typeof v !== "string" || v.length === 0) return undefined;
-  const trimmed = v.trim();
-  if (!trimmed || !isPublicUrl(trimmed)) {
-    console.error(`BYO endpoint rejected (not a public HTTPS URL): ${v.slice(0, 100).replace(/[\r\n]/g, "")}`);
-    return undefined;
-  }
-  return trimmed;
-}
-
-function safeString(v: unknown, max: number): string | undefined {
-  if (typeof v !== "string" || v.length === 0) return undefined;
-  return v.slice(0, max).replace(/[\x00-\x1f]/g, "");
-}
-
-export function loadEngineConfig(headers?: Headers): EngineConfig {
-  const config: EngineConfig = {
+export function loadEngineConfig(): EngineConfig {
+  return {
     text: {
       baseUrl: readVar("TEXT_BASE_URL"),
       apiKey: readVar("TEXT_API_KEY"),
@@ -88,35 +72,4 @@ export function loadEngineConfig(headers?: Headers): EngineConfig {
     tts: loadTtsConfig(),
     mockImage: readOptionalVar("MOCK_IMAGE") === "true",
   };
-
-  const byoHeader = headers?.get("x-byo-api");
-  if (byoHeader) {
-    if (byoHeader.length > 2048) {
-      console.error("x-byo-api header exceeds 2 KB limit, ignoring");
-    } else {
-      try {
-        const byo = JSON.parse(byoHeader);
-        if (byo.llm?.enabled) {
-          const ep = safeEndpoint(byo.llm?.endpoint);
-          const key = safeString(byo.llm?.apiKey, 256);
-          const model = safeString(byo.llm?.model, 128);
-          if (ep) { config.text.baseUrl = ep; config.vision.baseUrl = ep; }
-          if (key) { config.text.apiKey = key; config.vision.apiKey = key; }
-          if (model) { config.text.model = model; config.vision.model = model; }
-        }
-        if (byo.painter?.enabled) {
-          const ep = safeEndpoint(byo.painter?.endpoint);
-          const key = safeString(byo.painter?.apiKey, 256);
-          const model = safeString(byo.painter?.model, 128);
-          if (ep) config.image.baseUrl = ep;
-          if (key) config.image.apiKey = key;
-          if (model) config.image.model = model;
-        }
-      } catch (e) {
-        console.error("Failed to parse x-byo-api header:", e);
-      }
-    }
-  }
-
-  return config;
 }
