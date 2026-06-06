@@ -10,14 +10,8 @@ import {
   PLOT_STYLES,
   type Gender,
 } from "@/lib/options";
-
-/* ============================================================================
-   InfiPlot · 首页（编辑式视觉风格 · 居中构图，呼应低保真原型）
-   - 顶部 Header：左上角衬线 wordmark logo
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { readStoredTtsConfig } from "@/lib/clientTtsConfig";
+import { TtsKeyModal } from "@/components/TtsKeyModal";
 
 /* ============================================================================
    InfiPlot · 首页（编辑式视觉风格 · 居中构图，呼应低保真原型）
@@ -1394,7 +1388,12 @@ export default function HomePage() {
   // 顶部使用提示：默认展示，用户可点 × 永久关闭（localStorage:infiplot:hintClosed）。
   const [hintClosed, setHintClosed] = useState(false);
 
+  // 自带 TTS Key 弹窗：可选增强，Key 只存浏览器、绝不经过服务器。
+  const [ttsOpen, setTtsOpen] = useState(false);
+  const [ttsConfigured, setTtsConfigured] = useState(false);
+
   const styleRow = OPTS.findIndex((o) => o.modal);
+  const voiceRow = OPTS.findIndex((o) => o.label === "语音配音");
   const genderIndex = sel[0] ?? 0;
   const gender = (OPTS[0]!.items[genderIndex] as Gender) ?? "男性向";
   const phrases = EXAMPLE_PHRASES[gender];
@@ -1434,6 +1433,11 @@ export default function HomePage() {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  // 启动时回填「已启用」徽标——读 localStorage 判断用户是否已存过 Key。
+  useEffect(() => {
+    setTtsConfigured(readStoredTtsConfig() != null);
   }, []);
 
   // 输入框随内容自动增高：长文本整段可见（打字与点卡片填入都覆盖）。
@@ -1661,6 +1665,30 @@ export default function HomePage() {
             ))}
           </div>
 
+          {/* 自带 TTS Key 入口：公共语音模型有 RPM/TPM 限额，高并发易静音；
+              填自己的小米 MiMo Key（免费）→ 稳定配音、延迟更低，且 Key 只存本地。 */}
+          <div className="mt-5 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setTtsOpen(true)}
+              className={
+                "inline-flex items-center gap-2 rounded-full border px-4 py-1.5 font-sans text-xs md:text-[13px] transition-colors " +
+                (ttsConfigured
+                  ? "border-ember-500/40 bg-ember-500/5 text-ember-500 hover:bg-ember-500/10"
+                  : "border-clay-900/15 text-clay-500 hover:border-clay-900/30 hover:text-clay-700")
+              }
+            >
+              <i
+                className={
+                  ttsConfigured
+                    ? "fa-solid fa-circle-check text-[11px]"
+                    : "fa-solid fa-microphone-lines text-[11px]"
+                }
+              />
+              {ttsConfigured ? "自带配音 Key · 已启用" : "经常没声音？自带配音 Key（可选）"}
+            </button>
+          </div>
+
           {/* 使用提示：可被用户永久关闭（localStorage:infiplot:hintClosed） */}
           {!hintClosed && (
             <div className="relative mx-auto mt-10 md:mt-12 max-w-[640px] rounded-sm border border-clay-900/10 bg-cream-100/50 px-8 py-3.5">
@@ -1824,6 +1852,21 @@ export default function HomePage() {
           setStyleOverrides={setStyleOverrides}
           customStyleRefImage={customStyleRefImage}
           setCustomStyleRefImage={setCustomStyleRefImage}
+        />
+      )}
+      {ttsOpen && (
+        <TtsKeyModal
+          onClose={() => setTtsOpen(false)}
+          onSaved={(configured) => {
+            setTtsConfigured(configured);
+            // 启用自带 Key 时顺手把「语音配音」拨到「开启」——否则用户配了 Key
+            // 却还是静音，体验自相矛盾。停用时不动其选择，尊重用户原本的偏好。
+            if (configured && voiceRow >= 0) {
+              const onIdx = OPTS[voiceRow]!.items.indexOf("开启");
+              if (onIdx >= 0)
+                setSel((s) => s.map((v, j) => (j === voiceRow ? onIdx : v)));
+            }
+          }}
         />
       )}
     </div>

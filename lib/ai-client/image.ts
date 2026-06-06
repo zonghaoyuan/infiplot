@@ -1,5 +1,9 @@
-import type { ProviderConfig } from "@infiplot/types";
+import { generateImage as generateImageSdk } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import type { Orientation, ProviderConfig, ProviderProtocol } from "@infiplot/types";
 import { fetchWithRetry } from "./fetchWithRetry";
+import { normalizeBaseUrl } from "./normalizeUrl";
 
 // Runware uses its own task-array protocol (not OpenAI-compatible).
 // POST <baseUrl> with [{ taskType: "imageInference", ... }]; errors come
@@ -38,30 +42,71 @@ export type GenerateImageOptions = {
    * Reference image (UUID, public URL, or base64) for img2img. When set,
    * FLUX preserves the seed image's composition and applies `strength` to
    * deviate. NOTE: FLUX.2 [klein] 9B KV does NOT support seedImage — use
-   * `referenceImages` for visual continuity instead.
+   * `referenceImages` for visual continuity instead. Runware-only.
    */
   seedImage?: string;
   /**
    * Reference images (UUIDs, URLs, or base64) to condition generation on —
    * typically character portraits + the prior scene image. Runware caps at 4;
-   * we silently truncate beyond that.
+   * we silently truncate beyond that. On the OpenAI/Gemini AI SDK paths these
+   * map to `prompt.images` (the SDK accepts public URLs or data URLs).
    */
   referenceImages?: string[];
-  /** 0–1, FLUX needs ≥ 0.8 to actually have an effect. */
+  /** 0–1, FLUX needs ≥ 0.8 to actually have an effect. Runware-only. */
   strength?: number;
+  /**
+   * Output aspect, locked per session. "portrait" → 9:16 vertical for mobile;
+   * default/"landscape" → 16:9 widescreen. Mapped to each provider's nearest
+   * supported size: Runware 1024×1792, OpenAI-compatible REST 1024x1792,
+   * native gpt-image 1024x1536, Gemini aspectRatio 9:16.
+   */
+  orientation?: Orientation;
 };
 
 export type GenerateImageResult = {
-  /** Public CDN URL of the generated image (Runware-hosted). */
+  /**
+   * Image the client can render directly. A Runware CDN URL on the Runware
+   * path; a `data:<mime>;base64,...` URI on the AI SDK paths (OpenAI/Gemini
+   * return raw bytes, not a hosted URL).
+   */
   imageUrl: string;
-  /** Stable UUID for cheap re-reference in later `referenceImages`. */
+  /**
+   * Stable handle for cheap re-reference in later `referenceImages`. A real
+   * Runware UUID on the Runware path; a synthetic UUID on other paths (those
+   * re-reference via the URL/data-URL form instead).
+   */
   imageUuid: string;
 };
 
+// Match the Runware host by parsed hostname (exact match or subdomain), not a
+// bare substring — otherwise `notrunware.ai` or `api.runware.ai.evil.com` would
+// misroute to the Runware protocol. Falls back to false on an unparseable URL.
+function isRunwareHost(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === "runware.ai" || host.endsWith(".runware.ai");
+  } catch {
+    return false;
+  }
+}
+
+// Image roles support more protocols than text/vision. When IMAGE_PROVIDER is
+// unset we keep the historical URL-based inference so existing deployments
+// (Runware, or an OpenAI-compatible gateway) behave exactly as before.
+function inferImageProtocol(config: ProviderConfig): ProviderProtocol {
+  const isOpenAiCompat =
+    !isRunwareHost(config.baseUrl) || config.model === "image-2-vip";
+  return isOpenAiCompat ? "openai_compatible" : "runware";
+}
+
+function resolveImageProtocol(config: ProviderConfig): ProviderProtocol {
+  return config.provider ?? inferImageProtocol(config);
+}
+
 // ──────────────────────────────────────────────────────────────────────
 //  generateImage — text-to-image (default) or referenceImages-conditioned.
-//  Returns both the public URL (for client display + future references)
-//  and the UUID (cheapest reference form for subsequent calls).
+//  Returns both a renderable image URL and a re-reference handle (see
+//  GenerateImageResult). Dispatches on the resolved wire protocol.
 // ──────────────────────────────────────────────────────────────────────
 
 export async function generateImage(
@@ -69,58 +114,135 @@ export async function generateImage(
   prompt: string,
   options?: GenerateImageOptions,
 ): Promise<GenerateImageResult> {
-  const url = config.baseUrl.replace(/\/$/, "");
+  const protocol = resolveImageProtocol(config);
+  switch (protocol) {
+    case "openai":
+    case "google":
+      return generateImageViaAiSdk(config, prompt, options, protocol);
+    case "runware":
+      return generateImageRunware(config, prompt, options);
+    case "anthropic":
+      throw new Error(
+        'IMAGE_PROVIDER "anthropic" does not generate images. Use "openai", "google", "runware", or "openai_compatible".',
+      );
+    case "openai_compatible":
+    default:
+      return generateImageOpenAiCompatible(config, prompt, options);
+  }
+}
 
-  // 1. OpenAI-compatible route (GPTGod, DALL-E, etc.)
-  const isOpenAi = !url.includes("runware.ai") || config.model === "image-2-vip";
-  if (isOpenAi) {
-    const endpoint = url.endsWith("/images/generations") ? url : `${url}/images/generations`;
-    console.log(`[ai-client] Calling OpenAI-compatible image generations at: ${endpoint} with model: ${config.model}`);
-    
-    const res = await fetchWithRetry(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        prompt: prompt,
-        n: 1,
-        size: "1792x1024", // Use horizontal size (16:9)
-      }),
-    });
+// Native OpenAI (gpt-image) / Gemini (Nano Banana) via the Vercel AI SDK.
+// Unlike the fetch path, this supports reference-image editing via
+// `prompt.images`. The SDK returns raw bytes (no hosted URL), so we hand the
+// client a data URI and synthesize a UUID; continuity references reuse the
+// data URI rather than a provider UUID.
+async function generateImageViaAiSdk(
+  config: ProviderConfig,
+  prompt: string,
+  options: GenerateImageOptions | undefined,
+  protocol: "openai" | "google",
+): Promise<GenerateImageResult> {
+  const baseURL = normalizeBaseUrl(config.baseUrl, protocol);
+  const imageModel =
+    protocol === "openai"
+      ? createOpenAI({ apiKey: config.apiKey, baseURL }).image(config.model)
+      : createGoogleGenerativeAI({ apiKey: config.apiKey, baseURL }).image(
+          config.model,
+        );
 
-    const text = await res.text();
-    let json: any;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
-    }
+  const refs = (options?.referenceImages ?? []).slice(0, MAX_REFERENCE_IMAGES);
+  const promptArg =
+    refs.length > 0 ? { text: prompt, images: refs } : prompt;
 
-    if (json.error) {
-      throw new Error(`OpenAI Image API error: ${json.error.message || JSON.stringify(json.error)}`);
-    }
+  // Session-locked aspect. gpt-image takes an explicit `size` (portrait /
+  // landscape options are 1024x1536 / 1536x1024); Gemini takes an `aspectRatio`.
+  const portrait = options?.orientation === "portrait";
+  const { image } = await generateImageSdk({
+    model: imageModel,
+    prompt: promptArg,
+    ...(protocol === "openai"
+      ? { size: (portrait ? "1024x1536" : "1536x1024") as `${number}x${number}` }
+      : { aspectRatio: (portrait ? "9:16" : "16:9") as `${number}:${number}` }),
+  });
 
-    const data = json.data?.[0];
-    const imageUrl = data?.url;
-    if (!imageUrl) {
-      throw new Error(`No image URL in OpenAI response: ${text.slice(0, 300)}`);
-    }
-    // Generate a mock UUID since OpenAI compatible endpoint doesn't have UUIDs
-    const imageUuid = crypto.randomUUID();
-    return { imageUrl, imageUuid };
+  return {
+    imageUrl: `data:${image.mediaType};base64,${image.base64}`,
+    imageUuid: crypto.randomUUID(),
+  };
+}
+
+// OpenAI-compatible REST route (GPTGod, DALL-E proxies, etc.). Basic
+// text-to-image only — no reference images on this path; for editing/anchoring
+// set IMAGE_PROVIDER=openai (or google) to take the AI SDK path above.
+async function generateImageOpenAiCompatible(
+  config: ProviderConfig,
+  prompt: string,
+  options?: GenerateImageOptions,
+): Promise<GenerateImageResult> {
+  const base = normalizeBaseUrl(config.baseUrl, "openai_compatible");
+  const endpoint = `${base}/images/generations`;
+  console.log(
+    `[ai-client] Calling OpenAI-compatible image generations at: ${endpoint} with model: ${config.model}`,
+  );
+
+  const res = await fetchWithRetry(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      prompt: prompt,
+      n: 1,
+      // Session-locked aspect (16:9 default, 9:16 portrait for mobile).
+      size: options?.orientation === "portrait" ? "1024x1792" : "1792x1024",
+    }),
+  });
+
+  const text = await res.text();
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
   }
 
-  // 2. Runware task-array route
+  if (json.error) {
+    throw new Error(`OpenAI Image API error: ${json.error.message || JSON.stringify(json.error)}`);
+  }
+
+  const data = json.data?.[0];
+  const imageUrl = data?.url;
+  if (!imageUrl) {
+    throw new Error(`No image URL in OpenAI response: ${text.slice(0, 300)}`);
+  }
+  // Generate a mock UUID since OpenAI compatible endpoint doesn't have UUIDs
+  const imageUuid = crypto.randomUUID();
+  return { imageUrl, imageUuid };
+}
+
+// Runware task-array route — self-implemented to preserve the UUID/URL closed
+// loop (the official @runware/ai-sdk-provider drops both).
+async function generateImageRunware(
+  config: ProviderConfig,
+  prompt: string,
+  options?: GenerateImageOptions,
+): Promise<GenerateImageResult> {
+  const url = normalizeBaseUrl(config.baseUrl, "runware");
+
+  // Session-locked output aspect. Image models emit a FIXED pixel size; CSS
+  // object-fit on the client adapts this frame to the exact device/window. Both
+  // dimensions stay a multiple of 64 as FLUX requires.
+  const portrait = options?.orientation === "portrait";
+
   const task: Record<string, unknown> = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
     model: config.model,
     positivePrompt: prompt,
-    width: 1792,
-    height: 1024,
+    width: portrait ? 1024 : 1792,
+    height: portrait ? 1792 : 1024,
     steps: 4,
     CFGScale: 3.5,
     numberResults: 1,

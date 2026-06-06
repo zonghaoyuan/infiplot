@@ -7,7 +7,6 @@ import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 // Same rationale as /api/vision: the client resizes to 512px max-dim webp
 // (~30-80KB base64 typical) before upload, so 3 MB is generous headroom

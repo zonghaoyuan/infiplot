@@ -4,9 +4,6 @@ import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
-// The synth itself has a 15s per-call ceiling in the engine. 30s here just
-// covers JSON parsing + outbound network buffer.
-export const maxDuration = 30;
 
 export async function POST(req: Request) {
   let body: BeatAudioRequest;
@@ -26,7 +23,11 @@ export async function POST(req: Request) {
   try {
     const config = loadEngineConfig();
     const result = await requestBeatAudio(config, body);
-    return NextResponse.json(result);
+    if (!result.audio) return new Response(null, { status: 204 });
+    const binary = Buffer.from(result.audio.base64, "base64");
+    return new Response(binary, {
+      headers: { "Content-Type": result.audio.mime },
+    });
   } catch (err) {
     // Engine already swallows synth errors and returns audio:null. Anything
     // that reaches here is config-level — surface so the client can log it.

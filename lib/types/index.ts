@@ -41,6 +41,23 @@ export type BeatChoiceEffect =
   | { kind: "change-scene"; nextSceneSeed: string };
 
 // ──────────────────────────────────────────────────────────────────────
+//  Orientation — session-wide image aspect, locked at session start.
+//  "landscape" → 16:9 (1792×1024), the default for desktop / mobile-landscape.
+//  "portrait"  → 9:16 (1024×1792), painted for mobile users holding the phone
+//  upright so the scene fills the screen instead of letterboxing a widescreen
+//  image. CSS object-fit then adapts the 9:16 frame to the exact device size.
+// ──────────────────────────────────────────────────────────────────────
+
+export type Orientation = "portrait" | "landscape";
+
+/** Normalize an untrusted orientation value (from a request body, or a
+ *  persisted session that predates the field) to a valid Orientation.
+ *  Anything other than "portrait" falls back to "landscape" (back-compat). */
+export function coerceOrientation(value: unknown): Orientation {
+  return value === "portrait" ? "portrait" : "landscape";
+}
+
+// ──────────────────────────────────────────────────────────────────────
 //  Scene — one background image + a graph of beats.
 //  The Director emits an entire Scene per call; the player navigates
 //  through its beats locally with zero network until exiting.
@@ -75,6 +92,12 @@ export type Scene = {
    * Runware URL — the client renders both forms transparently.
    */
   imageUrl?: string;
+  /**
+   * Orientation this scene's image was painted in. Mirrors the session's
+   * locked orientation; recorded per-scene so the client can pick the right
+   * intrinsic dimensions / object-fit even across legacy or mixed history.
+   */
+  orientation?: Orientation;
 };
 
 export type SceneExit =
@@ -90,6 +113,43 @@ export type SceneHistoryEntry = {
   scene: Scene;
   visitedBeatIds: string[];
   exit?: SceneExit;
+};
+
+// ──────────────────────────────────────────────────────────────────────
+//  Writer two-phase split
+//
+//  The Writer runs as TWO LLM calls so scene-image generation can begin
+//  before the dialogue is fully written:
+//    Phase A (WriterPlan) — the minimal skeleton the image pipeline needs:
+//                           sceneSummary + sceneKey + the entry beat's
+//                           on-stage roster + the full cast to design.
+//    Phase B (beats)      — the full beats[] graph + storyStatePatch, written
+//                           to honor the plan, overlapped with image gen.
+//  The Cinematographer + character design + Painter all run off the Plan, so
+//  Phase B's (longer) output is hidden behind the image pipeline.
+// ──────────────────────────────────────────────────────────────────────
+
+export type WriterPlan = {
+  /** 中文 scene synopsis (location + time + mood + key event + opening hook).
+   *  The sole input the Cinematographer composes the establishing shot from. */
+  sceneSummary: string;
+  /** English location+time slug for cross-scene visual continuity. */
+  sceneKey?: string;
+  /** Beat id the player lands on when entering the scene. Phase B must emit a
+   *  beat with this id (reconciled if it doesn't). */
+  entryBeatId: string;
+  /** Every NPC name that appears anywhere in this scene. Drives character
+   *  design (card + portrait + voice) IN PARALLEL with Phase B beat writing, so
+   *  the whole cast is provisioned by the time the scene returns. Phase B may
+   *  only use names from this list (plus the POV "你"). Never includes the player. */
+  cast: string[];
+  /** The entry beat's on-stage roster (who's visible + pose when the player
+   *  lands). Drives the Cinematographer's framing and the entry-beat portraits
+   *  the Painter anchors to. Never includes the POV player. */
+  entryActiveCharacters: BeatActiveCharacter[];
+  /** The entry beat's speaker — an NPC name, "你" (player speaking), or
+   *  undefined for a pure narration/environment entry. Drives shot selection. */
+  entrySpeaker?: string;
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -214,6 +274,12 @@ export type Session = {
    * payload small for /api/scene round-trips.
    */
   styleReferenceImage?: string;
+  /**
+   * Session-wide image orientation, locked at session start from the client's
+   * device + orientation and carried on every /api/scene call so all scenes
+   * share one aspect ratio. Absent → "landscape" (back-compat).
+   */
+  orientation?: Orientation;
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -231,10 +297,41 @@ export type VisionClassify = "insert-beat" | "change-scene";
 //  Provider config
 // ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Wire protocol used to talk to a model provider. Which values are valid
+ * depends on the model role — each ai-client adapter accepts its own subset
+ * and falls back to a sensible default for anything else:
+ *
+ *   openai_compatible  text / vision / image  — OpenAI Chat Completions +
+ *                      `/images/generations` (self-implemented fetch; the
+ *                      default for text/vision when unset)
+ *   anthropic          text / vision          — native Anthropic Messages (AI SDK)
+ *   google             text / vision / image  — native Gemini (AI SDK); image
+ *                      uses the Nano Banana family
+ *   openai             image only             — OpenAI gpt-image via AI SDK,
+ *                      unlocks reference-image editing (for text/vision use
+ *                      openai_compatible, which already speaks OpenAI's format)
+ *   runware            image only             — Runware task-array protocol
+ *                      (self-implemented; the default for runware.ai URLs)
+ */
+export type ProviderProtocol =
+  | "openai_compatible"
+  | "anthropic"
+  | "google"
+  | "openai"
+  | "runware";
+
 export type ProviderConfig = {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /**
+   * Wire protocol. When unset, callers apply a role-specific default:
+   * text/vision → "openai_compatible"; image → inferred from baseUrl
+   * (runware.ai → "runware", otherwise "openai_compatible") so existing
+   * deployments keep working without setting *_PROVIDER.
+   */
+  provider?: ProviderProtocol;
 };
 
 export type TtsConfig = {
@@ -263,6 +360,18 @@ export type StartRequest = {
   styleGuide: string;
   /** Optional user-uploaded style reference image — see Session.styleReferenceImage. */
   styleReferenceImage?: string;
+  /**
+   * When true the client supplied its own Xiaomi TTS key and will provision +
+   * synth voices in the browser (key never touches our server). The route then
+   * drops `config.tts` so the engine skips all server-side TTS work.
+   */
+  clientTts?: boolean;
+  /**
+   * Device orientation chosen at session start. "portrait" makes the engine
+   * paint 9:16 vertical scene images (mobile, held upright); "landscape"
+   * (default) keeps 16:9 widescreen. Locked for the whole session.
+   */
+  orientation?: Orientation;
 };
 
 // /api/parse-style-image — vision LLM extracts a textual painting-style
@@ -295,6 +404,8 @@ export type StartResponse = {
 // (frontend synthesizes a speculative exit).
 export type SceneRequest = {
   session: Session;
+  /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
+  clientTts?: boolean;
 };
 
 export type SceneResponse = {
@@ -352,6 +463,8 @@ export type VisionResponse = {
 export type InsertBeatRequest = {
   session: Session;
   freeformAction: string;
+  /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
+  clientTts?: boolean;
 };
 
 /** Partial beat fields produced by the insert-beat director. */

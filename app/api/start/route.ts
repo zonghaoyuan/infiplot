@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 // Matches /api/vision and /api/parse-style-image — the user's resized 512px
 // webp is ~30-80 KB; this caps pathological direct-API payloads (which would
@@ -41,7 +40,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const config = loadEngineConfig();
+    const base = loadEngineConfig();
+    // BYO key: the browser provisions + synths voices directly against Xiaomi
+    // (key never reaches us), so strip server-side TTS so the engine skips all
+    // provisioning + synth. See StartRequest.clientTts.
+    const config = body.clientTts === true ? { ...base, tts: undefined } : base;
     const result = await startSession(config, body);
     return NextResponse.json(result);
   } catch (err) {

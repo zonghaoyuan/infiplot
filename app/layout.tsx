@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import { Analytics } from "@/components/Analytics";
 import "./globals.css";
@@ -23,6 +23,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "InfiPlot — AI 实时交互剧情游戏",
   description: "InfiPlot 是一款用 AI 实时生成图片、语音与剧情分支的交互式剧情游戏 Demo。",
+};
+
+// viewportFit:cover lets the immersive /play portrait layout extend under the
+// iOS notch / home-indicator and exposes env(safe-area-inset-*) to the
+// floating controls. device-width + initialScale keep mobile rendering 1:1.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

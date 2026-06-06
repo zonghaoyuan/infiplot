@@ -159,6 +159,12 @@ With the recommended trio, each scene's cost comes mainly from the image generat
 
 By default the browser fetches images directly from the provider — no setup needed; leave `NEXT_PUBLIC_IMAGE_PROXY_URL` blank and you're completely unaffected. You only want this if you hit progressive "top-to-bottom" image loading (Chrome's `ERR_QUIC_PROTOCOL_ERROR` on some networks paints partial PNGs row by row): deploy a tiny Cloudflare Worker that re-fetches images server-side and serves them atomically over HTTP/2. One-click deploy at **[infiplot-image-proxy](https://github.com/zonghaoyuan/infiplot-image-proxy)**, then paste the `workers.dev` URL it prints into `NEXT_PUBLIC_IMAGE_PROXY_URL`.
 
+**5. Let players bring their own voice Key (optional, recommended)**
+
+Xiaomi rate-limits the TTS model by RPM/TPM. When a public deployment has many people playing at once through a single shared `TTS_API_KEY`, those limits are easy to hit — the symptom is **story and visuals work fine, but there's no audio**. To fix this, players can optionally enter **their own** Xiaomi MiMo key on the homepage (free to obtain). Synthesis then runs **browser-direct to Xiaomi**, the **key stays in the player's browser and never touches your server**, and they get stable voice with lower latency. It's purely additive: leave it blank and playback falls back to your server key exactly as before.
+
+See the [Bring-your-own voice Key guide](docs/xiaomi-tts-key.md) for how to obtain and enter one.
+
 ---
 
 ## Roadmap

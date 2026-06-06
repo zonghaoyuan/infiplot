@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Beat, BeatChoice } from "@infiplot/types";
+import type { Beat, BeatChoice, Orientation } from "@infiplot/types";
 
 export type Phase =
   | "loading-first"        // first scene not yet rendered
@@ -109,11 +109,13 @@ function ChoiceButton({
   index,
   label,
   disabled,
+  vertical,
   onClick,
 }: {
   index: number;
   label: string;
   disabled: boolean;
+  vertical: boolean;
   onClick: () => void;
 }) {
   return (
@@ -121,8 +123,8 @@ function ChoiceButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="group relative flex-1 min-w-0 px-4 py-3 text-left transition-all duration-200
-        disabled:opacity-50 disabled:cursor-wait"
+      className={`group relative ${vertical ? "w-full" : "flex-1 min-w-0"} px-4 py-3 text-left transition-all duration-200
+        disabled:opacity-50 disabled:cursor-wait`}
       style={{
         background: "rgba(20, 14, 8, 0.68)",
         border: "1.5px solid rgba(180, 140, 80, 0.65)",
@@ -141,13 +143,13 @@ function ChoiceButton({
       />
       <span className="relative flex items-baseline gap-2">
         <span
-          className="shrink-0 font-serif text-[11px] num"
+          className={`shrink-0 font-serif num ${vertical ? "text-[13px]" : "text-[11px]"}`}
           style={{ color: "rgba(195,155,75,0.9)" }}
         >
           {index + 1}.
         </span>
         <span
-          className="font-serif text-[13px] md:text-[14px] leading-snug"
+          className={`font-serif leading-snug ${vertical ? "text-[15px]" : "text-[13px] md:text-[14px]"}`}
           style={{ color: "rgba(245,235,210,0.95)" }}
         >
           {label}
@@ -160,8 +162,7 @@ function ChoiceButton({
 // ── Main component ─────────────────────────────────────────────────────
 export function PlayCanvas({
   imageUrl,
-  audioBase64,
-  audioMime,
+  audioSrc,
   muted,
   phase,
   beat,
@@ -170,12 +171,12 @@ export function PlayCanvas({
   onAdvance,
   onSelectChoice,
   fullViewport = false,
+  orientation = "landscape",
   aboveCanvas,
   aboveCanvasLeft,
 }: {
   imageUrl: string | null;
-  audioBase64: string | null;
-  audioMime: string | null;
+  audioSrc: string | null;
   muted: boolean;
   phase: Phase;
   beat: Beat | null;
@@ -184,6 +185,8 @@ export function PlayCanvas({
   onAdvance: () => void;
   onSelectChoice: (choice: BeatChoice) => void;
   fullViewport?: boolean;
+  // 会话锁定的图片朝向。"portrait" 时整图铺满视口（object-fit:cover）、选项竖排、字号放大。
+  orientation?: Orientation;
   // 渲染在图片正上方、右对齐的 slot（画面外、紧贴右上角）。
   aboveCanvas?: ReactNode;
   // 渲染在图片正上方、左对齐的 slot（画面外、紧贴左上角），与 aboveCanvas 水平镜像。
@@ -204,7 +207,7 @@ export function PlayCanvas({
   const { shown: typedBody, done: typingDone, skip: skipTypewriter } =
     useTypewriter(displayBody, beat?.id ?? "", {
       targetDurationMs: audioDurationMs,
-      waitForAudio: Boolean(audioBase64),
+      waitForAudio: Boolean(audioSrc),
     });
 
   // ── Audio source change ──────────────────────────────────────────────
@@ -212,12 +215,12 @@ export function PlayCanvas({
   // unblock the typewriter via timeout so text doesn't stall.
   useEffect(() => {
     setAudioDurationMs(undefined);
-    if (!audioBase64) return;
+    if (!audioSrc) return;
     const timer = setTimeout(() => {
       setAudioDurationMs((prev) => prev ?? 0);
     }, AUDIO_WAIT_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [audioBase64]);
+  }, [audioSrc]);
 
   // ── Mute toggle ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -225,12 +228,12 @@ export function PlayCanvas({
     if (!el) return;
     el.muted = muted;
     el.playbackRate = SPEECH_RATE;
-    if (!muted && audioBase64 && el.paused) {
+    if (!muted && audioSrc && el.paused) {
       el.play().catch(() => {
         // autoplay blocked — silent until next interaction
       });
     }
-  }, [muted, audioBase64]);
+  }, [muted, audioSrc]);
 
   function handleAudioMetadata() {
     const el = audioRef.current;
@@ -255,9 +258,27 @@ export function PlayCanvas({
 
   function handleImageClick(e: React.MouseEvent<HTMLImageElement>) {
     if (phase !== "ready" || !imgRef.current || !beat) return;
-    const rect = imgRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+    const el = imgRef.current;
+    const rect = el.getBoundingClientRect();
+    // Portrait renders with object-fit:cover, which scales the 9:16 image to
+    // FILL the box and crops the overflow — so the rendered box ≠ the full
+    // image. Map the click from box-space back into full-image-space via the
+    // cover geometry so the marker lands where the user tapped. Landscape's box
+    // matches the image aspect (no crop), so it keeps simple normalization.
+    let x: number;
+    let y: number;
+    if (orientation === "portrait") {
+      const nw = el.naturalWidth || 1024;
+      const nh = el.naturalHeight || 1792;
+      const scale = Math.max(rect.width / nw, rect.height / nh);
+      const dispW = nw * scale;
+      const dispH = nh * scale;
+      x = (e.clientX - rect.left + (dispW - rect.width) / 2) / dispW;
+      y = (e.clientY - rect.top + (dispH - rect.height) / 2) / dispH;
+    } else {
+      x = (e.clientX - rect.left) / rect.width;
+      y = (e.clientY - rect.top) / rect.height;
+    }
     // If the typewriter is still printing, a click completes it instantly
     // (standard VN affordance) — the page never sees this click.
     if (!typingDone) {
@@ -291,13 +312,26 @@ export function PlayCanvas({
   const interactive = phase === "ready" && !!imageUrl;
   const dimmed = phase === "transitioning";
 
-  const sizeStyle = fullViewport
-    ? { maxWidth: "100vw", maxHeight: "100dvh" }
-    : { maxWidth: "96vw", maxHeight: "calc(100dvh - 200px)" };
+  const portrait = orientation === "portrait";
+  const intrinsicW = portrait ? 1024 : 1792;
+  const intrinsicH = portrait ? 1792 : 1024;
 
-  const placeholderWidth = fullViewport
-    ? "min(100vw, calc(100dvh * 16 / 9))"
-    : "min(96vw, calc((100dvh - 200px) * 16 / 9))";
+  // Portrait (mobile) always fills the whole viewport with object-fit:cover so
+  // the 9:16 image matches the exact device/window — no letterbox. Landscape
+  // keeps the prior contain-style sizing so the full 16:9 frame stays visible.
+  const sizeStyle: React.CSSProperties = portrait
+    ? { width: "100vw", height: "100dvh", objectFit: "cover" }
+    : fullViewport
+      ? { maxWidth: "100vw", maxHeight: "100dvh" }
+      : { maxWidth: "96vw", maxHeight: "calc(100dvh - 200px)" };
+
+  const placeholderStyle: React.CSSProperties = portrait
+    ? { width: "100vw", height: "100dvh" }
+    : {
+        width: fullViewport
+          ? "min(100vw, calc(100dvh * 16 / 9))"
+          : "min(96vw, calc((100dvh - 200px) * 16 / 9))",
+      };
 
 
   return (
@@ -305,11 +339,11 @@ export function PlayCanvas({
       className={`flex flex-col items-center ${fullViewport ? "w-full h-full justify-center" : "w-full"}`}
     >
       {/* Hidden audio element — voice playback for the current beat */}
-      {audioBase64 && (
+      {audioSrc && (
         <audio
-          key={audioBase64.slice(-48)}
+          key={audioSrc.slice(-48)}
           ref={audioRef}
-          src={`data:${audioMime ?? "audio/wav"};base64,${audioBase64}`}
+          src={audioSrc}
           preload="auto"
           onLoadedMetadata={handleAudioMetadata}
           onError={handleAudioError}
@@ -323,22 +357,23 @@ export function PlayCanvas({
           style={{ boxShadow: fullViewport ? "none" : SHADOW }}
         >
           {/* Background image — Runware CDN URL or data URI (mock mode).
-              The width/height attributes are NOT rendered dimensions (w-auto
-              h-auto + the maxWidth/maxHeight in sizeStyle still drive the
-              final layout); they give the browser an intrinsic aspect ratio
-              so that, while the bytes are still arriving from the CDN, the
-              <img> reserves a 1792:1024 box instead of collapsing to a
-              one-pixel sliver — fixes the "等很久 → 一根线 → 突然出图" jank. */}
+              The width/height attributes give the browser the intrinsic aspect
+              ratio (1792:1024 landscape / 1024:1792 portrait) so that, while the
+              bytes are still arriving from the CDN, the <img> reserves the right
+              box instead of collapsing to a one-pixel sliver — fixes the
+              "等很久 → 一根线 → 突然出图" jank. Landscape uses w-auto/h-auto +
+              maxWidth/maxHeight (contain); portrait switches sizeStyle to
+              100vw×100dvh with object-fit:cover (full-bleed, no letterbox). */}
           <img
             key={imageUrl.slice(-48)}
             ref={imgRef}
             src={imageUrl}
-            width={1792}
-            height={1024}
+            width={intrinsicW}
+            height={intrinsicH}
             alt="Generated scene"
             onClick={handleImageClick}
             draggable={false}
-            className={`block w-auto h-auto select-none animate-fade-in transition-opacity duration-700 ease-out ${
+            className={`block ${portrait ? "" : "w-auto h-auto"} select-none animate-fade-in transition-opacity duration-700 ease-out ${
               interactive ? "cursor-pointer" : "cursor-wait"
             } ${dimmed ? "opacity-40" : "opacity-100"}`}
             style={sizeStyle}
@@ -361,15 +396,29 @@ export function PlayCanvas({
           )}
 
           {beat && (
-            <div className="absolute inset-0 flex flex-col justify-end pointer-events-none select-none">
+            <div
+              className="absolute inset-0 flex flex-col justify-end pointer-events-none select-none"
+              style={
+                portrait
+                  ? { paddingBottom: "env(safe-area-inset-bottom)" }
+                  : undefined
+              }
+            >
               {choices.length > 0 && (
-                <div className="pointer-events-auto px-[3%] pb-[1.5%] flex gap-[1.5%] items-stretch">
+                <div
+                  className={`pointer-events-auto px-[3%] pb-[1.5%] flex items-stretch ${
+                    portrait
+                      ? "flex-col gap-2 max-h-[45dvh] overflow-y-auto"
+                      : "gap-[1.5%]"
+                  }`}
+                >
                   {choices.map((choice, i) => (
                     <ChoiceButton
                       key={choice.id}
                       index={i}
                       label={choice.label}
                       disabled={phase !== "ready"}
+                      vertical={portrait}
                       onClick={() => onSelectChoice(choice)}
                     />
                   ))}
@@ -407,7 +456,9 @@ export function PlayCanvas({
 
                   {beat.speaker && (
                     <p
-                      className="font-serif text-[11px] md:text-[12px] smallcaps mb-[0.6em]"
+                      className={`font-serif smallcaps mb-[0.6em] ${
+                        portrait ? "text-[13px]" : "text-[11px] md:text-[12px]"
+                      }`}
                       style={{ color: "rgba(205,165,90,0.92)" }}
                     >
                       {beat.speaker}
@@ -415,15 +466,17 @@ export function PlayCanvas({
                   )}
 
                   <p
-                    className="font-serif leading-[1.85] text-[13px] md:text-[15px]"
+                    className={`font-serif leading-[1.85] ${
+                      portrait ? "text-[16px]" : "text-[13px] md:text-[15px]"
+                    }`}
                     style={{ color: "rgba(245,235,210,0.95)" }}
                   >
                     {typedBody}
                     {beat.speaker && beat.narration && (
                       <span
-                        className={`block mt-[0.5em] italic text-[12px] md:text-[13px] transition-opacity duration-300 ${
-                          typingDone ? "opacity-100" : "opacity-0"
-                        }`}
+                        className={`block mt-[0.5em] italic transition-opacity duration-300 ${
+                          portrait ? "text-[14px]" : "text-[12px] md:text-[13px]"
+                        } ${typingDone ? "opacity-100" : "opacity-0"}`}
                         style={{ color: "rgba(200,185,155,0.78)" }}
                         aria-hidden={!typingDone}
                       >
@@ -488,11 +541,10 @@ export function PlayCanvas({
         </div>
       ) : (
         <div
-          className="relative aspect-video bg-cream-200 flex flex-col items-center justify-center gap-4"
-          style={{
-            width: placeholderWidth,
-            boxShadow: fullViewport ? "none" : SHADOW,
-          }}
+          className={`relative bg-cream-200 flex flex-col items-center justify-center gap-4 ${
+            portrait ? "" : "aspect-video"
+          }`}
+          style={{ ...placeholderStyle, boxShadow: fullViewport ? "none" : SHADOW }}
         >
           <div className="w-1.5 h-1.5 bg-clay-500 rounded-full animate-slow-pulse" />
           <p className="text-[9px] smallcaps text-clay-500 animate-slow-pulse">

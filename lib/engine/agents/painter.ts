@@ -4,6 +4,7 @@ import type {
   Beat,
   Character,
   EngineConfig,
+  Orientation,
   ProviderConfig,
 } from "@infiplot/types";
 import { mockImageDataUri } from "../mockImage";
@@ -54,6 +55,11 @@ export type PainterInput = {
    * session paints — even before any priorScene exists.
    */
   styleReferenceImage?: string;
+  /**
+   * Session-locked output aspect. Drives both the Painter prompt's framing
+   * rules and the generated image's pixel dimensions. Default "landscape".
+   */
+  orientation?: Orientation;
 };
 
 // Pick the references we send to Runware as `referenceImages`. Priority:
@@ -142,13 +148,14 @@ export async function runPainter(
   entryBeat: Beat | undefined,
 ): Promise<PainterResult> {
   if (config.mockImage) {
-    return { kind: "mock", imageUrl: await mockImageDataUri() };
+    return { kind: "mock", imageUrl: await mockImageDataUri(input.orientation) };
   }
 
   const prompt = buildPainterPrompt(
     input.integratedPrompt,
     input.styleGuide,
     input.onStageCharacters,
+    input.orientation,
   );
 
   const refs = collectReferenceImages(
@@ -165,7 +172,7 @@ export async function runPainter(
     const r = await tryGenerate(
       config.image,
       prompt,
-      { referenceImages: refs },
+      { referenceImages: refs, orientation: input.orientation },
       `referenceImages (${refs.length})`,
     );
     if (r) return { kind: "real", imageUrl: r.imageUrl, imageUuid: r.imageUuid };
@@ -174,6 +181,8 @@ export async function runPainter(
   // Tier B — pure text-to-image. Last resort, used when Tier A failed OR
   // there are no references to send (first scene with no characters yet).
   // Errors here propagate to the caller.
-  const r = await generateImage(config.image, prompt);
+  const r = await generateImage(config.image, prompt, {
+    orientation: input.orientation,
+  });
   return { kind: "real", imageUrl: r.imageUrl, imageUuid: r.imageUuid };
 }

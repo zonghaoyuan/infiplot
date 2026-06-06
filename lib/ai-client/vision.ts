@@ -1,5 +1,12 @@
-import type { ProviderConfig } from "@infiplot/types";
+import { generateText } from "ai";
+import type { ModelMessage } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import type { ProviderConfig, ProviderProtocol } from "@infiplot/types";
 import { fetchWithRetry } from "./fetchWithRetry";
+import { normalizeBaseUrl } from "./normalizeUrl";
+
+const VISION_TIMEOUT_MS = 60_000;
 
 export async function interpretClick(
   config: ProviderConfig,
@@ -16,6 +23,11 @@ export async function interpretClick(
   );
 }
 
+// text/vision default to the OpenAI-compatible wire protocol when unset.
+function resolveVisionProtocol(config: ProviderConfig): ProviderProtocol {
+  return config.provider ?? "openai_compatible";
+}
+
 /**
  * General single-image vision call. Accepts a complete data URL (preserves
  * the source mime type, e.g. webp/jpeg) and lets the caller opt out of
@@ -27,7 +39,65 @@ export async function analyzeImageDataUrl(
   prompt: string,
   opts: { responseFormat?: "json_object" | "text" } = {},
 ): Promise<string> {
-  const url = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+  const protocol = resolveVisionProtocol(config);
+  if (protocol === "anthropic" || protocol === "google") {
+    return analyzeViaAiSdk(config, imageDataUrl, prompt, protocol);
+  }
+  return analyzeOpenAiCompatible(config, imageDataUrl, prompt, opts);
+}
+
+// Native Anthropic / Gemini multimodal via the AI SDK. The image part takes
+// the full data URL directly; the SDK decodes it. response_format is not sent
+// (no JSON mode on Anthropic) — the engine's parseJsonLoose handles output.
+async function analyzeViaAiSdk(
+  config: ProviderConfig,
+  imageDataUrl: string,
+  prompt: string,
+  protocol: "anthropic" | "google",
+): Promise<string> {
+  const baseURL = normalizeBaseUrl(config.baseUrl, protocol);
+  const model =
+    protocol === "anthropic"
+      ? createAnthropic({ apiKey: config.apiKey, baseURL })(config.model)
+      : createGoogleGenerativeAI({ apiKey: config.apiKey, baseURL })(
+          config.model,
+        );
+
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        { type: "image", image: imageDataUrl },
+      ],
+    },
+  ];
+
+  const timeoutCtrl = new AbortController();
+  const timeoutId = setTimeout(() => timeoutCtrl.abort(), VISION_TIMEOUT_MS);
+  try {
+    const { text } = await generateText({
+      model,
+      messages,
+      temperature: 0.2,
+      abortSignal: timeoutCtrl.signal,
+    });
+    if (typeof text !== "string" || text.length === 0) {
+      throw new Error(`Vision API (AI SDK ${protocol}) returned no content.`);
+    }
+    return text;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function analyzeOpenAiCompatible(
+  config: ProviderConfig,
+  imageDataUrl: string,
+  prompt: string,
+  opts: { responseFormat?: "json_object" | "text" } = {},
+): Promise<string> {
+  const url = `${normalizeBaseUrl(config.baseUrl, "openai_compatible")}/chat/completions`;
 
   const body: Record<string, unknown> = {
     model: config.model,
@@ -47,7 +117,7 @@ export async function analyzeImageDataUrl(
   }
 
   const timeoutCtrl = new AbortController();
-  const timeoutId = setTimeout(() => timeoutCtrl.abort(), 60_000);
+  const timeoutId = setTimeout(() => timeoutCtrl.abort(), VISION_TIMEOUT_MS);
 
   let res: Response;
   try {

@@ -1,5 +1,7 @@
 import { chat } from "@infiplot/ai-client";
+import { coerceOrientation } from "@infiplot/types";
 import type {
+  Beat,
   Character,
   EngineConfig,
   InsertBeatPartial,
@@ -8,6 +10,7 @@ import type {
   Session,
   StoryState,
   StoryStatePatch,
+  WriterPlan,
 } from "@infiplot/types";
 import type { CharacterCard } from "./agents/characterDesigner";
 import {
@@ -18,12 +21,14 @@ import {
 } from "./agents/characterDesigner";
 import { runCinematographer } from "./agents/cinematographer";
 import { runPainter } from "./agents/painter";
+import type { WriterBeatsOutput } from "./agents/writer";
 import {
-  collectActiveCharacterNames,
   isPovName,
   normalizeSpeakerName,
   POV_DISPLAY_NAME,
-  runWriter,
+  runWriterBeats,
+  runWriterPlan,
+  synthesizeFallbackBeats,
 } from "./agents/writer";
 import { parseJsonLoose } from "./jsonParser";
 import { INSERT_BEAT_SYSTEM, buildInsertBeatUserMessage } from "./prompts";
@@ -33,25 +38,25 @@ import { INSERT_BEAT_SYSTEM, buildInsertBeatUserMessage } from "./prompts";
 //
 //  Critical path (per Scene call):
 //
-//    Writer LLM (~3s, serial)
+//    Writer PHASE A — plan LLM (scene skeleton only, serial)
 //      │
-//      ├─ CharacterCard LLM × N        (parallel per new char — TEXT only)
-//      ├─ Cinematographer LLM          (parallel with the cards)
-//      │
-//      └─ wait for cards + cinema
-//      │
-//      ├─ entry-beat portraits   ──┐  (block the Painter — its refs)
-//      ▼                           │
-//    Painter — generateImage       │  (overlapped, NOT on the paint path):
-//      with referenceImages        ├─ non-entry-beat portraits
-//      │                           └─ ALL voice provisioning + orphan voices
+//      ├──────────────────────────┬───────────────────────────────────────┐
+//      ▼                           ▼                                       │
+//    Writer PHASE B            image pipeline (concurrent):                 │
+//    beats LLM                   CharacterCard LLM × N ∥ Cinematographer    │
+//    (full dialogue,             → entry-beat portraits (block Painter)     │
+//     overlapped)                → Painter (generateImage w/ refs)          │
+//      │                         → await overlapped: rest portraits+voices  │
+//      └──────────────────────────► await Phase B ◄────────────────────────┘
 //      ▼
-//    await the overlapped work, fold into the registry
-//      │
-//      ▼
-//    return { scene, sceneImageUrl, characters, storyState }
+//    assemble Scene → { scene, sceneImageUrl, characters, storyState }
 //
-//  Two deliberate decouplings unlock the parallelism:
+//  Why split the Writer (the latency win): the image pipeline only needs the
+//  scene SUMMARY + entry roster + cast (Phase A) — NOT the dialogue (Phase B).
+//  Writing beats used to sit serially in FRONT of the image; now it overlaps
+//  it, so the floor is max(beats, image) instead of beats + image.
+//
+//  The decouplings that unlock the rest of the parallelism:
 //   1. The Cinematographer only POSITIONS named characters, so it needs no
 //      visualDescription and runs alongside the card LLMs.
 //   2. The Painter only needs visualDescription TEXT (all on-stage) + the
@@ -163,31 +168,60 @@ export async function directScene(
 ): Promise<SceneResult> {
   const tTotal = Date.now();
 
-  // Stage 1 — Writer (serial; everything downstream needs sceneSummary +
-  // beats[] to know who's on stage and what to compose around).
-  const tWriter = Date.now();
-  const writerOut = await runWriter(config.text, session);
-  tlog("[directScene] Writer", tWriter);
+  // ── Phase A — Writer PLAN (serial). The image pipeline needs the scene
+  // summary + entry roster + cast to start, but NOT the dialogue beats. This
+  // call is small (skeleton only), so it returns fast and unblocks everything.
+  const tPlan = Date.now();
+  const plan = await runWriterPlan(config.text, session);
+  tlog("[directScene] Phase A (plan)", tPlan);
 
-  // Identify NEW characters introduced by this scene that need to be
-  // designed (LLM + portrait + voice). Existing characters in the registry
-  // are skipped — their cards / portraits / voices persist across scenes.
-  const allActiveNames = collectActiveCharacterNames(writerOut.beats);
-  const newCharNames = allActiveNames.filter(
+  // ── Phase B — Writer BEATS, launched NOW so its (longer) output overlaps the
+  // ENTIRE image pipeline below. Only needed to assemble the final Scene, so we
+  // await it last. A failure degrades to a single playable beat from the plan.
+  const tBeats = Date.now();
+  const beatsPromise: Promise<WriterBeatsOutput> = runWriterBeats(
+    config.text,
+    session,
+    plan,
+  )
+    .then((out) => {
+      tlog("[directScene] Phase B (beats)", tBeats);
+      return out;
+    })
+    .catch((err): WriterBeatsOutput => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[directScene] Phase B (beats) failed, using fallback: ${msg}`,
+      );
+      return { beats: synthesizeFallbackBeats(plan), storyStatePatch: undefined };
+    });
+
+  // NEW characters to design come from the PLAN's cast (so design fires in
+  // parallel with Phase B, not after the beats are written). Existing
+  // characters keep their cards / portraits / voices across scenes.
+  const newCharNames = plan.cast.filter(
     (n) => !session.characters.some((c) => c.name === n),
   );
 
-  // Find the entry beat for the Cinematographer (which characters are
-  // on-screen in the establishing shot).
-  const entryBeat = writerOut.beats.find((b) => b.id === writerOut.entryBeatId);
-  const entryBeatActive = entryBeat?.activeCharacters ?? [];
+  // Entry-beat composition is the PLAN's (Phase B is constrained to honor it).
+  // The Painter needs a Beat-shaped object for reference collection, but the
+  // real beat isn't written until Phase B — so synthesize one from the plan
+  // (collectReferenceImages only reads speaker + activeCharacters).
+  const entryBeatActive = plan.entryActiveCharacters;
+  const entryBeatSpeaker = plan.entrySpeaker;
+  const entryBeatForPaint: Beat = {
+    id: plan.entryBeatId,
+    speaker: entryBeatSpeaker,
+    activeCharacters: entryBeatActive.length > 0 ? entryBeatActive : undefined,
+    next: { type: "continue", nextBeatId: plan.entryBeatId },
+  };
 
   // For sceneKey-based visual continuity, look up the prior matching scene's
   // image to slot into Painter's referenceImages (max 4 of which include
   // character portraits too).
   const { priorSceneReference, priorSceneKey } = pickPriorSceneReference(
     session,
-    writerOut.sceneKey,
+    plan.sceneKey,
   );
 
   // ── Stage 2 — character cards (LLM) ∥ Cinematographer ──────────────────
@@ -211,12 +245,12 @@ export async function directScene(
   );
 
   const cinemaPromise = runCinematographer(config.text, {
-    sceneSummary: writerOut.sceneSummary,
+    sceneSummary: plan.sceneSummary,
     styleGuide: session.styleGuide,
     entryBeatActive,
-    entryBeatSpeaker: entryBeat?.speaker,
+    entryBeatSpeaker,
     priorSceneKey,
-    currentSceneKey: writerOut.sceneKey,
+    currentSceneKey: plan.sceneKey,
   });
 
   const [cards, cinemaOut] = await Promise.all([
@@ -242,8 +276,8 @@ export async function directScene(
   // Entry-beat character names: the ONLY portraits the Painter references
   // (collectReferenceImages slots in the entry beat's speaker + activeChars).
   const entryNames = new Set<string>();
-  if (entryBeat?.speaker && !isPovName(entryBeat.speaker)) {
-    entryNames.add(entryBeat.speaker);
+  if (entryBeatSpeaker && !isPovName(entryBeatSpeaker)) {
+    entryNames.add(entryBeatSpeaker);
   }
   for (const c of entryBeatActive) {
     if (!isPovName(c.name)) entryNames.add(c.name);
@@ -281,24 +315,6 @@ export async function directScene(
     ),
   );
 
-  // Edge case: a speaker the Writer referenced without listing in any beat's
-  // activeCharacters. collectActiveCharacterNames already includes speakers,
-  // so this is a rare defensive net. Provision a voice only (never on-screen).
-  const speakerNames = new Set(
-    writerOut.beats.map((b) => b.speaker).filter((n): n is string => Boolean(n)),
-  );
-  const orphanSpeakers = [...speakerNames].filter(
-    // Pattern B: "你" (player) is a valid speaker but never gets a Character
-    // record — TTS is intentionally skipped on the client.
-    (n) =>
-      !isPovName(n) &&
-      !characters.some((c) => c.name === n) &&
-      !cards.some((c) => c.name === n),
-  );
-  const orphanPromises = orphanSpeakers.map((n) =>
-    provisionVoiceForName(config, session, n),
-  );
-
   // Block the Painter ONLY on entry-beat portraits (its referenceImages).
   const entryPortraits = await Promise.all(entryPortraitPromises);
   characters = mergeCharacters(
@@ -313,11 +329,13 @@ export async function directScene(
   tlog("[directScene] entry-beat portraits", tProvision);
 
   // ── Stage 4 — Painter (depends on cinemaOut + on-stage visual cards +
-  // entry portraits). On-stage = everyone named in any beat, so the archetype
-  // block covers anyone the player might encounter in this scene.
-  const onStageCharacters = characters.filter((c) =>
-    allActiveNames.includes(c.name),
-  );
+  // entry portraits). On-stage = the plan's cast (everyone who'll appear),
+  // filtered to those now in the registry, so the archetype block covers them.
+  const onStageCharacters = characters.filter((c) => plan.cast.includes(c.name));
+
+  // Session-locked orientation (set at session start). Threads into both the
+  // Painter prompt's framing rules and the generated image's pixel dimensions.
+  const orientation = coerceOrientation(session.orientation);
 
   const tPainter = Date.now();
   const painted = await runPainter(
@@ -328,19 +346,19 @@ export async function directScene(
       onStageCharacters,
       priorSceneImage: priorSceneReference,
       styleReferenceImage: session.styleReferenceImage,
+      orientation,
     },
-    entryBeat,
+    entryBeatForPaint,
   );
   tlog("[directScene] Painter", tPainter);
 
-  // Fold in the work that overlapped the paint: remaining portraits, all
-  // voices, and any orphan-speaker voices. Awaited before returning so the
-  // session the client persists is fully provisioned for later scenes.
+  // Fold in the work that overlapped the paint: remaining portraits + all
+  // voices. Awaited before returning so the session the client persists is
+  // fully provisioned for later scenes.
   const tOverlap = Date.now();
-  const [restPortraits, voicedChars, orphanChars] = await Promise.all([
+  const [restPortraits, voicedChars] = await Promise.all([
     Promise.all(restPortraitPromises),
     Promise.all(voicePromises),
-    Promise.all(orphanPromises),
   ]);
   characters = mergeCharacters(
     characters,
@@ -352,10 +370,31 @@ export async function directScene(
     })),
   );
   characters = mergeCharacters(characters, voicedChars);
-  if (orphanChars.length > 0) {
+  tlog("[directScene] overlapped portraits+voices", tOverlap);
+
+  // ── Await Phase B — it overlapped the whole image pipeline above. ──────
+  const beatsOut = await beatsPromise;
+  const beats = beatsOut.beats;
+
+  // entryBeatId is guaranteed present (runWriterBeats pins it onto a beat), but
+  // keep the defensive fallback for the synthesized-fallback path.
+  const entryBeatId = beats.some((b) => b.id === plan.entryBeatId)
+    ? plan.entryBeatId
+    : beats[0]!.id;
+
+  // Orphan-speaker voices: a beat speaker Phase B used that isn't in the
+  // registry. Should be rare — the prompt constrains speakers to the cast, and
+  // every cast member was provisioned above — so this is a defensive net,
+  // serial but skipped entirely (zero latency) in the common case.
+  const orphanSpeakers = [
+    ...new Set(beats.map((b) => b.speaker).filter((n): n is string => Boolean(n))),
+  ].filter((n) => !isPovName(n) && !characters.some((c) => c.name === n));
+  if (orphanSpeakers.length > 0) {
+    const orphanChars = await Promise.all(
+      orphanSpeakers.map((n) => provisionVoiceForName(config, session, n)),
+    );
     characters = mergeCharacters(characters, orphanChars);
   }
-  tlog("[directScene] overlapped portraits+voices", tOverlap);
 
   const scene: Scene = {
     id: newSceneId(),
@@ -365,11 +404,12 @@ export async function directScene(
     // anything that already reads scene.scenePrompt (e.g., insert-beat
     // user prompt).
     scenePrompt: cinemaOut.integratedPrompt,
-    beats: writerOut.beats,
-    entryBeatId: writerOut.entryBeatId,
-    sceneKey: writerOut.sceneKey,
+    beats,
+    entryBeatId,
+    sceneKey: plan.sceneKey,
     imageUuid: painted.kind === "real" ? painted.imageUuid : undefined,
     imageUrl: painted.imageUrl,
+    orientation,
   };
 
   // Merge the Writer's volatile memory rewrite onto the carried bible so the
@@ -377,7 +417,7 @@ export async function directScene(
   // client persists it back into the session).
   const storyState = applyStoryStatePatch(
     session.storyState,
-    writerOut.storyStatePatch,
+    beatsOut.storyStatePatch,
   );
 
   tlog("[directScene] TOTAL", tTotal);

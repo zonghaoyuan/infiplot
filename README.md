@@ -125,7 +125,7 @@ InfiPlot 同时支持部署到 Vercel 与 Cloudflare Workers。Cloudflare 部署
 
 ## 配置教程
 
-InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Vision）都使用 OpenAI 兼容的接口**，可以自由搭配。**图像（Image）**目前接入 **Runware**（其自有的 task-array 协议，并非 OpenAI 兼容）。**语音（TTS）**使用**小米 MiMo** 自有的音色设计/克隆协议——支持角色级音色设计、克隆与逐行演绎指导。
+InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Vision）** 默认使用 OpenAI 兼容接口，也可原生切换到 **Anthropic** 或 **Google Gemini**。**图像（Image）** 支持 **Runware**（其自有 task-array 协议）、**OpenAI**（`gpt-image`）与 **Google Gemini**（Nano Banana）。**语音（TTS）**使用**小米 MiMo** 自有的音色设计/克隆协议——支持角色级音色设计、克隆与逐行演绎指导。
 
 **1. 选择你的供应商**
 
@@ -135,6 +135,18 @@ InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Visio
 | Image · 场景渲染  | `IMAGE_BASE_URL` `IMAGE_API_KEY` `IMAGE_MODEL`     | ✅ | [Runware](https://runware.ai) 的 `runware:400@6`（FLUX.2 [klein] 9B KV） |
 | Vision · 点击解读  | `VISION_BASE_URL` `VISION_API_KEY` `VISION_MODEL`  | ✅ | Google 的 `gemini-3.5-flash` |
 | TTS · 角色配音 | `TTS_BASE_URL` `TTS_API_KEY` `TTS_SPEECH_MODEL` | 可选 —— 留空则静音运行 | 小米 MiMo 的 `mimo-v2.5-tts` |
+
+> **可选 · 指定接口协议**：每类模型都可加一个 `*_PROVIDER` 变量（`TEXT_PROVIDER` / `VISION_PROVIDER` / `IMAGE_PROVIDER`）显式选择接口协议。**不设则保持向后兼容**——文本/视觉默认走 OpenAI 兼容接口，图像按 `*_BASE_URL` 自动判断（`runware.ai` → Runware，否则 OpenAI 兼容；个别在 `runware.ai` 上以 OpenAI 协议提供的模型——如 `image-2-vip`——会按 OpenAI 兼容处理，需要时用 `IMAGE_PROVIDER` 显式覆盖即可）。
+>
+> | 取值 | 适用 | 说明 |
+> |---|---|---|
+> | `openai_compatible`（默认） | Text · Vision · Image | OpenAI Chat Completions / `/images/generations` |
+> | `anthropic` | Text · Vision | 原生 Anthropic Messages 接口 |
+> | `google` | Text · Vision · Image | 原生 Gemini；图像用 Nano Banana 系（如 `gemini-2.5-flash-image`，**勿用 Imagen（已废弃，2026-06-24 停服）**） |
+> | `openai` | Image | OpenAI `gpt-image`，支持参考图编辑 |
+> | `runware` | Image | Runware task-array 协议 |
+>
+> 此外，`*_BASE_URL` 带不带 `/v1`（甚至末尾多写了 `/chat/completions`）都能正常工作——引擎会自动规范化。
 
 **2. 填写环境变量**
 
@@ -157,6 +169,12 @@ InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Visio
 **4. 图片代理（可选）**
 
 默认浏览器直连图片供应商，无需任何配置 —— 留空 `NEXT_PUBLIC_IMAGE_PROXY_URL` 即可，完全不受影响。只有当你遇到图片「层层加载」（Chrome 在某些网络下 `ERR_QUIC_PROTOCOL_ERROR` 导致 PNG 逐行渲染）时才需要它：部署一个极小的 Cloudflare Worker，把图片改为服务端转发 + HTTP/2 原子返回。一键部署见 **[infiplot-image-proxy](https://github.com/zonghaoyuan/infiplot-image-proxy)**，然后把它给出的 `workers.dev` 地址填进 `NEXT_PUBLIC_IMAGE_PROXY_URL`。
+
+**5. 玩家自带配音 Key（可选，推荐）**
+
+小米对 TTS 模型有 RPM/TPM 限额。当你的公共部署有多人同时游玩、共用同一把 `TTS_API_KEY` 时，很容易撞到限额，表现为**剧情、画面都正常，唯独没有声音**。为此，玩家可以在首页可选地填入**自己的**小米 MiMo Key（免费申请）——配音请求由**浏览器直连小米**完成，**Key 只存在玩家本地、绝不经过你的服务器**，从而获得稳定配音与更低延迟。这是纯增强：不填则照常使用你部署的服务器 Key，行为不变。
+
+申请与填写步骤见 [自带配音 Key 教程](docs/xiaomi-tts-key.md)。
 
 ---
 

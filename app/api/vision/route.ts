@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 // Browser annotator resizes to 768 wide → typically 200-800 KB base64.
 // 3 MB caps abusive direct-API payloads (which would inflate upstream

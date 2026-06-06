@@ -12,6 +12,7 @@ import type {
   VisionRequest,
   VisionResponse,
 } from "@infiplot/types";
+import { coerceOrientation } from "@infiplot/types";
 import { runArchitect } from "./agents/architect";
 import { directInsertBeat, directScene } from "./director";
 import { synthesizeBeat } from "./voice";
@@ -48,6 +49,7 @@ export async function startSession(
     history: [],
     characters: [],
     styleReferenceImage: req.styleReferenceImage?.trim() || undefined,
+    orientation: coerceOrientation(req.orientation),
   };
 
   // Stage 0 — Architect: expand the terse world/style prompt into a story
