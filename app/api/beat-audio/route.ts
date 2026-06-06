@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const config = loadEngineConfig(req.headers);
+    const config = loadEngineConfig();
     const result = await requestBeatAudio(config, body);
     if (!result.audio) return new Response(null, { status: 204 });
     const binary = Buffer.from(result.audio.base64, "base64");

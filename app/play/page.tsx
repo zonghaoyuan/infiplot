@@ -33,7 +33,6 @@ import type {
   VisionResponse,
 } from "@infiplot/types";
 import { track } from "@/lib/analytics";
-import { getByoHeaders, isByoActive } from "@/lib/byoHeaders";
 
 const MUTED_STORAGE_KEY = "infiplot:muted";
 
@@ -328,7 +327,6 @@ function prefetchScenePath(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getByoHeaders(),
       },
       body: JSON.stringify({ session: stripVoicesForTransport(specSession), clientTts }),
       signal: abort.signal,
@@ -651,7 +649,6 @@ function PlayInner() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              ...getByoHeaders(),
             },
             body: JSON.stringify({
               beat: { id: beat.id, line: beat.line, lineDelivery: beat.lineDelivery },
@@ -933,7 +930,6 @@ function PlayInner() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...getByoHeaders(),
           },
           body: JSON.stringify({
             ...livePayload,
@@ -1168,7 +1164,6 @@ function PlayInner() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getByoHeaders(),
         },
         body: JSON.stringify({
           session: stripVoicesForTransport(specSession),
@@ -1196,7 +1191,6 @@ function PlayInner() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getByoHeaders(),
         },
         body: JSON.stringify({ session: stripVoicesForTransport(session), annotatedImageBase64 }),
       });
@@ -1215,7 +1209,6 @@ function PlayInner() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...getByoHeaders(),
           },
           body: JSON.stringify({
             session: stripVoicesForTransport(session),
@@ -1302,7 +1295,6 @@ function PlayInner() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              ...getByoHeaders(),
             },
             body: JSON.stringify({
               session: stripVoicesForTransport(specSession),
@@ -1335,8 +1327,6 @@ function PlayInner() {
   // ── Render ────────────────────────────────────────────────────────────
 
   if (error) {
-    const byoOn = isByoActive();
-
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-8">
         <div className="max-w-md text-center animate-fade-in">
@@ -1346,14 +1336,9 @@ function PlayInner() {
           <p className="font-serif italic text-clay-900 text-lg leading-[1.7] mb-6">
             {error}
           </p>
-          {byoOn && (
-            <p className="font-sans text-xs text-ember-600 mb-10 leading-relaxed">
-              提示：当前已启用「自带 API」。如果请求失败，请返回首页并检查右上角 API 配置的 Key、Endpoint 和 Model 是否正确，并确认您的服务额度充足。
-            </p>
-          )}
           <Link
             href="/"
-            className={"text-[10px] smallcaps text-clay-700 hover:text-ember-500 transition-colors inline-flex items-center gap-3" + (byoOn ? "" : " mt-4")}
+            className="mt-4 text-[10px] smallcaps text-clay-700 hover:text-ember-500 transition-colors inline-flex items-center gap-3"
           >
             <i className="fa-solid fa-arrow-left text-[9px]" />
             返 回

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
 import {
   ART_STYLES,
@@ -11,7 +11,6 @@ import {
   type Gender,
 } from "@/lib/options";
 import { readStoredTtsConfig } from "@/lib/clientTtsConfig";
-import { BYO_STORAGE_KEY, getByoHeaders } from "@/lib/byoHeaders";
 import { TtsKeyModal } from "@/components/TtsKeyModal";
 
 /* ============================================================================
@@ -700,93 +699,6 @@ const DISPLAY_ORDER: Record<Gender, number[]> = {
   女性向: Array.from({ length: 30 }, (_, i) => i),
 };
 
-/* ---------- BYO API config ---------- */
-/* 「自带 API」首页右上角入口里持有的配置：LLM / 画师两段独立 toggle，因为很多
-   用户只想换其中一段（画师 key 比 LLM key 难拿）。整份配置只落 localStorage，
-   后端路由如何消费（请求头夹带 / sessionStorage 透传等）由后续 PR 处理。 */
-
-type ByoSection = {
-  enabled: boolean;
-  provider: string;
-  endpoint: string;
-  apiKey: string;
-  model: string;
-};
-
-type ByoApiConfig = {
-  llm: ByoSection;
-  painter: ByoSection;
-};
-
-type ByoProvider = { label: string; endpoint: string; modelHint: string };
-
-const LLM_PROVIDERS: Record<string, ByoProvider> = {
-  openai: { label: "OpenAI", endpoint: "https://api.openai.com/v1", modelHint: "gpt-5 / gpt-4o" },
-  anthropic: { label: "Anthropic", endpoint: "https://api.anthropic.com/v1", modelHint: "claude-opus-4-7 …" },
-  compatible: { label: "OpenAI 兼容", endpoint: "", modelHint: "你部署的模型 ID" },
-  custom: { label: "自定义", endpoint: "", modelHint: "" },
-};
-
-const PAINTER_PROVIDERS: Record<string, ByoProvider> = {
-  runware: { label: "Runware", endpoint: "https://api.runware.ai/v1", modelHint: "runware:101@1 …" },
-  replicate: { label: "Replicate", endpoint: "https://api.replicate.com/v1", modelHint: "black-forest-labs/flux-1.1-pro" },
-  custom: { label: "自定义", endpoint: "", modelHint: "" },
-};
-
-const DEFAULT_BYO: ByoApiConfig = {
-  llm: {
-    enabled: false,
-    provider: "openai",
-    endpoint: LLM_PROVIDERS.openai!.endpoint,
-    apiKey: "",
-    model: "",
-  },
-  painter: {
-    enabled: false,
-    provider: "runware",
-    endpoint: PAINTER_PROVIDERS.runware!.endpoint,
-    apiKey: "",
-    model: "",
-  },
-};
-
-function normalizeByoSection(
-  s: unknown,
-  providers: Record<string, ByoProvider>,
-  defaultProvider: string,
-): ByoSection {
-  const obj = (s && typeof s === "object" ? s : {}) as Record<string, unknown>;
-  const provider =
-    typeof obj.provider === "string" && providers[obj.provider]
-      ? obj.provider
-      : defaultProvider;
-  return {
-    enabled: obj.enabled === true,
-    provider,
-    endpoint:
-      typeof obj.endpoint === "string"
-        ? obj.endpoint
-        : providers[provider]?.endpoint ?? "",
-    apiKey: typeof obj.apiKey === "string" ? obj.apiKey : "",
-    model: typeof obj.model === "string" ? obj.model : "",
-  };
-}
-
-function loadByoConfig(): ByoApiConfig {
-  try {
-    const raw = localStorage.getItem(BYO_STORAGE_KEY);
-    if (!raw) return DEFAULT_BYO;
-    const parsed: unknown = JSON.parse(raw);
-    const obj = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
-    return {
-      llm: normalizeByoSection(obj.llm, LLM_PROVIDERS, "openai"),
-      painter: normalizeByoSection(obj.painter, PAINTER_PROVIDERS, "runware"),
-    };
-  } catch {
-    return DEFAULT_BYO;
-  }
-}
-
 /* ---------- typewriter ---------- */
 
 // 父组件持有当前 phrase 的索引（这样 start() 不输入时能用当前闪动的那句
@@ -1062,10 +974,7 @@ function StyleModal({
       const resized = await resizeImageToDataUrl(file);
       const res = await fetch("/api/parse-style-image", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getByoHeaders(),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageDataUrl: resized }),
       });
       if (!res.ok) {
@@ -1454,270 +1363,6 @@ function StyleModal({
   );
 }
 
-/* ---------- BYO API modal ---------- */
-
-function ByoField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-[80px_1fr] items-center gap-3">
-      <span className="font-sans text-[10.5px] tracking-[0.16em] uppercase text-clay-500">
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
-
-function ByoSectionCard({
-  title,
-  subtitle,
-  iconClass,
-  value,
-  onChange,
-  providers,
-}: {
-  title: string;
-  subtitle: string;
-  iconClass: string;
-  value: ByoSection;
-  onChange: (patch: Partial<ByoSection>) => void;
-  providers: Record<string, ByoProvider>;
-}) {
-  const [showKey, setShowKey] = useState(false);
-  const providerMeta = providers[value.provider];
-  // 换 provider 时把 endpoint 重置为该 provider 的默认值——切到「自定义」就清空让用户自己填。
-  // 即便用户手动改过 endpoint 这里也会覆盖：换 provider 后旧 endpoint 多半已经无效。
-  const onProvider = (p: string) => {
-    const meta = providers[p];
-    if (!meta) return;
-    onChange({ provider: p, endpoint: meta.endpoint });
-  };
-  return (
-    <div className="rounded-sm border border-clay-900/12 bg-cream-100/40 p-5 md:p-6">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-clay-900/10 bg-cream-50 text-clay-500">
-            <i className={iconClass} />
-          </span>
-          <div className="flex flex-col">
-            <span className="font-serif text-base md:text-lg text-clay-900">{title}</span>
-            <span className="mt-0.5 font-sans text-[11.5px] leading-snug text-clay-500">
-              {subtitle}
-            </span>
-          </div>
-        </div>
-        <div className="inline-flex shrink-0 rounded-sm border border-clay-900/15 bg-cream-100 p-0.5">
-          <button
-            type="button"
-            onClick={() => onChange({ enabled: false })}
-            className={
-              "rounded-sm px-3 py-1 font-sans text-[11px] tracking-wide transition-colors " +
-              (!value.enabled
-                ? "bg-cream-50 text-clay-900 shadow-sm"
-                : "text-clay-500 hover:text-clay-700")
-            }
-          >
-            默认
-          </button>
-          <button
-            type="button"
-            onClick={() => onChange({ enabled: true })}
-            className={
-              "rounded-sm px-3 py-1 font-sans text-[11px] tracking-wide transition-colors " +
-              (value.enabled
-                ? "bg-ember-500 text-cream-50 shadow-sm"
-                : "text-clay-500 hover:text-clay-700")
-            }
-          >
-            自带
-          </button>
-        </div>
-      </div>
-
-      <div
-        className={
-          "grid grid-cols-1 gap-3 transition-opacity " +
-          (value.enabled ? "opacity-100" : "pointer-events-none select-none opacity-40")
-        }
-      >
-        <ByoField label="Provider">
-          <select
-            value={value.provider}
-            onChange={(e) => onProvider(e.target.value)}
-            className="h-10 w-full rounded-sm border border-clay-900/15 bg-cream-50 px-3 font-sans text-sm text-clay-900 outline-none transition-colors focus:border-ember-500"
-          >
-            {Object.entries(providers).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </ByoField>
-
-        <ByoField label="Endpoint">
-          <input
-            type="text"
-            value={value.endpoint}
-            onChange={(e) => onChange({ endpoint: e.target.value })}
-            placeholder="https://api.example.com/v1"
-            spellCheck={false}
-            className="h-10 w-full rounded-sm border border-clay-900/15 bg-cream-50 px-3 font-sans text-sm text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
-          />
-        </ByoField>
-
-        <ByoField label="API Key">
-          <div className="relative">
-            <input
-              type={showKey ? "text" : "password"}
-              value={value.apiKey}
-              onChange={(e) => onChange({ apiKey: e.target.value })}
-              placeholder="sk-•••"
-              autoComplete="off"
-              spellCheck={false}
-              className="h-10 w-full rounded-sm border border-clay-900/15 bg-cream-50 pl-3 pr-10 font-sans text-sm text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
-            />
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => setShowKey((s) => !s)}
-              aria-label={showKey ? "隐藏 key" : "显示 key"}
-              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-clay-400 transition-colors hover:text-clay-700"
-            >
-              <i className={"fa-regular text-sm " + (showKey ? "fa-eye-slash" : "fa-eye")} />
-            </button>
-          </div>
-        </ByoField>
-
-        <ByoField label="Model">
-          <input
-            type="text"
-            value={value.model}
-            onChange={(e) => onChange({ model: e.target.value })}
-            placeholder={providerMeta?.modelHint || "模型名 / ID"}
-            spellCheck={false}
-            className="h-10 w-full rounded-sm border border-clay-900/15 bg-cream-50 px-3 font-sans text-sm text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
-          />
-        </ByoField>
-      </div>
-    </div>
-  );
-}
-
-function ByoApiModal({
-  value,
-  onSave,
-  onClose,
-}: {
-  value: ByoApiConfig;
-  onSave: (cfg: ByoApiConfig) => void;
-  onClose: () => void;
-}) {
-  const [shown, setShown] = useState(false);
-  // 把 draft 与外部 value 分开：取消就丢弃，保存才落 localStorage。
-  // 这样用户可以随便拨 toggle / 改字段试，不满意点取消立刻回滚。
-  const [draft, setDraft] = useState<ByoApiConfig>(value);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-  const close = () => {
-    setShown(false);
-    setTimeout(onClose, 280);
-  };
-  const save = () => {
-    onSave(draft);
-    close();
-  };
-  return (
-    <div
-      onMouseDown={close}
-      className={
-        "fixed inset-0 z-[60] flex items-center justify-center p-6 md:p-10 transition-all duration-300 " +
-        (shown ? "bg-clay-900/30 backdrop-blur-md" : "bg-clay-900/0 backdrop-blur-0")
-      }
-    >
-      <div
-        onMouseDown={(e) => e.stopPropagation()}
-        className={
-          "flex max-h-[86vh] w-[680px] max-w-[94vw] flex-col overflow-hidden rounded-sm border border-clay-900/15 bg-cream-50 shadow-2xl shadow-clay-900/25 transition-all duration-300 " +
-          (shown ? "scale-100 opacity-100" : "scale-95 opacity-0")
-        }
-      >
-        <div className="flex items-start gap-5 border-b border-clay-900/10 px-6 py-5 md:px-8">
-          <div className="flex flex-col">
-            <span className="font-serif text-xl text-clay-900 md:text-2xl">自带 API</span>
-            <span className="mt-1 text-[11.5px] leading-relaxed text-clay-500">
-              默认使用 InfiPlot 提供的画师与 LLM。填入你自己的 key 后，这一台机器的所有生成都会走你的服务，不再消耗我们的额度。
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="关闭"
-            className="ml-auto text-xl leading-none text-clay-500 transition-colors hover:text-clay-900"
-          >
-            <i className="fa-solid fa-xmark" />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
-          <ByoSectionCard
-            title="LLM"
-            subtitle="剧情 / 角色 / 对白生成"
-            iconClass="fa-solid fa-feather text-base"
-            value={draft.llm}
-            onChange={(patch) =>
-              setDraft((d) => ({ ...d, llm: { ...d.llm, ...patch } }))
-            }
-            providers={LLM_PROVIDERS}
-          />
-          <ByoSectionCard
-            title="画师"
-            subtitle="场景图 / 立绘 / 风格"
-            iconClass="fa-solid fa-palette text-base"
-            value={draft.painter}
-            onChange={(patch) =>
-              setDraft((d) => ({ ...d, painter: { ...d.painter, ...patch } }))
-            }
-            providers={PAINTER_PROVIDERS}
-          />
-
-          <p className="px-1 font-sans text-[11.5px] leading-relaxed text-clay-500">
-            <i className="fa-regular fa-circle-question mr-1.5 text-clay-400" />
-            API key 只保存在你的浏览器（localStorage），不会上传到我们的服务器。
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 border-t border-clay-900/10 bg-cream-100/40 px-6 py-4 md:px-8">
-          <button
-            type="button"
-            onClick={() => setDraft(DEFAULT_BYO)}
-            className="font-sans text-xs text-clay-500 transition-colors hover:text-ember-500"
-          >
-            <i className="fa-solid fa-rotate-left mr-1.5" />
-            全部重置
-          </button>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={close}
-              className="px-4 py-1.5 font-sans text-sm text-clay-500 transition-colors hover:text-clay-900"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              className="rounded-sm bg-clay-900 px-5 py-1.5 font-sans text-sm text-cream-50 transition-colors hover:bg-ember-500"
-            >
-              保存
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ---------- page ---------- */
 
 export default function HomePage() {
@@ -1726,11 +1371,6 @@ export default function HomePage() {
   const [sel, setSel] = useState<number[]>(OPTS.map((o) => o.defaultIndex ?? 0));
   const [open, setOpen] = useState<number>(-1);
   const [styleOpen, setStyleOpen] = useState(false);
-  // 「自带 API」配置入口。byoActive 用于在 header 入口上挂 ember 小圆点表示已启用。
-  // 这份配置目前只落 localStorage——后端路由消费由后续 PR 处理。
-  const [byoApiOpen, setByoApiOpen] = useState(false);
-  const [byoApi, setByoApi] = useState<ByoApiConfig>(DEFAULT_BYO);
-  const byoActive = byoApi.llm.enabled || byoApi.painter.enabled;
   const [prompt, setPrompt] = useState("");
   // 用户在「自定义」入口里填的 styleGuide 文本（中/英文都行，原样喂给 LLM）。
   // 仅在内存里持有——刷新即丢，符合「这就是一次性试玩」的语义。
@@ -1794,19 +1434,6 @@ export default function HomePage() {
       /* ignore */
     }
   }, []);
-
-  useEffect(() => {
-    setByoApi(loadByoConfig());
-  }, []);
-
-  const saveByoApi = (cfg: ByoApiConfig) => {
-    setByoApi(cfg);
-    try {
-      localStorage.setItem(BYO_STORAGE_KEY, JSON.stringify(cfg));
-    } catch {
-      /* ignore */
-    }
-  };
 
   // 启动时回填「已启用」徽标——读 localStorage 判断用户是否已存过 Key。
   useEffect(() => {
@@ -1941,22 +1568,6 @@ export default function HomePage() {
           Infi<em className="italic font-light text-ember-500">Plot</em>
         </span>
         <div className="flex items-center gap-5">
-          <button
-            type="button"
-            onClick={() => setByoApiOpen(true)}
-            aria-label={byoActive ? "管理自带 API（已启用）" : "使用自己的 API key"}
-            title={byoActive ? "已启用自带 API" : "使用自己的 API key"}
-            className="inline-flex items-center gap-1.5 font-sans text-sm text-clay-500 transition-colors hover:text-ember-500"
-          >
-            <i className="fa-solid fa-sliders text-[13px]" />
-            API
-            {byoActive && (
-              <span
-                aria-hidden
-                className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-ember-500"
-              />
-            )}
-          </button>
           <a
             href="https://github.com/zonghaoyuan/infiplot"
             target="_blank"
@@ -2243,10 +1854,6 @@ export default function HomePage() {
           setCustomStyleRefImage={setCustomStyleRefImage}
         />
       )}
-      {byoApiOpen && (
-        <ByoApiModal value={byoApi} onSave={saveByoApi} onClose={() => setByoApiOpen(false)} />
-      )}
-
       {ttsOpen && (
         <TtsKeyModal
           onClose={() => setTtsOpen(false)}

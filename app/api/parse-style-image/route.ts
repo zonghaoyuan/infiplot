@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const config = loadEngineConfig(req.headers);
+    const config = loadEngineConfig();
     const raw = await analyzeImageDataUrl(
       config.vision,
       body.imageDataUrl,

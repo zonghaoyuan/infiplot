@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const config = loadEngineConfig(req.headers);
+    const config = loadEngineConfig();
     const result = await visionDecide(config, body);
     return NextResponse.json(result);
   } catch (err) {
