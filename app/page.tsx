@@ -1610,7 +1610,11 @@ export default function HomePage() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
                     e.preventDefault();
                     start();
                   }
@@ -1638,6 +1642,11 @@ export default function HomePage() {
                 <i className="fa-solid fa-arrow-right text-xs" />
               </button>
             </div>
+            {prompt && (
+              <p className="mt-2 text-right text-xs text-clay-400">
+                Enter 发送 · Shift+Enter 换行
+              </p>
+            )}
           </form>
 
           {/* 类别选择器（居中） */}
