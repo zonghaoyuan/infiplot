@@ -37,13 +37,35 @@ Free to play, no setup required: [infiplot.com](https://infiplot.com)
 
 ---
 
-## One-click deploy
+## Deploy
 
-InfiPlot deploys to both Vercel and Cloudflare Workers. Cloudflare deployment requires the Workers Paid Plan because the scene pipeline needs longer CPU time; for personal use, the one-click Vercel deploy is recommended.
+InfiPlot offers multiple deployment options. For personal use, we recommend the one-click Vercel deploy; to self-host on your own server or local machine, use Docker.
+
+### Vercel / Cloudflare (one-click)
+
+Cloudflare deployment requires the Workers Paid Plan because the scene pipeline needs longer CPU time.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%20uses%20MiMo%27s%20own%20protocol.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide) &nbsp; [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zonghaoyuan/infiplot)
 
 After deploy, fill in the environment variables — see the [Configuration guide](#configuration-guide) below. The repo root is the app itself: Vercel needs no special root directory; on Cloudflare, just set the build command to `pnpm build:cf`.
+
+### Docker (self-hosted)
+
+For VPS, home servers, or local machines. Supports x86 and ARM (including Apple Silicon Macs).
+
+1. Copy `.env.example` to `.env.local` and fill in your API keys (see [Configuration guide](#configuration-guide))
+2. Start:
+
+```bash
+docker compose up -d
+```
+
+Visit `http://localhost:3000` to start playing.
+
+> You can also run the image directly without Compose:
+> ```bash
+> docker run -d -p 3000:3000 --env-file .env.local ghcr.io/zonghaoyuan/infiplot:latest
+> ```
 
 ---
 
