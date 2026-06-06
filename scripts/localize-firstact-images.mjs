@@ -28,9 +28,10 @@ import sharp from "sharp";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = resolve(__dirname, "..");
-const FIRSTACT_DIR = resolve(WEB_ROOT, "public", "home", "firstact");
-const FIRSTSCENE_DIR = resolve(WEB_ROOT, "public", "home", "firstscene");
-const PUBLIC_LOCAL_PREFIX = "/home/firstscene/";
+const PORTRAIT = process.argv.includes("--portrait");
+const FIRSTACT_DIR = resolve(WEB_ROOT, "public", "home", PORTRAIT ? "firstact-portrait" : "firstact");
+const FIRSTSCENE_DIR = resolve(WEB_ROOT, "public", "home", PORTRAIT ? "firstscene-portrait" : "firstscene");
+const PUBLIC_LOCAL_PREFIX = PORTRAIT ? "/home/firstscene-portrait/" : "/home/firstscene/";
 const MAX_EDGE = 1600;
 const QUALITY = 80;
 

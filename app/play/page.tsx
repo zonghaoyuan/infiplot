@@ -897,11 +897,10 @@ function PlayInner() {
   // Lock the visible orientation BEFORE the first paint, so portrait phones
   // never flash the landscape loading chrome. The state inits to "landscape"
   // for SSR-safety; this corrects it pre-paint (no-op re-render on landscape
-  // devices). Prebaked cards (decision C) stay landscape-baked regardless of
-  // device. The bootstrap effect below re-derives the same value for the
+  // devices). The bootstrap effect below re-derives the same value for the
   // /api/start payload.
   useIsomorphicLayoutEffect(() => {
-    setOrientation(params.get("card") ? "landscape" : detectOrientation());
+    setOrientation(detectOrientation());
   }, [params]);
 
   // ── Bootstrap: start session ─────────────────────────────────────────
@@ -952,14 +951,10 @@ function PlayInner() {
       }
     }
 
-    // Lock orientation for the whole session. Prebaked cards (decision C) are
-    // landscape-baked, so they stay landscape regardless of device; only the
-    // live /api/start path requests a portrait paint when the phone is upright.
-    // The visible state is already set pre-paint by the layout effect above;
-    // here we only need the value for the /api/start payload.
-    const sessionOrientation: Orientation = cardName
-      ? "landscape"
-      : detectOrientation();
+    // Lock orientation for the whole session. Both prebaked-card and live paths
+    // now respect device orientation — portrait prebaked assets live under
+    // firstact-portrait/ and firstscene-portrait/.
+    const sessionOrientation: Orientation = detectOrientation();
     if (livePayload) livePayload.orientation = sessionOrientation;
 
     if (!cardName && !livePayload) {
@@ -980,11 +975,20 @@ function PlayInner() {
       cardGender?: string;
     };
 
+    const firstactDir = sessionOrientation === "portrait"
+      ? "firstact-portrait"
+      : "firstact";
+
     const fetchStart: Promise<PrebakedFirstAct> = cardName
-      ? fetch(`/home/firstact/${encodeURIComponent(cardName)}.json`).then(
+      ? fetch(`/home/${firstactDir}/${encodeURIComponent(cardName)}.json`).then(
           async (r) => {
-            if (!r.ok) throw new Error(`找不到精选剧情：${cardName}`);
-            return (await r.json()) as PrebakedFirstAct;
+            if (r.ok) return (await r.json()) as PrebakedFirstAct;
+            if (sessionOrientation === "portrait") {
+              console.warn(`[play] portrait firstact missing for ${cardName} (HTTP ${r.status}), falling back to landscape`);
+              const fb = await fetch(`/home/firstact/${encodeURIComponent(cardName)}.json`);
+              if (fb.ok) return (await fb.json()) as PrebakedFirstAct;
+            }
+            throw new Error(`找不到精选剧情：${cardName}`);
           },
         )
       : fetch("/api/start", {
