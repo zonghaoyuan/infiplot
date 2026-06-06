@@ -11,7 +11,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { PlayCanvas, type Phase } from "@/components/PlayCanvas";
+import {
+  PlayCanvas,
+  type Phase,
+} from "@/components/PlayCanvas";
+import type { DialogueHistoryItem } from "@/components/DialogueHistoryModal";
 import { TtsKeyModal } from "@/components/TtsKeyModal";
 import { annotateClick } from "@/lib/annotateClient";
 import { loadClientTtsConfig } from "@/lib/clientTtsConfig";
@@ -261,6 +265,63 @@ type ScenePathStep = {
   fromVisitedBeats: string[];
   exit: { choiceId: string; label: string; nextSceneSeed: string };
 };
+
+function buildDialogueHistory(
+  session: Session | null,
+  currentSceneId: string | undefined,
+  currentVisitedBeatIds: string[],
+): DialogueHistoryItem[] {
+  if (!session) return [];
+
+  return session.history.flatMap((entry, sceneIndex) => {
+    const beatsById = new Map(entry.scene.beats.map((b) => [b.id, b]));
+    const visitedBeatIds =
+      entry.scene.id === currentSceneId
+        ? currentVisitedBeatIds
+        : entry.visitedBeatIds;
+
+    return visitedBeatIds.flatMap((beatId, beatIndex) => {
+      const beat = beatsById.get(beatId);
+      if (!beat) return [];
+
+      const nextVisitedBeatId = visitedBeatIds[beatIndex + 1];
+      const choice =
+        beat.next.type === "choice"
+          ? beat.next.choices.find((c) => {
+              if (c.effect.kind === "advance-beat") {
+                return c.effect.targetBeatId === nextVisitedBeatId;
+              }
+              return (
+                beatIndex === visitedBeatIds.length - 1 &&
+                entry.exit?.kind === "choice" &&
+                c.id === entry.exit.choiceId
+              );
+            })
+          : undefined;
+      const freeformAction =
+        beatIndex === visitedBeatIds.length - 1 &&
+        entry.exit?.kind === "freeform"
+          ? entry.exit.action
+          : undefined;
+
+      const body = beat.speaker ? beat.line : beat.narration;
+      const narration = beat.speaker ? beat.narration : undefined;
+      if (!body && !narration && !choice && !freeformAction) return [];
+
+      return [
+        {
+          id: `${sceneIndex}:${beatId}:${beatIndex}`,
+          sceneIndex: sceneIndex + 1,
+          speaker: beat.speaker,
+          body,
+          narration,
+          selectedChoice: choice?.label,
+          freeformAction,
+        },
+      ];
+    });
+  });
+}
 
 function pathKey(steps: ScenePathStep[]): string {
   return steps.map((s) => s.exit.choiceId).join("/");
@@ -548,6 +609,16 @@ function PlayInner() {
     if (!currentScene || !currentBeatId) return null;
     return currentScene.beats.find((b) => b.id === currentBeatId) ?? null;
   }, [currentScene, currentBeatId]);
+
+  const dialogueHistory = useMemo<DialogueHistoryItem[]>(
+    () =>
+      buildDialogueHistory(
+        session,
+        currentScene?.id,
+        visitedBeatsRef.current,
+      ),
+    [session, currentScene?.id, currentBeatId],
+  );
 
   const audioSrc = (currentBeat ? beatAudioMap[currentBeat.id] : undefined) ?? null;
 
@@ -1369,6 +1440,7 @@ function PlayInner() {
           onSelectChoice={onSelectChoice}
           orientation={orientation}
           fullViewport
+          dialogueHistory={dialogueHistory}
         />
         {orientation === "portrait" && (
           <div
@@ -1442,6 +1514,7 @@ function PlayInner() {
           onAdvance={onAdvance}
           onSelectChoice={onSelectChoice}
           orientation={orientation}
+          dialogueHistory={dialogueHistory}
           aboveCanvas={
             <button
               type="button"

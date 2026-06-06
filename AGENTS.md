@@ -119,6 +119,8 @@ Use aliases from `tsconfig.json`: `@/*`, `@infiplot/engine`, `@infiplot/ai-clien
 
 React components use PascalCase. Hooks, helpers, variables, and functions use camelCase. Types and interfaces use PascalCase. Route folders follow Next.js App Router conventions. UI work should follow the existing Tailwind-heavy visual language.
 
+Modal/dialog UI should be extracted into dedicated components instead of being inlined inside large page or canvas components. Keep the host responsible for open/close state and domain data, and keep the modal component responsible for dialog layout, overlay behavior, keyboard close handling, scroll containers, and modal-specific styling.
+
 Comment only non-obvious sequencing, provider quirks, fallback behavior, or architectural invariants.
 
 ## Configuration & Providers
