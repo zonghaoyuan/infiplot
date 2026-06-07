@@ -43,5 +43,8 @@ glob = [
     "*.generated.*",
     "public/**",
     "docs/**",
-    "*.md"
+    # NOTE: do NOT add "*.md" here — it would hide best_practices.md and
+    # AGENTS.md from the /review diff view, even though /improve still reads
+    # best_practices.md directly. README-style noise is preferred over
+    # silently dropping changes to the project's authoritative rule files.
 ]
