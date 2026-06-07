@@ -54,9 +54,10 @@ After deploy, fill in the environment variables — see the [Configuration guide
 For VPS, home servers, or local machines. Supports x86 and ARM (including Apple Silicon Macs). No need to clone the repo — just download two files:
 
 ```bash
-mkdir infiplot && cd infiplot
+mkdir -p infiplot && cd infiplot
 curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/docker-compose.yml -o docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/.env.example -o .env.local
+curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/.env.example -o .env.example
+[ -f .env.local ] || cp .env.example .env.local
 ```
 
 Edit `.env.local` with your API keys (see [Configuration guide](#configuration-guide)), then start:

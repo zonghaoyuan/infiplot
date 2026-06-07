@@ -54,9 +54,10 @@ Cloudflare 部署因场景流水线需要更长 CPU 时间，需要 Workers Paid
 适用于 VPS、家庭服务器或本地电脑。支持 x86 和 ARM（含 Apple Silicon Mac）。无需克隆仓库，只需下载两个文件：
 
 ```bash
-mkdir infiplot && cd infiplot
+mkdir -p infiplot && cd infiplot
 curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/docker-compose.yml -o docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/.env.example -o .env.local
+curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/.env.example -o .env.example
+[ -f .env.local ] || cp .env.example .env.local
 ```
 
 编辑 `.env.local` 填入你的 API Key（详见[配置教程](#配置教程)），然后启动：
