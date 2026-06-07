@@ -51,10 +51,15 @@ After deploy, fill in the environment variables — see the [Configuration guide
 
 ### Docker (self-hosted)
 
-For VPS, home servers, or local machines. Supports x86 and ARM (including Apple Silicon Macs).
+For VPS, home servers, or local machines. Supports x86 and ARM (including Apple Silicon Macs). No need to clone the repo — just download two files:
 
-1. Copy `.env.example` to `.env.local` and fill in your API keys (see [Configuration guide](#configuration-guide))
-2. Start:
+```bash
+mkdir infiplot && cd infiplot
+curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/zonghaoyuan/infiplot/main/.env.example -o .env.local
+```
+
+Edit `.env.local` with your API keys (see [Configuration guide](#configuration-guide)), then start:
 
 ```bash
 docker compose up -d
