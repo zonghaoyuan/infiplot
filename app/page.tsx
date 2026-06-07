@@ -868,7 +868,7 @@ function StyleModal({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const thumbV = "v4";
+  const thumbV = "v1";
   const STYLE_THUMB: Record<string, string> = {
     "自动": `/home/styles/auto.webp?${thumbV}`,
     "自定义风格": `/home/styles/custom.webp?${thumbV}`,
@@ -892,6 +892,20 @@ function StyleModal({
     "儿童绘本": `/home/styles/children.webp?${thumbV}`,
     "儿童涂鸦": `/home/styles/crayon.webp?${thumbV}`,
     "黏土手工": `/home/styles/clay.webp?${thumbV}`,
+    "敦煌壁画": `/home/styles/dunhuang.webp?${thumbV}`,
+    "细密画": `/home/styles/miniature.webp?${thumbV}`,
+    "镶嵌画": `/home/styles/mosaic.webp?${thumbV}`,
+    "彩绘玻璃": `/home/styles/stainedglass.webp?${thumbV}`,
+    "蒸汽波": `/home/styles/vaporwave.webp?${thumbV}`,
+    "矢量插画": `/home/styles/vector.webp?${thumbV}`,
+    "低多边形": `/home/styles/lowpoly.webp?${thumbV}`,
+    "波普艺术": `/home/styles/popart.webp?${thumbV}`,
+    "故障艺术": `/home/styles/glitch.webp?${thumbV}`,
+    "剪纸艺术": `/home/styles/papercut.webp?${thumbV}`,
+    "蒸汽朋克": `/home/styles/steampunk.webp?${thumbV}`,
+    "仙侠玄幻": `/home/styles/xianxia.webp?${thumbV}`,
+    "暗黑童话": `/home/styles/darkfairytale.webp?${thumbV}`,
+    "都市幻想": `/home/styles/urbanfantasy.webp?${thumbV}`,
   };
   useEffect(() => {
     const id = requestAnimationFrame(() => setShown(true));
