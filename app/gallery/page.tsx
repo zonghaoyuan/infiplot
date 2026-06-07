@@ -858,7 +858,14 @@ function GalleryInner() {
           name: `infiplot-branch-${String(branchN).padStart(3, "0")}.${inferImageExtension(alt.imageUrl)}`,
         });
       }
-      await downloadImagesAsZip(files, `infiplot-gallery-${doc.id}.zip`);
+      const result = await downloadImagesAsZip(files, `infiplot-gallery-${doc.id}.zip`);
+      if (result.downloaded === 0) {
+        alert("所有图片抓取失败，请检查网络后重试");
+      } else if (result.failed.length > 0) {
+        alert(`已打包 ${result.downloaded} 张，${result.failed.length} 张抓取失败`);
+      }
+    } catch {
+      alert("打包下载失败，请重试");
     } finally {
       setDownloadingScenes(false);
     }

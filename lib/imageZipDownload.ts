@@ -19,13 +19,17 @@ const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 export function inferImageExtension(url: string): string {
-  if (url.startsWith("data:image/svg")) return "svg";
-  if (url.startsWith("data:image/")) {
-    return url.slice(11, url.indexOf(";")).replace(/^jpeg$/, "jpg") || "png";
+  const dataMatch = /^data:image\/([^;,]+)/i.exec(url);
+  if (dataMatch?.[1]) {
+    const sub = dataMatch[1].toLowerCase();
+    if (sub === "svg+xml") return "svg";
+    return sub === "jpeg" ? "jpg" : sub;
   }
 
   try {
-    const ext = new URL(url).pathname.split(".").pop()?.toLowerCase();
+    const base =
+      typeof window !== "undefined" ? window.location.href : "http://localhost";
+    const ext = new URL(url, base).pathname.split(".").pop()?.toLowerCase();
     if (ext && ["jpg", "jpeg", "png", "webp", "gif", "svg"].includes(ext)) {
       return ext === "jpeg" ? "jpg" : ext;
     }
@@ -143,7 +147,8 @@ function triggerBrowserDownload(blob: Blob, fileName: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+  const delayMs = blob.size > 5_000_000 ? 60_000 : 1_500;
+  setTimeout(() => URL.revokeObjectURL(blobUrl), delayMs);
 }
 
 function normalizeZipName(name: string): string {
@@ -161,15 +166,16 @@ function uniqueZipPath(name: string, usedPaths: Set<string>): string {
   const dot = clean.lastIndexOf(".");
   const base = dot > 0 ? clean.slice(0, dot) : clean;
   const ext = dot > 0 ? clean.slice(dot) : "";
-  let n = 2;
-  while (true) {
+  for (let n = 2; n < 10_000; n++) {
     const candidate = `${base}-${n}${ext}`;
     if (!usedPaths.has(candidate)) {
       usedPaths.add(candidate);
       return candidate;
     }
-    n++;
   }
+  const fallback = `${base}-${Date.now()}${ext}`;
+  usedPaths.add(fallback);
+  return fallback;
 }
 
 function sanitizeZipPath(name: string): string {
