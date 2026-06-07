@@ -15,6 +15,11 @@ import type {
   Orientation,
   SceneExit,
 } from "@infiplot/types";
+import {
+  downloadImagesIndividually,
+  downloadImagesAsZip,
+  inferImageExtension,
+} from "@/lib/imageZipDownload";
 
 // ──────────────────────────────────────────────────────────────────────
 //  Gallery — an offline-only replay of a played session. Entered from
@@ -121,72 +126,6 @@ function pickedChoiceIdAt(
     return scene.exit.choiceId;
   }
   return null;
-}
-
-// ── Download a batch of image URLs as separate browser downloads.
-// Runware CDN sends Access-Control-Allow-Origin (the annotate flow already
-// relies on this) so fetch().blob() works cross-origin without a proxy.
-//
-// Each fetch has its own AbortController + per-file timeout — without that
-// a single slow/hung CDN response strands the whole loop, the caller's busy
-// flag never clears, and the button looks "stuck" (the original "下载完按钮就没了"
-// report). Fetches run in a small concurrency pool to keep total time
-// reasonable for ~10-30 portraits; the actual <a download> clicks remain
-// serial with a small gap so Chrome's "allow multiple downloads" prompt
-// fires once instead of being coalesced or dropped.
-async function downloadImages(
-  files: { url: string; name: string }[],
-): Promise<void> {
-  const CONCURRENT_FETCH = 4;
-  const FETCH_TIMEOUT_MS = 20_000;
-
-  async function fetchOne(
-    file: { url: string; name: string },
-  ): Promise<{ blobUrl: string; name: string } | null> {
-    const { url, name } = file;
-    if (!url) return null;
-    if (url.startsWith("data:")) return { blobUrl: url, name };
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const r = await fetch(url, { mode: "cors", signal: ctrl.signal });
-      if (!r.ok) return null;
-      const blob = await r.blob();
-      return { blobUrl: URL.createObjectURL(blob), name };
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  const queue = [...files];
-  const ready: ({ blobUrl: string; name: string } | null)[] = [];
-  await Promise.all(
-    Array.from({ length: CONCURRENT_FETCH }, async () => {
-      while (queue.length > 0) {
-        const f = queue.shift();
-        if (!f) break;
-        ready.push(await fetchOne(f));
-      }
-    }),
-  );
-
-  for (const item of ready) {
-    if (!item) continue;
-    const { blobUrl, name } = item;
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = name;
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    if (blobUrl.startsWith("blob:")) {
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
-    }
-    await new Promise((r) => setTimeout(r, 250));
-  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -892,13 +831,6 @@ function GalleryInner() {
     if (!doc || downloadingScenes) return;
     setDownloadingScenes(true);
     try {
-      function extOf(url: string): string {
-        if (url.startsWith("data:image/svg")) return "svg";
-        if (url.startsWith("data:image/")) {
-          return url.slice(11, url.indexOf(";")) || "png";
-        }
-        return "jpg";
-      }
       // Main path + every unique alternate (AI-prefetched branches the player
       // didn't take). Dedupe by URL — the picked choice's alternate IS the
       // next main scene, so they overlap, and we never want the same image
@@ -913,7 +845,7 @@ function GalleryInner() {
         sceneN++;
         files.push({
           url: sc.imageUrl,
-          name: `infiplot-scene-${String(sceneN).padStart(3, "0")}.${extOf(sc.imageUrl)}`,
+          name: `infiplot-scene-${String(sceneN).padStart(3, "0")}.${inferImageExtension(sc.imageUrl)}`,
         });
       }
       let branchN = 0;
@@ -923,10 +855,10 @@ function GalleryInner() {
         branchN++;
         files.push({
           url: alt.imageUrl,
-          name: `infiplot-branch-${String(branchN).padStart(3, "0")}.${extOf(alt.imageUrl)}`,
+          name: `infiplot-branch-${String(branchN).padStart(3, "0")}.${inferImageExtension(alt.imageUrl)}`,
         });
       }
-      await downloadImages(files);
+      await downloadImagesAsZip(files, `infiplot-gallery-${doc.id}.zip`);
     } finally {
       setDownloadingScenes(false);
     }
@@ -1000,7 +932,7 @@ function GalleryInner() {
     if (files.length === 0) return;
     setDownloadingPortraits(true);
     try {
-      await downloadImages(files);
+      await downloadImagesIndividually(files);
     } finally {
       setDownloadingPortraits(false);
     }
@@ -1173,27 +1105,28 @@ function GalleryInner() {
             disabled={downloadingScenes}
             className="flex h-9 items-center gap-2 rounded-full bg-black/40 px-3 text-[11px] smallcaps text-white/80 backdrop-blur-sm transition-colors hover:text-white disabled:opacity-50"
             aria-label="批量下载图集到本地"
-            title="把本局所有场景图（含未选中的分支预生成图）下载到本机（浏览器若弹「允许多个下载」请点允许）"
+            title="把本局所有场景图（含未选中的分支预生成图）打包成 zip 下载到本机"
           >
             <i
               className={`fa-solid ${downloadingScenes ? "fa-spinner animate-spin" : "fa-download"} text-[11px]`}
             />
-            {downloadingScenes ? "下载中" : "下载图集"}
+            {downloadingScenes ? "打包中" : "下载图集"}
           </button>
         </div>
       </div>
 
-      {/* Download-in-progress hint — Chrome/Edge/Firefox throw a "允许此网站
-          下载多个文件" prompt after the first <a download>.click(); without
-          this banner most users miss it and only the first file lands. */}
       {(downloadingScenes || downloadingPortraits) && (
         <div
           className="absolute inset-x-0 z-30 flex justify-center pointer-events-none px-4"
           style={{ top: "calc(max(0.75rem, env(safe-area-inset-top)) + 60px)" }}
         >
           <span className="flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-[11px] text-white/95 backdrop-blur-sm shadow-lg max-w-[92vw]">
-            <i className="fa-solid fa-circle-exclamation text-[11px] text-amber-300" />
-            浏览器顶部如弹出「允许此网站下载多个文件」,请点「允许」,否则只能下到第一张
+            <i
+              className={`fa-solid ${downloadingScenes ? "fa-file-zipper" : "fa-circle-exclamation"} text-[11px] text-amber-300`}
+            />
+            {downloadingScenes
+              ? "正在抓取图片并打包 zip,完成后会自动开始下载"
+              : "浏览器顶部如弹出「允许此网站下载多个文件」,请点「允许」,否则只能下到第一张"}
           </span>
         </div>
       )}
