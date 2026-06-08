@@ -13,9 +13,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.beat?.id || !body.beat?.line || !body.voice?.referenceAudioBase64) {
+  // Accept either provider's voice shape — xiaomi carries referenceAudioBase64,
+  // stepfun carries voiceId. We only check the discriminator + the line text;
+  // shape-specific validation lives in each provider's synth function.
+  if (!body.beat?.id || !body.beat?.line || !body.voice?.provider) {
     return NextResponse.json(
-      { error: "beat.id, beat.line and voice.referenceAudioBase64 are required" },
+      { error: "beat.id, beat.line and voice.provider are required" },
       { status: 400 },
     );
   }

@@ -138,7 +138,7 @@ Use `.env.example` as the source of truth. Never commit `.env.local`, API keys, 
 
 - Text and Vision use `TEXT_*` and `VISION_*`; default protocol is `openai_compatible`, with native `anthropic` and `google` available via `TEXT_PROVIDER` / `VISION_PROVIDER`.
 - Image uses `IMAGE_*`; supported protocols are `runware`, `openai_compatible`, native `openai`, and native `google`. When `IMAGE_PROVIDER` is unset, Runware is inferred from `*.runware.ai` URLs and otherwise falls back to OpenAI-compatible image generations.
-- TTS uses Xiaomi MiMo protocol and is optional: blank config means silent mode.
+- TTS supports Xiaomi MiMo (voicedesign + voiceclone) or StepFun (preset voices auto-selected by keyword scoring), inferred from `TTS_BASE_URL` (host containing `stepfun.com` → StepFun, otherwise → MiMo). `CharacterVoice` is a discriminated union on `provider`; synth dispatches on the voice's own tag so a session may carry both shapes through a provider switch. Blank config means silent mode.
 - `MOCK_IMAGE=true` skips image generation and returns a placeholder for cheap local iteration.
 - `NEXT_PUBLIC_IMAGE_PROXY_URL` and `NEXT_PUBLIC_IMAGE_PROXY_ALLOWED_HOSTS` opt into browser-side image proxying for allowed hosts.
 - Analytics uses optional Umami `NEXT_PUBLIC_UMAMI_*` values and must stay content-free/privacy-preserving.

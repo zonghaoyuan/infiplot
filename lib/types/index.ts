@@ -160,12 +160,24 @@ export type WriterPlan = {
 //  Characters & voices (TTS)
 // ──────────────────────────────────────────────────────────────────────
 
-export type CharacterVoice = {
-  provider: "xiaomi";
-  /** Xiaomi MiMo design output stored as reference audio for later clones. */
-  referenceAudioBase64: string;
-  mimeType: string;
-};
+export type CharacterVoice =
+  | {
+      provider: "xiaomi";
+      /** Xiaomi MiMo design output stored as reference audio for later clones. */
+      referenceAudioBase64: string;
+      mimeType: string;
+    }
+  | {
+      provider: "stepfun";
+      /** StepFun preset voice ID (e.g. "cixingnansheng"). Selected by keyword
+       *  matching against the LLM-written voiceDescription — no network call
+       *  on provision (StepFun has no voicedesign endpoint), so this carries
+       *  only the picked preset, not a clip. */
+      voiceId: string;
+      /** TTS model used at synth time (step-tts-mini / step-tts-2 / stepaudio-2.5-tts). */
+      model: string;
+      mimeType: string;
+    };
 
 export type Character = {
   name: string;

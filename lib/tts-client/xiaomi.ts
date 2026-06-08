@@ -79,6 +79,11 @@ export async function xiaomiSynthesize(
   delivery?: string,
   signal?: AbortSignal,
 ): Promise<{ audioBase64: string; mimeType: string }> {
+  if (voice.provider !== "xiaomi") {
+    throw new Error(
+      `xiaomiSynthesize received non-xiaomi voice (provider="${voice.provider}")`,
+    );
+  }
   const url = joinUrl(cfg.baseUrl, "/chat/completions");
 
   // The free-form delivery direction rides in the `user` (director) message,
