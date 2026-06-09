@@ -1567,7 +1567,7 @@ export default function HomePage() {
               >
                 <i className="fa-solid fa-file-import text-sm" />
                 <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-clay-900 px-2 py-1 font-sans text-[11px] text-cream-50 opacity-0 transition-opacity group-hover:opacity-100">
-                  载入剧情
+                  载入infiplot剧情
                 </span>
               </button>
             </div>
