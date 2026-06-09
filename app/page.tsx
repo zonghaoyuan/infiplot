@@ -870,7 +870,7 @@ function StyleModal({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const thumbV = "v5";
+  const thumbV = "v6";
   const STYLE_THUMB: Record<string, string> = {
     "自动": `/home/styles/auto.webp?${thumbV}`,
     "自定义风格": `/home/styles/custom.webp?${thumbV}`,
