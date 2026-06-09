@@ -1021,34 +1021,6 @@ function PlayInner() {
     }
     track("gallery_export", { scene_count: scenes.length });
     window.open(`/gallery#id=${id}`, "_blank", "noopener");
-
-    // Fire-and-forget: also pack an encrypted `.infiplot` share file for the
-    // player to send to a friend. The local-tab view above is instant either
-    // way; this happens in the background. Server returns 503 if
-    // GALLERY_SECRET isn't configured, in which case we silently skip — the
-    // local view still works, just no share file.
-    void (async () => {
-      try {
-        const r = await fetch("/api/gallery-pack", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ docStr }),
-        });
-        if (!r.ok) return;
-        const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `infiplot-${id}.infiplot`;
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      } catch {
-        // network / decrypt error — local view above already worked
-      }
-    })();
   }, [trimGalleryExports]);
 
   const handleExportStory = useCallback(() => {
