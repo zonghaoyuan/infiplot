@@ -361,6 +361,18 @@ export type EngineConfig = {
 //  API contracts
 // ──────────────────────────────────────────────────────────────────────
 
+/**
+ * BYOK (Bring Your Own Key) LLM credentials carried in request bodies.
+ * Per-role: text/image/vision can be independently configured. Keys never
+ * persist or log server-side — they only pass through request→config build
+ * (see lib/config.ts buildByoEngineConfig). vision typically mirrors text.
+ */
+export type ByoLlmKeys = {
+  text?: { provider: string; apiKey: string; baseUrl?: string; model?: string };
+  image?: { provider: string; apiKey: string; baseUrl?: string; model?: string };
+  vision?: { provider: string; apiKey: string; baseUrl?: string; model?: string };
+};
+
 export type StartRequest = {
   worldSetting: string;
   styleGuide: string;
@@ -380,6 +392,13 @@ export type StartRequest = {
   orientation?: Orientation;
   /** Optional player display name — see Session.playerName. */
   playerName?: string;
+  /**
+   * BYOK: user-provided LLM keys. When present, server uses these to construct
+   * EngineConfig instead of reading from env. Per-role: text/image/vision can
+   * be independently configured. Keys never persist or log — they only pass
+   * through request→config construction.
+   */
+  byo?: ByoLlmKeys;
 };
 
 // /api/parse-style-image — vision LLM extracts a textual painting-style
@@ -414,6 +433,8 @@ export type SceneRequest = {
   session: Session;
   /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
   clientTts?: boolean;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 export type SceneResponse = {
@@ -459,6 +480,8 @@ export type VisionRequest = {
    * server-side image re-fetch per click.
    */
   annotatedImageBase64: string;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 export type VisionResponse = {
@@ -472,6 +495,8 @@ export type VisionResponse = {
 export type FreeformClassifyRequest = {
   session: Session;
   freeformText: string;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 export type FreeformClassify = "insert-beat" | "change-scene";
@@ -488,6 +513,8 @@ export type InsertBeatRequest = {
   freeformAction: string;
   /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
   clientTts?: boolean;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 /** Partial beat fields produced by the insert-beat director. */

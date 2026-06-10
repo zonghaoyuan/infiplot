@@ -1,7 +1,7 @@
 import { requestScene } from "@infiplot/engine";
 import type { Character, SceneRequest } from "@infiplot/types";
 import { NextResponse } from "next/server";
-import { loadEngineConfig } from "@/lib/config";
+import { loadEngineConfig, buildByoEngineConfig } from "@/lib/config";
 
 function stripKnownVoices(
   characters: Character[],
@@ -27,7 +27,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const base = loadEngineConfig();
+    const official = loadEngineConfig();
+    // BYOK: if user provided LLM keys, build config from them (with SSRF validation)
+    const base = body.byo ? buildByoEngineConfig(body.byo, official) : official;
     // See StartRequest.clientTts — BYO clients synth in-browser, so drop server TTS.
     const config = body.clientTts === true ? { ...base, tts: undefined } : base;
     const result = await requestScene(config, body);
@@ -40,6 +42,7 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message.includes("Invalid BYO") || message.includes("Missing BYO") ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

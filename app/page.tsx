@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
@@ -52,6 +53,31 @@ const OPTS: Opt[] = [
 ];
 
 type StoryContent = { title: string; outline: string; style: string; tags: string[] };
+
+// 首页卡片的统一渲染形态——无论来自 D1 featured API 还是硬编码 STORIES 降级，
+// 都归一到这个形状后只走一条渲染路径。
+type FeaturedCard = {
+  id: string;        // e.g. "m0" / "f12"，用于 ?card= 与封面拼接
+  title: string;
+  outline: string;
+  coverPath: string; // e.g. "/home/m0.webp"
+};
+
+// D1 featured API 的响应行（与 lib/db/schema.ts FeaturedStory 对应的线上子集）。
+type FeaturedStoryRow = {
+  id: string;
+  gender: string;
+  title: string;
+  outline: string;
+  style: string;
+  tags: string;       // JSON 字符串
+  coverPath: string;
+  firstactPath: string;
+  firstscenePath?: string | null;
+  sortOrder: number;
+  isActive: number;
+  clickCount: number;
+};
 
 import { STYLE_MAP } from "@/lib/options";
 
@@ -684,6 +710,22 @@ const DISPLAY_ORDER: Record<Gender, number[]> = {
   女性向: Array.from({ length: 30 }, (_, i) => i),
 };
 
+// 从硬编码 STORIES + DISPLAY_ORDER 构造首页卡片（featured API 故障/空时的降级源，
+// 同时作为首屏即时渲染的初始值，避免等 fetch 期间卡片区空白）。
+function buildFallbackCards(g: Gender): FeaturedCard[] {
+  const imgPrefix = g === "女性向" ? "f" : "m";
+  const localStories = STORIES[g];
+  return DISPLAY_ORDER[g].map((origIdx) => {
+    const c = localStories[origIdx]!;
+    return {
+      id: `${imgPrefix}${origIdx}`,
+      title: c.title,
+      outline: c.outline,
+      coverPath: `/home/${imgPrefix}${origIdx}.webp`,
+    };
+  });
+}
+
 /* ---------- typewriter ---------- */
 
 // 父组件持有当前 phrase 的索引（这样 start() 不输入时能用当前闪动的那句
@@ -1285,6 +1327,39 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, [gender, galleryGender]);
 
+  // Featured stories 动态加载（从 /api/stories/featured），降级用硬编码 STORIES。
+  // 惰性初始化确保首屏即有卡片内容（SSR + hydration 一致），fetch 成功后无缝替换。
+  const [featuredCards, setFeaturedCards] = useState<FeaturedCard[]>(() =>
+    buildFallbackCards(galleryGender),
+  );
+  useEffect(() => {
+    const apiGender = galleryGender === "女性向" ? "female" : "male";
+    fetch(`/api/stories/featured?gender=${apiGender}`)
+      .then((r) => r.json())
+      .then((data: { stories: FeaturedStoryRow[] }) => {
+        // API 已按 sortOrder 排序且仅返回 isActive=1 的记录。
+        // D1 故障时 featured route 返回 { stories: [] }（HTTP 200），
+        // 空数组也必须降级到常量，否则首页白屏。
+        const rows = data.stories ?? [];
+        if (rows.length === 0) {
+          setFeaturedCards(buildFallbackCards(galleryGender));
+          return;
+        }
+        setFeaturedCards(
+          rows.map((s) => ({
+            id: s.id,
+            title: s.title,
+            outline: s.outline,
+            coverPath: s.coverPath,
+          })),
+        );
+      })
+      .catch(() => {
+        // 网络故障 / JSON 解析失败 → 降级到常量
+        setFeaturedCards(buildFallbackCards(galleryGender));
+      });
+  }, [galleryGender]);
+
   /* close any open dropdown on outside click */
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -1396,8 +1471,6 @@ export default function HomePage() {
     router.push("/play?custom=1");
   };
 
-  const stories = STORIES[galleryGender];
-  const imgPrefix = galleryGender === "女性向" ? "f" : "m";
   const analyticsOn = Boolean(
     process.env.NEXT_PUBLIC_UMAMI_SRC && process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID,
   );
@@ -1408,7 +1481,7 @@ export default function HomePage() {
   // 「语音配音」选项仍然生效：把 audioEnabled 经 sessionStorage 传给 /play。
   // 其余选项（剧情风格 / 内容节奏）在预烘焙时已锁成「多线转折 / 紧凑爽快」
   // 的红果默认基调，对精选卡不再生效。
-  const onCardClick = (idx: number, _card: StoryContent) => {
+  const onCardClick = (cardId: string) => {
     const voice = OPTS[voiceRow]!.items[sel[voiceRow] ?? 1]!;
     const audioEnabled = voice === "开启";
     sessionStorage.setItem(
@@ -1419,9 +1492,9 @@ export default function HomePage() {
       source: "curated",
       gender: galleryGender,
       tts: audioEnabled,
-      card: `${imgPrefix}${idx}`,
+      card: cardId as `${"m" | "f"}${number}`,
     });
-    router.push(`/play?card=${imgPrefix}${idx}`);
+    router.push(`/play?card=${cardId}`);
   };
 
   return (
@@ -1432,6 +1505,14 @@ export default function HomePage() {
           Infi<em className="italic font-light text-ember-500">Plot</em>
         </span>
         <div className="flex items-center gap-5">
+          <Link
+            href="/stories"
+            aria-label="我的剧情"
+            title="我的剧情"
+            className="text-base text-clay-500 hover:text-ember-500 transition-colors cursor-pointer"
+          >
+            <i className="fa-solid fa-book-bookmark" />
+          </Link>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -1574,19 +1655,15 @@ export default function HomePage() {
           }
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
-            {DISPLAY_ORDER[galleryGender].map((origIdx) => {
-              const c = stories[origIdx];
-              if (!c) return null;
-              return (
-                <StoryCard
-                  key={`${imgPrefix}-${origIdx}`}
-                  title={c.title}
-                  outline={c.outline}
-                  image={`/home/${imgPrefix}${origIdx}.webp`}
-                  onClick={() => onCardClick(origIdx, c)}
-                />
-              );
-            })}
+            {featuredCards.map((card) => (
+              <StoryCard
+                key={card.id}
+                title={card.title}
+                outline={card.outline}
+                image={card.coverPath}
+                onClick={() => onCardClick(card.id)}
+              />
+            ))}
           </div>
         </div>
       </section>

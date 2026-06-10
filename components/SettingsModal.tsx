@@ -7,6 +7,12 @@ import {
   writeStoredTtsConfig,
 } from "@/lib/clientTtsConfig";
 import {
+  readStoredLlmConfig,
+  writeStoredLlmConfig,
+  clearStoredLlmConfig,
+  type LlmProvider,
+} from "@/lib/clientLlmConfig";
+import {
   findTtsPreset,
   PAYG_PRESET_ID,
   TTS_KEY_DOC_URL,
@@ -52,7 +58,12 @@ export function SettingsModal({
 }: {
   initialVisionClickEnabled?: boolean;
   onClose: () => void;
-  onSaved: (settings: { ttsConfigured: boolean; playerName: string; visionClickEnabled: boolean }) => void;
+  onSaved: (settings: {
+    ttsConfigured: boolean;
+    playerName: string;
+    visionClickEnabled: boolean;
+    llmConfigured: boolean;
+  }) => void;
   footerNote?: ReactNode;
 }) {
   const [initialTts] = useState(() => readStoredTtsConfig());
@@ -66,6 +77,36 @@ export function SettingsModal({
   const [apiKey, setApiKey] = useState<string>(initialTts?.apiKey ?? "");
   const [showKey, setShowKey] = useState(false);
   const ttsAlreadyConfigured = initialTts != null;
+
+  // LLM Key state
+  const [initialLlm] = useState(() => readStoredLlmConfig());
+  const [llmTextProvider, setLlmTextProvider] = useState<LlmProvider>(
+    initialLlm?.text?.provider ?? "openai",
+  );
+  const [llmTextApiKey, setLlmTextApiKey] = useState<string>(
+    initialLlm?.text?.apiKey ?? "",
+  );
+  const [llmTextBaseUrl, setLlmTextBaseUrl] = useState<string>(
+    initialLlm?.text?.baseUrl ?? "",
+  );
+  const [llmTextModel, setLlmTextModel] = useState<string>(
+    initialLlm?.text?.model ?? "",
+  );
+  const [llmImageProvider, setLlmImageProvider] = useState<LlmProvider>(
+    initialLlm?.image?.provider ?? "openai",
+  );
+  const [llmImageApiKey, setLlmImageApiKey] = useState<string>(
+    initialLlm?.image?.apiKey ?? "",
+  );
+  const [llmImageBaseUrl, setLlmImageBaseUrl] = useState<string>(
+    initialLlm?.image?.baseUrl ?? "",
+  );
+  const [llmImageModel, setLlmImageModel] = useState<string>(
+    initialLlm?.image?.model ?? "",
+  );
+  const [showLlmTextKey, setShowLlmTextKey] = useState(false);
+  const [showLlmImageKey, setShowLlmImageKey] = useState(false);
+  const llmAlreadyConfigured = initialLlm != null;
 
   const [playerName, setPlayerName] = useState(() => readStoredPlayerName());
   const [visionClick, setVisionClick] = useState(initialVisionClickEnabled);
@@ -105,19 +146,34 @@ export function SettingsModal({
       ttsConfigured = false;
     }
 
-    onSaved({ ttsConfigured, playerName: name, visionClickEnabled: visionClick });
+    // LLM Key persistence
+    let llmConfigured = false;
+    const textKey = llmTextApiKey.trim();
+    const imageKey = llmImageApiKey.trim();
+    if (textKey || imageKey) {
+      writeStoredLlmConfig({
+        ...(textKey ? { text: { provider: llmTextProvider, apiKey: textKey, baseUrl: llmTextBaseUrl.trim() || undefined, model: llmTextModel.trim() || undefined } } : {}),
+        ...(imageKey ? { image: { provider: llmImageProvider, apiKey: imageKey, baseUrl: llmImageBaseUrl.trim() || undefined, model: llmImageModel.trim() || undefined } } : {}),
+      });
+      llmConfigured = true;
+    } else {
+      clearStoredLlmConfig();
+    }
+
+    onSaved({ ttsConfigured, playerName: name, visionClickEnabled: visionClick, llmConfigured });
     close();
   };
 
   const clearAll = () => {
     clearStoredTtsConfig();
+    clearStoredLlmConfig();
     writeStoredPlayerName("");
     try { localStorage.removeItem(VISION_CLICK_STORAGE_KEY); } catch { /* ignore */ }
-    onSaved({ ttsConfigured: false, playerName: "", visionClickEnabled: true });
+    onSaved({ ttsConfigured: false, playerName: "", visionClickEnabled: true, llmConfigured: false });
     close();
   };
 
-  const hasAnySetting = ttsAlreadyConfigured || readStoredPlayerName().length > 0;
+  const hasAnySetting = ttsAlreadyConfigured || llmAlreadyConfigured || readStoredPlayerName().length > 0;
 
   return (
     <div
@@ -222,6 +278,154 @@ export function SettingsModal({
             </div>
             <span className="text-[11px] text-clay-400">
               开启后，在选择节点点击画面会触发 AI 识图并生成新的剧情分支。
+            </span>
+          </div>
+
+          <div className="border-t border-clay-900/8 mx-6 md:mx-8" />
+
+          {/* ── LLM Key Section ── */}
+          <div className="flex flex-col gap-3 px-6 md:px-8 py-5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 items-center justify-center rounded-sm border border-clay-900/10 bg-cream-100 text-clay-400">
+                <i className="fa-solid fa-robot text-[11px]" />
+              </span>
+              <span className="font-serif text-base text-clay-900">
+                自带 AI Key
+              </span>
+              <span className="text-[10px] text-clay-400">可选</span>
+            </div>
+            <p className="text-[12px] leading-relaxed text-clay-500">
+              填入你自己的 LLM API Key，剧情生成将使用你的配额。Key
+              仅保存在本地浏览器，经服务端中转到上游（不记录、不存储）。
+            </p>
+
+            {/* Text Model */}
+            <div className="flex flex-col gap-2 rounded-sm border border-clay-900/8 p-3">
+              <span className="text-[11px] font-medium text-clay-700">文本模型（剧情+角色+分镜）</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(["openai", "claude", "gemini"] as const).map((p) => {
+                  const active = llmTextProvider === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setLlmTextProvider(p)}
+                      className={
+                        "rounded-sm border px-2 py-1.5 text-[11px] transition-all " +
+                        (active
+                          ? "border-ember-500 bg-ember-500/5 text-clay-900"
+                          : "border-clay-900/12 text-clay-600 hover:border-clay-900/35")
+                      }
+                    >
+                      {p === "openai" ? "OpenAI" : p === "claude" ? "Claude" : "Gemini"}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="relative">
+                <input
+                  value={llmTextApiKey}
+                  onChange={(e) => setLlmTextApiKey(e.target.value)}
+                  type={showLlmTextKey ? "text" : "password"}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="API Key"
+                  className="h-9 w-full rounded-sm border border-clay-900/15 bg-cream-100 pl-3 pr-9 text-[12px] text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLlmTextKey((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clay-400 hover:text-clay-700 transition-colors"
+                >
+                  <i className={`fa-solid ${showLlmTextKey ? "fa-eye-slash" : "fa-eye"} text-[11px]`} />
+                </button>
+              </div>
+              <input
+                value={llmTextBaseUrl}
+                onChange={(e) => setLlmTextBaseUrl(e.target.value)}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Base URL（可选，留空用官方）"
+                className="h-9 w-full rounded-sm border border-clay-900/15 bg-cream-100 px-3 text-[12px] text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
+              />
+              <input
+                value={llmTextModel}
+                onChange={(e) => setLlmTextModel(e.target.value)}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Model（可选，留空用默认）"
+                className="h-9 w-full rounded-sm border border-clay-900/15 bg-cream-100 px-3 text-[12px] text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
+              />
+            </div>
+
+            {/* Image Model */}
+            <div className="flex flex-col gap-2 rounded-sm border border-clay-900/8 p-3">
+              <span className="text-[11px] font-medium text-clay-700">图像模型（场景画+肖像）</span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(["openai", "claude", "gemini"] as const).map((p) => {
+                  const active = llmImageProvider === p;
+                  const disabled = p !== "openai";
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => !disabled && setLlmImageProvider(p)}
+                      disabled={disabled}
+                      className={
+                        "rounded-sm border px-2 py-1.5 text-[11px] transition-all " +
+                        (disabled
+                          ? "cursor-not-allowed border-clay-900/8 text-clay-300"
+                          : active
+                            ? "border-ember-500 bg-ember-500/5 text-clay-900"
+                            : "border-clay-900/12 text-clay-600 hover:border-clay-900/35")
+                      }
+                    >
+                      {p === "openai" ? "OpenAI" : p === "claude" ? "Claude" : "Gemini"}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="relative">
+                <input
+                  value={llmImageApiKey}
+                  onChange={(e) => setLlmImageApiKey(e.target.value)}
+                  type={showLlmImageKey ? "text" : "password"}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="API Key"
+                  className="h-9 w-full rounded-sm border border-clay-900/15 bg-cream-100 pl-3 pr-9 text-[12px] text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLlmImageKey((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-clay-400 hover:text-clay-700 transition-colors"
+                >
+                  <i className={`fa-solid ${showLlmImageKey ? "fa-eye-slash" : "fa-eye"} text-[11px]`} />
+                </button>
+              </div>
+              <input
+                value={llmImageBaseUrl}
+                onChange={(e) => setLlmImageBaseUrl(e.target.value)}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Base URL（可选，留空用官方）"
+                className="h-9 w-full rounded-sm border border-clay-900/15 bg-cream-100 px-3 text-[12px] text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
+              />
+              <input
+                value={llmImageModel}
+                onChange={(e) => setLlmImageModel(e.target.value)}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Model（可选，留空用默认）"
+                className="h-9 w-full rounded-sm border border-clay-900/15 bg-cream-100 px-3 text-[12px] text-clay-900 outline-none transition-colors focus:border-ember-500 placeholder:text-clay-400"
+              />
+            </div>
+            <span className="text-[11px] text-clay-400">
+              Vision（识图）自动复用文本模型配置。如不填图像 Key，将使用站点官方配额生成图片。
             </span>
           </div>
 

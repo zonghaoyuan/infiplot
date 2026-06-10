@@ -20,6 +20,8 @@ import type { GalleryDoc, GalleryScene } from "@/app/gallery/page";
 import { SettingsModal, readStoredPlayerName, readStoredVisionClick } from "@/components/SettingsModal";
 import { annotateClick } from "@/lib/annotateClient";
 import { loadClientTtsConfig } from "@/lib/clientTtsConfig";
+import { readStoredLlmConfig } from "@/lib/clientLlmConfig";
+import { saveStory, loadFromLocalStorage } from "@/lib/clientStoryPersistence";
 import { PRESETS } from "@/lib/presets";
 import { provisionVoice, synthesize } from "@infiplot/tts-client";
 import type {
@@ -381,6 +383,7 @@ function prefetchScenePath(
   steps: ScenePathStep[],
   depth: number,
   clientTts: boolean,
+  byo?: ReturnType<typeof Object>,
 ): void {
   if (depth >= PREFETCH_MAX_DEPTH) return;
   const key = pathKey(steps);
@@ -394,7 +397,7 @@ function prefetchScenePath(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ session: stripVoicesForTransport(specSession), clientTts }),
+      body: JSON.stringify({ session: stripVoicesForTransport(specSession), clientTts, byo }),
       signal: abort.signal,
     });
     if (!res.ok) {
@@ -456,6 +459,7 @@ function prefetchScenePath(
           [...steps, nextStep],
           depth + 1,
           clientTts,
+          byo,
         );
       }
     }
@@ -582,6 +586,9 @@ function PlayInner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [visionClickEnabled, setVisionClickEnabled] = useState(true);
 
+  // Save story status (idle → saving → saved/failed → idle)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+
   const startedRef = useRef(false);
   const poolRef = useRef<Map<string, PrefetchEntry>>(new Map());
   // Accumulator for resolved prefetches across the whole session — every
@@ -610,6 +617,14 @@ function PlayInner() {
     loadClientTtsConfig(),
   );
   const byoTtsRef = useRef<TtsConfig | null>(byoTtsConfig);
+  const byoLlmRef = useRef(readStoredLlmConfig());
+
+  const getByoPayload = () => {
+    const llm = byoLlmRef.current;
+    if (!llm) return undefined;
+    return { text: llm.text, image: llm.image, vision: llm.vision ?? llm.text };
+  };
+
   // BYO voice cache (see resolveByoVoice). Keyed by character name; persists
   // across scenes so each speaker is provisioned at most once per session.
   const provisionedVoicesRef = useRef<Map<string, Promise<CharacterVoice>>>(
@@ -854,13 +869,14 @@ function PlayInner() {
   }, [muted, prefetchSceneAudio]);
 
   const handleSettingsSaved = useCallback(
-    (settings: { ttsConfigured: boolean; playerName: string; visionClickEnabled: boolean }) => {
+    (settings: { ttsConfigured: boolean; playerName: string; visionClickEnabled: boolean; llmConfigured: boolean }) => {
       setVisionClickEnabled(settings.visionClickEnabled);
       const nextPlayerName = settings.playerName || undefined;
       setSession((prev) => prev ? { ...prev, playerName: nextPlayerName } : prev);
       const cfg = settings.ttsConfigured ? loadClientTtsConfig() : null;
       byoTtsRef.current = cfg;
       setByoTtsConfig(cfg);
+      byoLlmRef.current = settings.llmConfigured ? readStoredLlmConfig() : null;
       if (cfg) {
         setSilenceStrikes(0);
         cancelBeatAudioFetches();
@@ -909,6 +925,17 @@ function PlayInner() {
       // best-effort — quota or disabled storage shouldn't block the export
     }
   }, []);
+
+  const handleSaveStory = useCallback(async () => {
+    const s = sessionRef.current;
+    if (!s || s.history.length === 0) return;
+    if (saveStatus === "saving") return;
+
+    setSaveStatus("saving");
+    const result = await saveStory(s);
+    setSaveStatus(result.ok ? "saved" : "failed");
+    setTimeout(() => setSaveStatus("idle"), 2500);
+  }, [saveStatus]);
 
   // Strips the live Session to a small GalleryDoc — only scene images +
   // dialogue text + recorded choices, no voice base64 / portraits / style
@@ -1098,9 +1125,11 @@ function PlayInner() {
     //   ?preset=<id>         → 内置 PRESETS（仍走 /api/start 现场生成）
     //   ?custom=1            → 用户自定义 prompt，sessionStorage 取 ws/sg
     //                          后走 /api/start 现场生成
+    //   ?storyId=<uuid>      → 加载已保存的剧情（从 /api/stories/[id] 或 localStorage）
     const cardName = params.get("card");
     const presetId = params.get("preset");
     const isCustom = params.get("custom") === "1";
+    const storyId = params.get("storyId");
 
     let livePayload: {
       worldSetting: string;
@@ -1144,8 +1173,40 @@ function PlayInner() {
     const sessionOrientation: Orientation = detectOrientation();
     if (livePayload) livePayload.orientation = sessionOrientation;
 
-    if (!cardName && !livePayload) {
+    if (!cardName && !livePayload && !storyId) {
       router.replace("/");
+      return;
+    }
+
+    // ── Load saved story path ──
+    if (storyId) {
+      // TEMPORARY: localStorage-only mode (D1 disabled until auth integration)
+      const loadedSession = loadFromLocalStorage(storyId);
+      if (!loadedSession) {
+        setError("找不到保存的剧情");
+        return;
+      }
+      const firstScene = loadedSession.history[0]?.scene;
+      if (!firstScene) {
+        setError("剧情数据损坏");
+        return;
+      }
+      (async () => {
+        try {
+          const blobUrl = await getOrCreateBlobUrl(firstScene.imageUrl ?? "");
+          lastImageOriginalUrlRef.current = firstScene.imageUrl ?? "";
+          setSession(loadedSession);
+          setCurrentScene(firstScene);
+          setCurrentBeatId(firstScene.entryBeatId);
+          setImageUrl(blobUrl);
+          visitedBeatsRef.current = [firstScene.entryBeatId];
+          setOrientation(loadedSession.orientation ?? "landscape");
+          setPhase("ready");
+          track("scene_reached", { scene_index: loadedSession.history.length });
+        } catch (e) {
+          setError(String(e));
+        }
+      })();
       return;
     }
 
@@ -1188,7 +1249,7 @@ function PlayInner() {
           },
           body: JSON.stringify({
             ...livePayload,
-            clientTts: !!byoTtsRef.current,
+            clientTts: !!byoTtsRef.current, byo: getByoPayload(),
           }),
         }).then(async (r) => {
           if (!r.ok) {
@@ -1271,6 +1332,7 @@ function PlayInner() {
         [step],
         0,
         !!byoTtsRef.current,
+        getByoPayload(),
       );
     }
   }, [currentScene?.id, session?.id]);
@@ -1430,7 +1492,7 @@ function PlayInner() {
         },
         body: JSON.stringify({
           session: stripVoicesForTransport(specSession),
-          clientTts: !!byoTtsRef.current,
+          clientTts: !!byoTtsRef.current, byo: getByoPayload(),
         }),
       });
       if (!res.ok) {
@@ -1460,6 +1522,7 @@ function PlayInner() {
         body: JSON.stringify({
           session: stripVoicesForTransport(session),
           freeformText: text,
+          byo: getByoPayload(),
         }),
       });
       if (!classifyRes.ok) {
@@ -1477,7 +1540,7 @@ function PlayInner() {
           body: JSON.stringify({
             session: stripVoicesForTransport(session),
             freeformAction: decision.freeformAction,
-            clientTts: !!byoTtsRef.current,
+            clientTts: !!byoTtsRef.current, byo: getByoPayload(),
           }),
         });
         if (!insertRes.ok) {
@@ -1556,7 +1619,7 @@ function PlayInner() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session: stripVoicesForTransport(specSession),
-            clientTts: !!byoTtsRef.current,
+            clientTts: !!byoTtsRef.current, byo: getByoPayload(),
           }),
         });
         if (!res.ok) {
@@ -1586,7 +1649,7 @@ function PlayInner() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ session: stripVoicesForTransport(session), annotatedImageBase64 }),
+        body: JSON.stringify({ session: stripVoicesForTransport(session), annotatedImageBase64, byo: getByoPayload() }),
       });
       if (!visionRes.ok) {
         const j = (await visionRes.json().catch(() => ({}))) as {
@@ -1607,7 +1670,7 @@ function PlayInner() {
           body: JSON.stringify({
             session: stripVoicesForTransport(session),
             freeformAction: decision.intent.freeformAction,
-            clientTts: !!byoTtsRef.current,
+            clientTts: !!byoTtsRef.current, byo: getByoPayload(),
           }),
         });
         if (!insertRes.ok) {
@@ -1692,7 +1755,7 @@ function PlayInner() {
             },
             body: JSON.stringify({
               session: stripVoicesForTransport(specSession),
-              clientTts: !!byoTtsRef.current,
+              clientTts: !!byoTtsRef.current, byo: getByoPayload(),
             }),
           });
           if (!res.ok) {
@@ -1868,16 +1931,51 @@ function PlayInner() {
           }
           belowCanvas={
             session && session.history.length > 0 ? (
-              <button
-                type="button"
-                onClick={handleExportGallery}
-                className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2"
-                aria-label="导出可交互图集"
-                title="导出本局为可交互图集链接（只会保留最近两次的可交互图集链接）"
-              >
-                <i className="fa-solid fa-link text-[10px]" />
-                导 · 出 · 图 · 集
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleSaveStory}
+                  disabled={saveStatus === "saving"}
+                  className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  aria-label="保存剧情"
+                  title={
+                    saveStatus === "saved"
+                      ? "已保存到服务器"
+                      : saveStatus === "failed"
+                        ? "保存失败，已存本地"
+                        : "保存剧情"
+                  }
+                >
+                  <i
+                    className={`fa-solid ${
+                      saveStatus === "saving"
+                        ? "fa-spinner fa-spin"
+                        : saveStatus === "saved"
+                          ? "fa-check"
+                          : saveStatus === "failed"
+                            ? "fa-exclamation-triangle"
+                            : "fa-bookmark"
+                    } text-[10px]`}
+                  />
+                  {saveStatus === "saving"
+                    ? "保 · 存 · 中"
+                    : saveStatus === "saved"
+                      ? "已 · 保 · 存"
+                      : saveStatus === "failed"
+                        ? "已 · 存 · 本 · 地"
+                        : "保 · 存 · 剧 · 情"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportGallery}
+                  className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2 cursor-pointer"
+                  aria-label="导出可交互图集"
+                  title="导出本局为可交互图集链接（只会保留最近两次的可交互图集链接）"
+                >
+                  <i className="fa-solid fa-link text-[10px]" />
+                  导 · 出 · 图 · 集
+                </button>
+              </>
             ) : null
           }
           aboveCanvasLeft={

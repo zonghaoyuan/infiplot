@@ -1,8 +1,13 @@
+import "server-only";
+
 import type {
+  ByoLlmKeys,
   EngineConfig,
+  ProviderConfig,
   ProviderProtocol,
   TtsConfig,
 } from "@infiplot/types";
+import { validateUpstreamUrl, normalizeBaseUrl } from "./byoProxy";
 
 const VALID_PROTOCOLS = [
   "openai_compatible",
@@ -71,5 +76,130 @@ export function loadEngineConfig(): EngineConfig {
     },
     tts: loadTtsConfig(),
     mockImage: readOptionalVar("MOCK_IMAGE") === "true",
+  };
+}
+
+// ── BYOK (Bring Your Own Key) ────────────────────────────────────────────
+
+/** Provider default base URLs when user doesn't specify one. */
+const PROVIDER_DEFAULTS: Record<string, string> = {
+  openai: "https://api.openai.com",
+  claude: "https://api.anthropic.com",
+  gemini: "https://generativelanguage.googleapis.com",
+};
+
+/** Provider default models when user doesn't specify one. */
+const MODEL_DEFAULTS: Record<string, { text: string; image: string; vision: string }> = {
+  openai: {
+    text: "gpt-4o",
+    image: "gpt-image-1", // CR-4: 支持任意尺寸，dall-e-3 不支持 1536x1024
+    vision: "gpt-4o",
+  },
+  claude: {
+    text: "claude-3-5-sonnet-20241022",
+    image: "claude-3-5-sonnet-20241022", // Claude doesn't have native image gen
+    vision: "claude-3-5-sonnet-20241022",
+  },
+  gemini: {
+    text: "gemini-2.0-flash-exp",
+    image: "imagen-3.0-generate-001",
+    vision: "gemini-2.0-flash-exp",
+  },
+};
+
+type ByoRole = "text" | "image" | "vision";
+type ByoProviderConfig = { provider: string; apiKey: string; baseUrl?: string; model?: string };
+
+/**
+ * Build ProviderConfig from user-supplied BYOK credentials.
+ * Validates upstream URL (SSRF protection), normalizes baseUrl, applies defaults.
+ * Throws on validation failure so API route can return 400.
+ */
+function buildByoProviderConfig(
+  role: ByoRole,
+  byo: ByoProviderConfig,
+  fallback: ProviderConfig,
+): ProviderConfig {
+  const { provider, apiKey, baseUrl } = byo;
+
+  // Validate provider
+  if (!["openai", "claude", "gemini"].includes(provider)) {
+    throw new Error(`Invalid BYO provider for ${role}: ${provider}`);
+  }
+
+  // Claude/Gemini cannot generate images — only OpenAI supports image generation
+  if (role === "image" && provider !== "openai") {
+    throw new Error(
+      `BYO provider "${provider}" does not support image generation. Use "openai" for the image role.`,
+    );
+  }
+
+  // Validate apiKey
+  if (!apiKey?.trim()) {
+    throw new Error(`Missing BYO apiKey for ${role}`);
+  }
+
+  // Resolve baseUrl (user-provided or provider default)
+  let resolvedBaseUrl = baseUrl?.trim() || PROVIDER_DEFAULTS[provider];
+  if (!resolvedBaseUrl) {
+    throw new Error(`No baseUrl for BYO ${role} provider: ${provider}`);
+  }
+  resolvedBaseUrl = normalizeBaseUrl(resolvedBaseUrl);
+
+  // SSRF protection — validates the HOST portion of the URL.
+  // SAFETY INVARIANT: ai-client/normalizeUrl.ts only appends PATH segments
+  // (e.g. /v1) but never changes the host/authority. If that invariant ever
+  // breaks, this check must be moved downstream or duplicated. (CR-9)
+  const validation = validateUpstreamUrl(resolvedBaseUrl);
+  if (!validation.valid) {
+    throw new Error(`Invalid BYO baseUrl for ${role}: ${validation.error}`);
+  }
+
+  // Resolve model (user-provided > provider default > official model)
+  const modelDefaults = MODEL_DEFAULTS[provider];
+  const model = byo.model?.trim() || modelDefaults?.[role] || fallback.model;
+
+  // Map provider string to ProviderProtocol
+  let providerProtocol: ProviderProtocol;
+  if (provider === "openai") {
+    providerProtocol = "openai";
+  } else if (provider === "claude") {
+    providerProtocol = "anthropic";
+  } else if (provider === "gemini") {
+    providerProtocol = "google";
+  } else {
+    providerProtocol = "openai_compatible";
+  }
+
+  return {
+    baseUrl: resolvedBaseUrl,
+    apiKey: apiKey.trim(),
+    model,
+    provider: providerProtocol,
+  };
+}
+
+/**
+ * Build EngineConfig with BYOK (Bring Your Own Key) overrides.
+ * - `byo` param contains user-provided keys from request body (StartRequest.byo / SceneRequest.byo)
+ * - For each role (text/image/vision), if user provided BYO config, use it; otherwise fallback to official keys
+ * - Validates all BYO baseUrls (SSRF protection) and throws on failure
+ */
+export function buildByoEngineConfig(
+  byo: ByoLlmKeys,
+  officialConfig: EngineConfig,
+): EngineConfig {
+  return {
+    text: byo.text
+      ? buildByoProviderConfig("text", byo.text, officialConfig.text)
+      : officialConfig.text,
+    image: byo.image
+      ? buildByoProviderConfig("image", byo.image, officialConfig.image)
+      : officialConfig.image,
+    vision: byo.vision
+      ? buildByoProviderConfig("vision", byo.vision, officialConfig.vision)
+      : officialConfig.vision,
+    tts: officialConfig.tts, // TTS BYOK stays client-side only (existing flow)
+    mockImage: officialConfig.mockImage,
   };
 }
