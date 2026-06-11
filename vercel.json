@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "ignoreCommand": "[ \"$VERCEL_GIT_COMMIT_REF\" = \"cloudflare-migration\" ] && exit 0 || exit 1"
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"cloudflare-migration\" ]; then exit 0; else exit 1; fi"
 }
