@@ -57,8 +57,11 @@ export type GalleryScene = {
 };
 
 export type GalleryDoc = {
-  /** v1 = scenes only (initial export). v2 = + alternates + characters. */
-  v: 1 | 2;
+  /** v1 = scenes only (initial export). v2 = + alternates + characters.
+   *  v3 = + beat audio (stored in a sidecar localStorage key so the main
+   *  doc stays small and the first paint isn't blocked by JSON.parse-ing
+   *  several MB of base64). */
+  v: 1 | 2 | 3;
   id: string;
   createdAt: number;
   orientation: Orientation;
@@ -71,18 +74,40 @@ export type GalleryDoc = {
 };
 
 const STORAGE_PREFIX = "infiplot:gallery:";
+const AUDIO_SUFFIX = ":audio";
+const MUTED_STORAGE_KEY = "infiplot:gallery:muted";
 
 function readDoc(id: string): GalleryDoc | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_PREFIX + id);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GalleryDoc;
-    if ((parsed.v !== 1 && parsed.v !== 2) || !Array.isArray(parsed.scenes)) {
+    if (
+      (parsed.v !== 1 && parsed.v !== 2 && parsed.v !== 3) ||
+      !Array.isArray(parsed.scenes)
+    ) {
       return null;
     }
     return parsed;
   } catch {
     return null;
+  }
+}
+
+function readSidecarAudio(id: string): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(
+      STORAGE_PREFIX + id + AUDIO_SUFFIX,
+    );
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string" && v.startsWith("data:")) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
   }
 }
 
@@ -352,6 +377,8 @@ function Slide({
   beatId,
   orientation,
   alternates,
+  audioByBeatId,
+  muted,
   dialogueOpen,
   setDialogueOpen,
   onAdvanceBeat,
@@ -361,6 +388,8 @@ function Slide({
   beatId: string;
   orientation: Orientation;
   alternates: Record<string, GalleryScene>;
+  audioByBeatId: Record<string, string>;
+  muted: boolean;
   dialogueOpen: boolean;
   setDialogueOpen: (b: boolean) => void;
   onAdvanceBeat: (nextBeatId: string) => void;
@@ -371,6 +400,24 @@ function Slide({
   const intrinsicH = portrait ? 1792 : 1024;
 
   const beat = findBeat(scene, beatId) ?? findBeat(scene, scene.entryBeatId);
+
+  const audioSrc =
+    beat && scene.id && !muted
+      ? (audioByBeatId[`${scene.id}:${beat.id}`] ?? null)
+      : null;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (!audioSrc) {
+      el.pause();
+      return;
+    }
+    el.currentTime = 0;
+    void el.play().catch(() => {
+      // Browsers can refuse autoplay until user interacts — silent fail is fine.
+    });
+  }, [audioSrc]);
 
   const choices: BeatChoice[] =
     beat?.next.type === "choice"
@@ -533,6 +580,16 @@ function Slide({
           onClose={() => setDialogueOpen(false)}
         />
       )}
+
+      {audioSrc && (
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          autoPlay
+          preload="auto"
+          className="hidden"
+        />
+      )}
     </div>
   );
 }
@@ -561,6 +618,20 @@ function GalleryInner() {
   const [downloadingPortraits, setDownloadingPortraits] = useState(false);
   const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [presentation, setPresentation] = useState(false);
+  // Audio map keyed by `${sceneId}:${beatId}`. Loaded in two phases: the
+  // sidecar localStorage key (gallery export path) is read lazily after first
+  // paint so the multi-MB JSON.parse doesn't block the first scene image's
+  // progressive paint. Imports from `.infiplot` files set this synchronously
+  // since the data is already in memory.
+  const [audioByBeatId, setAudioByBeatId] = useState<Record<string, string>>({});
+  const [muted, setMuted] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(MUTED_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   // Top toolbar auto-hide while in fullscreen — it shows briefly on entry,
   // retracts upward, and pops back down when the cursor approaches the top
   // edge. Outside presentation mode the bar is always visible.
@@ -609,6 +680,17 @@ function GalleryInner() {
     setOrientation(d.orientation ?? detectOrientation());
     const first = d.scenes[0]!;
     setStack([{ scene: first, beatId: first.entryBeatId, mainIdx: 0 }]);
+
+    // Lazy-load the audio sidecar AFTER first paint so its JSON.parse (~MBs
+    // of base64) doesn't stall the main thread and let the first image
+    // paint row-by-row. setTimeout(0) yields back to the renderer first.
+    if (d.v === 3) {
+      const t = window.setTimeout(() => {
+        const audio = readSidecarAudio(id);
+        if (Object.keys(audio).length > 0) setAudioByBeatId(audio);
+      }, 0);
+      return () => window.clearTimeout(t);
+    }
   }, []);
 
   // Prefer the doc's stored orientation; fall back to the device.
@@ -1035,6 +1117,8 @@ function GalleryInner() {
         beatId={top.beatId}
         orientation={orientation}
         alternates={alternates}
+        audioByBeatId={audioByBeatId}
+        muted={muted}
         dialogueOpen={dialogueOpen}
         setDialogueOpen={setDialogueOpen}
         onAdvanceBeat={onAdvanceBeat}
@@ -1080,6 +1164,27 @@ function GalleryInner() {
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2">
+          {Object.keys(audioByBeatId).length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = !muted;
+                setMuted(next);
+                try {
+                  window.localStorage.setItem(MUTED_STORAGE_KEY, next ? "1" : "0");
+                } catch {
+                  // ignore
+                }
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm transition-colors hover:text-white"
+              aria-label={muted ? "取消静音" : "静音"}
+              title={muted ? "取消静音" : "静音"}
+            >
+              <i
+                className={`fa-solid ${muted ? "fa-volume-xmark" : "fa-volume-high"} text-[12px]`}
+              />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void togglePresentation()}

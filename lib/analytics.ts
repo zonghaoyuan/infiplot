@@ -53,7 +53,7 @@ type AnalyticsEventData = {
   tts_toggle: { muted: boolean };
   fullscreen_toggle: { on: boolean };
   play_heartbeat: never;
-  gallery_export: { scene_count: number };
+  gallery_export: { scene_count: number; audio_count: number };
 };
 
 export type AnalyticsEvent = keyof AnalyticsEventData;

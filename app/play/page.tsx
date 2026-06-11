@@ -20,6 +20,7 @@ import type { GalleryDoc, GalleryScene } from "@/app/gallery/page";
 import { SettingsModal, readStoredPlayerName, readStoredVisionClick } from "@/components/SettingsModal";
 import { annotateClick } from "@/lib/annotateClient";
 import { loadClientTtsConfig } from "@/lib/clientTtsConfig";
+import { collectBeatAudioForExport } from "@/lib/exportAudio";
 import { PRESETS } from "@/lib/presets";
 import {
   STORY_SHARE_STORAGE_KEY,
@@ -587,6 +588,11 @@ function PlayInner() {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [visionClickEnabled, setVisionClickEnabled] = useState(true);
+  // Top-of-screen progress toast for the gallery / story export pipeline.
+  // null when idle; { done, total, label } while collecting beat audio.
+  const [exportProgress, setExportProgress] = useState<
+    { done: number; total: number; label: string } | null
+  >(null);
 
   const startedRef = useRef(false);
   const poolRef = useRef<Map<string, PrefetchEntry>>(new Map());
@@ -631,6 +637,12 @@ function PlayInner() {
   const replayIndexRef = useRef(-1);
   const replayActiveRef = useRef(false);
   const exportingStoryRef = useRef(false);
+  const exportingGalleryRef = useRef(false);
+  // Audio carried in from a `.infiplot` share file, keyed by `${sceneId}:${beatId}`.
+  // Survives scene swaps so a player who re-exports a replayed game keeps the
+  // baked voices that the original creator already paid to synth — they're
+  // free to embed back into the new gallery / share file.
+  const prebakedAudioRef = useRef<Record<string, string>>({});
   // Original (CDN) URL of the currently-rendered scene image. Used as the key
   // to revoke its blob: URL when the scene swaps. We track the ORIGINAL URL,
   // not the blob URL, because blobUrlCache is keyed by original URL.
@@ -711,6 +723,18 @@ function PlayInner() {
       if (mutedRef.current) return; // 静音 → 不合成 TTS（避免无谓的调用与花费）。
       // 「首页选关闭」也走这条路：bootstrap 时 muted 已被初始化为 true。
       if (!beat.speaker || !beat.line) return;
+
+      // Reuse pre-baked audio from a `.infiplot` import before any synth —
+      // free, instant, and identical to what the original player heard.
+      const curSceneId = currentSceneRef.current?.id;
+      if (curSceneId) {
+        const baked = prebakedAudioRef.current[`${curSceneId}:${beat.id}`];
+        if (baked) {
+          setBeatAudioMap((m) => (m[beat.id] === baked ? m : { ...m, [beat.id]: baked }));
+          return;
+        }
+      }
+
       const speaker = sess.characters.find((c) => c.name === beat.speaker);
       if (!speaker) return;
 
@@ -899,13 +923,26 @@ function PlayInner() {
   // export so the cap is enforced strictly (≤ keepCount + 1 transiently → ≤ N
   // once write completes). Corrupt entries (un-parseable / no createdAt) sort
   // last and get evicted first.
+  //
+  // Audio lives in a sidecar key `infiplot:gallery:<id>:audio` so the main
+  // doc JSON.parse on gallery load doesn't block the main thread with several
+  // MB of base64. The sidecar key inherits its doc's age — paired by id, not
+  // its own createdAt (it never has one) — and is evicted alongside its doc.
   const trimGalleryExports = useCallback((keepCount: number) => {
     try {
       const prefix = "infiplot:gallery:";
-      const entries: { key: string; createdAt: number }[] = [];
+      const audioSuffix = ":audio";
+      const docs: Map<string, { key: string; createdAt: number }> = new Map();
+      const sidecars: Map<string, string> = new Map();
       for (let i = 0; i < window.localStorage.length; i++) {
         const k = window.localStorage.key(i);
         if (!k || !k.startsWith(prefix)) continue;
+        if (k.endsWith(audioSuffix)) {
+          const id = k.slice(prefix.length, -audioSuffix.length);
+          sidecars.set(id, k);
+          continue;
+        }
+        const id = k.slice(prefix.length);
         let createdAt = 0;
         try {
           const raw = window.localStorage.getItem(k);
@@ -916,11 +953,22 @@ function PlayInner() {
         } catch {
           createdAt = 0;
         }
-        entries.push({ key: k, createdAt });
+        docs.set(id, { key: k, createdAt });
       }
-      entries.sort((a, b) => b.createdAt - a.createdAt);
-      for (const e of entries.slice(keepCount)) {
-        window.localStorage.removeItem(e.key);
+      const ordered = [...docs.entries()].sort(
+        (a, b) => b[1].createdAt - a[1].createdAt,
+      );
+      for (const [id, { key }] of ordered.slice(keepCount)) {
+        window.localStorage.removeItem(key);
+        const sc = sidecars.get(id);
+        if (sc) window.localStorage.removeItem(sc);
+        sidecars.delete(id);
+      }
+      // Orphan sidecars (their doc was already gone) get cleaned up too.
+      for (const sc of sidecars.values()) {
+        if (!docs.has(sc.slice(prefix.length, -audioSuffix.length))) {
+          window.localStorage.removeItem(sc);
+        }
       }
     } catch {
       // best-effort — quota or disabled storage shouldn't block the export
@@ -932,9 +980,15 @@ function PlayInner() {
   // reference (those are tens-to-hundreds of KB each). Writes it to
   // localStorage under a one-shot id and opens /gallery#<id> in a new tab
   // so the play session keeps running.
-  const handleExportGallery = useCallback(() => {
+  //
+  // Beat audio is collected synchronously here (reusing the per-scene
+  // beatAudioMap when possible, BYO / server TTS for the rest) and stashed
+  // in a sidecar localStorage key so the gallery's first paint isn't
+  // bottlenecked on JSON.parse-ing several MB of base64.
+  const handleExportGallery = useCallback(async () => {
     const s = sessionRef.current;
-    if (!s) return;
+    if (!s || exportingGalleryRef.current) return;
+    exportingGalleryRef.current = true;
     const scenes: GalleryScene[] = s.history
       .map((h) => ({
         id: h.scene.id,
@@ -947,7 +1001,10 @@ function PlayInner() {
         exit: h.exit,
       }))
       .filter((sc) => sc.imageUrl);
-    if (scenes.length === 0) return;
+    if (scenes.length === 0) {
+      exportingGalleryRef.current = false;
+      return;
+    }
 
     // Alternates: ${parentSceneId}:${choiceId} → reachable scene. Two sources,
     // merged with main-path winning ties (it always agrees with prefetch when
@@ -999,8 +1056,29 @@ function PlayInner() {
     const id = `${Date.now().toString(36)}_${Math.random()
       .toString(36)
       .slice(2, 8)}`;
+
+    let audioByBeatId: Record<string, string> = {};
+    try {
+      setExportProgress({ done: 0, total: 0, label: "正在准备配音" });
+      audioByBeatId = await collectBeatAudioForExport({
+        session: s,
+        beatAudioMap,
+        currentSceneId: currentSceneRef.current?.id ?? null,
+        byoTts: byoTtsRef.current,
+        byoVoiceCache: provisionedVoicesRef.current,
+        prebakedAudio: prebakedAudioRef.current,
+        onProgress: (done, total) =>
+          setExportProgress({ done, total, label: "正在准备配音" }),
+      });
+    } catch {
+      // best-effort — even if the collector throws, the gallery without audio
+      // is still usable; we keep going rather than block the export.
+    } finally {
+      setExportProgress(null);
+    }
+
     const doc: GalleryDoc = {
-      v: 2,
+      v: audioByBeatId && Object.keys(audioByBeatId).length > 0 ? 3 : 2,
       id,
       createdAt: Date.now(),
       orientation: s.orientation ?? "landscape",
@@ -1017,50 +1095,86 @@ function PlayInner() {
       window.localStorage.setItem(`infiplot:gallery:${id}`, docStr);
     } catch {
       // localStorage full or disabled — silently bail; the player keeps playing.
+      exportingGalleryRef.current = false;
       return;
     }
-    track("gallery_export", { scene_count: scenes.length });
+    const audioCount = Object.keys(audioByBeatId).length;
+    if (audioCount > 0) {
+      try {
+        window.localStorage.setItem(
+          `infiplot:gallery:${id}:audio`,
+          JSON.stringify(audioByBeatId),
+        );
+      } catch {
+        // Sidecar too big for quota — gallery still opens without sound.
+      }
+    }
+    track("gallery_export", { scene_count: scenes.length, audio_count: audioCount });
     window.open(`/gallery#id=${id}`, "_blank", "noopener");
-  }, [trimGalleryExports]);
+    exportingGalleryRef.current = false;
+  }, [beatAudioMap, trimGalleryExports]);
 
-  const handleExportStory = useCallback(() => {
+  const handleExportStory = useCallback(async () => {
     const s = sessionRef.current;
     if (!s || s.history.length === 0 || exportingStoryRef.current) return;
     exportingStoryRef.current = true;
     const sceneIndex = Math.max(0, s.history.length - 1);
-    const doc = createStoryShareDoc(s, {
-      sceneIndex,
-      beatId: currentBeatRef.current?.id ?? s.history[sceneIndex]?.scene.entryBeatId,
-    });
-    void (async () => {
-      try {
-        const r = await fetch("/api/story-pack", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ docStr: JSON.stringify(doc) }),
-        });
-        if (!r.ok) {
-          const j = (await r.json().catch(() => ({}))) as { error?: string };
-          window.alert(j.error ?? "剧情分享打包失败");
-          return;
-        }
-        const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = storyShareFilename(doc);
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      } catch {
-        window.alert("剧情分享打包失败");
-      } finally {
-        exportingStoryRef.current = false;
+
+    let audioByBeatId: Record<string, string> = {};
+    try {
+      setExportProgress({ done: 0, total: 0, label: "正在准备配音" });
+      audioByBeatId = await collectBeatAudioForExport({
+        session: s,
+        beatAudioMap,
+        currentSceneId: currentSceneRef.current?.id ?? null,
+        byoTts: byoTtsRef.current,
+        byoVoiceCache: provisionedVoicesRef.current,
+        prebakedAudio: prebakedAudioRef.current,
+        onProgress: (done, total) =>
+          setExportProgress({ done, total, label: "正在准备配音" }),
+      });
+    } catch {
+      // best-effort — share the doc silent if collecting audio failed
+    } finally {
+      setExportProgress(null);
+    }
+
+    const doc = createStoryShareDoc(
+      s,
+      {
+        sceneIndex,
+        beatId: currentBeatRef.current?.id ?? s.history[sceneIndex]?.scene.entryBeatId,
+      },
+      Object.keys(audioByBeatId).length > 0 ? audioByBeatId : undefined,
+    );
+
+    try {
+      const r = await fetch("/api/story-pack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docStr: JSON.stringify(doc) }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        window.alert(j.error ?? "剧情分享打包失败");
+        return;
       }
-    })();
-  }, []);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = storyShareFilename(doc);
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch {
+      window.alert("剧情分享打包失败");
+    } finally {
+      exportingStoryRef.current = false;
+    }
+  }, [beatAudioMap]);
 
   // ── Presentation mode toggle ─────────────────────────────────────────
   const togglePresentation = useCallback(async () => {
@@ -1168,6 +1282,21 @@ function PlayInner() {
           replayIndexRef.current = 0;
           replayActiveRef.current = imported.history.length > 1;
           visitedBeatsRef.current = [first.scene.entryBeatId];
+          // Stash pre-baked audio (from doc.audioByBeatId) so it survives scene
+          // swaps and re-exports. Keyed by `${sceneId}:${beatId}`. Also seed the
+          // current beatAudioMap for the first scene so audio plays right away
+          // — the scene-change effect normally clears the map on transition,
+          // and bare beat ids "b1/b2/..." would otherwise miss prebaked entries.
+          if (doc.audioByBeatId) {
+            prebakedAudioRef.current = { ...doc.audioByBeatId };
+            const seed: Record<string, string> = {};
+            for (const beat of first.scene.beats) {
+              const k = `${first.scene.id}:${beat.id}`;
+              const v = doc.audioByBeatId[k];
+              if (v) seed[beat.id] = v;
+            }
+            if (Object.keys(seed).length > 0) setBeatAudioMap(seed);
+          }
           setSession(initial);
           setCurrentScene(first.scene);
           setCurrentBeatId(first.scene.entryBeatId);
@@ -2066,6 +2195,19 @@ function PlayInner() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {exportProgress && (
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-full bg-black/75 px-4 py-2 text-[11px] smallcaps text-white/95 backdrop-blur-sm shadow-lg flex items-center gap-2"
+        >
+          <i className="fa-solid fa-circle-notch animate-spin text-[11px] text-amber-300" />
+          <span>{exportProgress.label}</span>
+          {exportProgress.total > 0 && (
+            <span className="num text-white/70">
+              {exportProgress.done}/{exportProgress.total}
+            </span>
+          )}
+        </div>
+      )}
       <header className="px-5 md:px-12 pt-6 md:pt-8 flex items-center justify-between">
         <Link
           href="/"
@@ -2119,20 +2261,22 @@ function PlayInner() {
               <>
                 <button
                   type="button"
-                  onClick={handleExportGallery}
-                  className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2"
+                  onClick={() => void handleExportGallery()}
+                  disabled={!!exportProgress}
+                  className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2 disabled:opacity-50"
                   aria-label="导出可交互图集"
-                  title="导出本局为可交互图集链接（只会保留最近两次的可交互图集链接）"
+                  title="导出本局为可交互图集链接（含配音；只会保留最近两次的可交互图集链接）"
                 >
                   <i className="fa-solid fa-link text-[10px]" />
                   导 · 出 · 图 · 集
                 </button>
                 <button
                   type="button"
-                  onClick={handleExportStory}
-                  className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2"
+                  onClick={() => void handleExportStory()}
+                  disabled={!!exportProgress}
+                  className="text-[10px] smallcaps text-clay-500 hover:text-ember-500 transition-colors flex items-center gap-2 disabled:opacity-50"
                   aria-label="分享当前剧情"
-                  title="导出本局为可继续游玩的剧情 JSON"
+                  title="导出本局为可继续游玩的剧情 .infiplot（含配音）"
                 >
                   <i className="fa-solid fa-share-nodes text-[10px]" />
                   分 · 享 · 剧 · 情

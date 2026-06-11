@@ -11,7 +11,7 @@ import type {
 export const STORY_SHARE_STORAGE_KEY = "infiplot:story-import";
 
 export type StoryShareDoc = {
-  v: 1;
+  v: 1 | 2;
   kind: "infiplot-story";
   exportedAt: number;
   current: {
@@ -19,6 +19,11 @@ export type StoryShareDoc = {
     beatId?: string;
   };
   session: Session;
+  /** Pre-synthesized per-beat audio (data:audio/...;base64,...). Keyed by
+   *  `${sceneId}:${beatId}`. v2+ only — older files just have no audio and
+   *  play silent on replay. Embedding keeps the share file self-contained
+   *  so a friend can hear the recorded voices without their own TTS key. */
+  audioByBeatId?: Record<string, string>;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -133,13 +138,16 @@ function sanitizeSessionForShare(session: Session): Session {
 export function createStoryShareDoc(
   session: Session,
   current: { sceneIndex: number; beatId?: string },
+  audioByBeatId?: Record<string, string>,
 ): StoryShareDoc {
+  const hasAudio = !!audioByBeatId && Object.keys(audioByBeatId).length > 0;
   return {
-    v: 1,
+    v: hasAudio ? 2 : 1,
     kind: "infiplot-story",
     exportedAt: Date.now(),
     current,
     session: sanitizeSessionForShare(session),
+    ...(hasAudio ? { audioByBeatId } : {}),
   };
 }
 
@@ -149,7 +157,7 @@ export function storyShareFilename(doc: StoryShareDoc): string {
 
 export function parseStoryShareDoc(value: unknown): StoryShareDoc {
   if (!isRecord(value)) throw new Error("这不是有效的剧情分享文件");
-  if (value.kind !== "infiplot-story" || value.v !== 1) {
+  if (value.kind !== "infiplot-story" || (value.v !== 1 && value.v !== 2)) {
     throw new Error("剧情分享文件格式不支持");
   }
   if (typeof value.exportedAt !== "number" || !Number.isFinite(value.exportedAt)) {
@@ -211,9 +219,22 @@ export function parseStoryShareDoc(value: unknown): StoryShareDoc {
     }
   }
 
+  let audioByBeatId: Record<string, string> | undefined;
+  if (value.audioByBeatId !== undefined) {
+    if (!isRecord(value.audioByBeatId)) {
+      throw new Error("剧情分享文件配音数据不合法");
+    }
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value.audioByBeatId)) {
+      if (typeof v === "string" && v.startsWith("data:")) cleaned[k] = v;
+    }
+    if (Object.keys(cleaned).length > 0) audioByBeatId = cleaned;
+  }
+
   const doc = value as StoryShareDoc;
   return {
     ...doc,
     session: sanitizeSessionForShare(doc.session),
+    ...(audioByBeatId ? { audioByBeatId } : {}),
   };
 }
