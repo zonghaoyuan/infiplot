@@ -31,8 +31,6 @@ const ENDPOINT_SUFFIX =
 const DEFAULT_VERSION_SEGMENT: Record<ProviderProtocol, string | null> = {
   openai_compatible: "v1",
   openai: "v1",
-  anthropic: "v1",
-  google: "v1beta",
   // Runware posts to the bare base URL with no version-pathed sub-resource,
   // so never inject a segment for it.
   runware: null,

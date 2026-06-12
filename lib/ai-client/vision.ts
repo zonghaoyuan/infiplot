@@ -1,7 +1,6 @@
-import { generateText } from "ai";
-import type { ModelMessage } from "ai";
+import OpenAI from "openai";
 import type { ProviderConfig } from "@infiplot/types";
-import { createLanguageModel, resolveProtocol } from "./model";
+import { normalizeBaseUrl } from "./normalizeUrl";
 
 const VISION_TIMEOUT_MS = 60_000;
 
@@ -22,34 +21,32 @@ export async function analyzeImageDataUrl(
   imageDataUrl: string,
   prompt: string,
 ): Promise<string> {
-  const protocol = resolveProtocol(config);
-  const model = createLanguageModel(config, protocol);
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: normalizeBaseUrl(config.baseUrl, "openai_compatible"),
+    maxRetries: 0,
+    timeout: VISION_TIMEOUT_MS,
+    dangerouslyAllowBrowser: true,
+  });
 
-  const messages: ModelMessage[] = [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: prompt },
-        { type: "image", image: imageDataUrl },
-      ],
-    },
-  ];
+  const completion = await client.chat.completions.create({
+    model: config.model,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: imageDataUrl } },
+        ],
+      },
+    ],
+    temperature: 0.2,
+    stream: false,
+  });
 
-  const timeoutCtrl = new AbortController();
-  const timeoutId = setTimeout(() => timeoutCtrl.abort(), VISION_TIMEOUT_MS);
-  try {
-    const { text } = await generateText({
-      model,
-      messages,
-      temperature: 0.2,
-      maxRetries: 0,
-      abortSignal: timeoutCtrl.signal,
-    });
-    if (typeof text !== "string" || text.length === 0) {
-      throw new Error(`Vision API (AI SDK ${protocol}) returned no content.`);
-    }
-    return text;
-  } finally {
-    clearTimeout(timeoutId);
+  const text = completion.choices[0]?.message?.content ?? "";
+  if (text.length === 0) {
+    throw new Error(`Vision API returned no content.`);
   }
+  return text;
 }

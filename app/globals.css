@@ -88,6 +88,30 @@
   .vn-scrollbar::-webkit-scrollbar-corner {
     background: transparent;
   }
+
+  /* 极细滚动条 · 无轨道背景 */
+  .thin-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(195, 155, 75, 0.5) transparent;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(195, 155, 75, 0.45);
+    border-radius: 999px;
+  }
+
+  .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(220, 180, 95, 0.7);
+  }
 }
 
 @keyframes infiplot-ripple {

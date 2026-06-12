@@ -3,8 +3,9 @@ import { jsonrepair, JSONRepairError } from "jsonrepair";
 // Strict-then-forgiving JSON parser for LLM output. Tries in order:
 //   1. Direct JSON.parse on the trimmed text.
 //   2. Extract from ```json``` fenced block.
-//   3. Slice between first { and last } and parse.
-//   4. Apply targeted regex pre-repairs (see preRepair) and try jsonrepair.
+//   3. Parse the first complete JSON value prefix (handles duplicated objects).
+//   4. Slice between first { and last } and parse.
+//   5. Apply targeted regex pre-repairs (see preRepair) and try jsonrepair.
 //
 // On final failure, logs the first 800 chars of the raw model output so we
 // can diagnose the actual syntax error without flooding logs or leaking
@@ -40,6 +41,67 @@ function preRepair(s: string): string {
   return s.replace(/"([^"\n:]+):(\s+)"/g, '"$1":$2"');
 }
 
+function firstJsonStart(s: string): number {
+  const objectStart = s.indexOf("{");
+  const arrayStart = s.indexOf("[");
+  if (objectStart === -1) return arrayStart;
+  if (arrayStart === -1) return objectStart;
+  return Math.min(objectStart, arrayStart);
+}
+
+function firstCompleteJsonValue(s: string): string | undefined {
+  const start = firstJsonStart(s);
+  if (start === -1) return undefined;
+
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < s.length; i += 1) {
+    const ch = s[i]!;
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") {
+      stack.push("}");
+      continue;
+    }
+
+    if (ch === "[") {
+      stack.push("]");
+      continue;
+    }
+
+    if (ch === "}" || ch === "]") {
+      if (stack.at(-1) !== ch) return undefined;
+      stack.pop();
+      if (stack.length === 0) return s.slice(start, i + 1);
+    }
+  }
+
+  return undefined;
+}
+
+function parseFirstCompleteJsonValue<T>(s: string): T | undefined {
+  const value = firstCompleteJsonValue(s);
+  if (!value) return undefined;
+  return JSON.parse(value) as T;
+}
+
 export function parseJsonLoose<T>(raw: string): T {
   const trimmed = raw.trim();
 
@@ -54,8 +116,20 @@ export function parseJsonLoose<T>(raw: string): T {
     try {
       return JSON.parse(fenced[1]) as T;
     } catch {
-      // fall through
+      try {
+        const parsed = parseFirstCompleteJsonValue<T>(fenced[1]);
+        if (parsed !== undefined) return parsed;
+      } catch {
+        // fall through
+      }
     }
+  }
+
+  try {
+    const parsed = parseFirstCompleteJsonValue<T>(trimmed);
+    if (parsed !== undefined) return parsed;
+  } catch {
+    // fall through
   }
 
   const first = trimmed.indexOf("{");

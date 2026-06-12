@@ -8,6 +8,16 @@ import type { CharacterVoice, TtsConfig } from "@infiplot/types";
 // top-N candidates so multiple similar characters don't collapse onto the
 // same voice. Provision is a pure function — no network call needed.
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
 const OUTPUT_FORMAT = "mp3";
 const OUTPUT_MIME = "audio/mpeg";
 
@@ -183,8 +193,6 @@ export async function stepfunSynthesize(
   }
 
   const ab = await res.arrayBuffer();
-  // Buffer is fine here — TTS routes run on runtime="nodejs". Falls back to
-  // btoa+chunks if we ever target Edge.
-  const audioBase64 = Buffer.from(ab).toString("base64");
+  const audioBase64 = arrayBufferToBase64(ab);
   return { audioBase64, mimeType: OUTPUT_MIME };
 }

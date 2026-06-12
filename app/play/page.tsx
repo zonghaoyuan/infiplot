@@ -29,13 +29,18 @@ import {
   storyShareFilename,
 } from "@/lib/storyShare";
 import { provisionVoice, synthesize } from "@infiplot/tts-client";
+import {
+  startSession,
+  requestScene,
+  visionDecide,
+  classifyFreeform,
+  requestInsertBeat,
+} from "@/lib/engineClient";
 import type {
   Beat,
   BeatChoice,
   Character,
   CharacterVoice,
-  FreeformClassifyResponse,
-  InsertBeatResponse,
   Orientation,
   Scene,
   SceneExit,
@@ -43,44 +48,10 @@ import type {
   Session,
   StartResponse,
   TtsConfig,
-  VisionResponse,
 } from "@infiplot/types";
 import { track } from "@/lib/analytics";
 
 const MUTED_STORAGE_KEY = "infiplot:muted";
-
-// ── FOT reduction helpers ──────────────────────────────────────────────
-// Strip bulky voice.referenceAudioBase64 from the session before sending it to
-// the server. The engine only needs character names + visualDescriptions for
-// scene generation; voice data is only used by /api/beat-audio (which receives
-// the voice directly, not via session). The client retains voices locally and
-// re-merges them from the response via mergeCharactersPreserveVoice.
-function stripVoicesForTransport(session: Session): Session {
-  return {
-    ...session,
-    characters: session.characters.map((c) => ({ ...c, voice: undefined })),
-  };
-}
-
-// Merge server-returned characters with locally-held voices. The server strips
-// voice from already-known characters (P0), so only NEW characters carry voice.
-// For existing characters, re-attach the voice the client already holds.
-function mergeCharactersPreserveVoice(
-  local: Character[],
-  remote: Character[],
-): Character[] {
-  const localByName = new Map(local.map((c) => [c.name, c]));
-  return remote.map((c) => {
-    const prev = localByName.get(c.name);
-    if (!prev) return c;
-    return { ...c, voice: c.voice ?? prev.voice };
-  });
-}
-
-// Consecutive silent (no-audio) beats before we surface the BYO-key nudge to a
-// non-BYO, unmuted player. Set high enough that one transient miss won't trip
-// it, low enough to catch a scene that's clearly being rate-limited.
-const SILENCE_NUDGE_THRESHOLD = 3;
 
 // Mobile-portrait users get a 9:16 scene image painted for them; everyone else
 // (desktop, tablet, mobile-landscape) keeps the 16:9 landscape image. Only a
@@ -396,19 +367,8 @@ function prefetchScenePath(
   const specSession = buildSpeculativeSession(baseSession, steps);
   const abort = new AbortController();
   const promise = (async () => {
-    const res = await fetch("/api/scene", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ session: stripVoicesForTransport(specSession), clientTts }),
-      signal: abort.signal,
-    });
-    if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(j.error ?? res.statusText);
-    }
-    const data = (await res.json()) as SceneResponse;
+    const data = await requestScene({ session: specSession, clientTts });
+    if (abort.signal.aborted) throw new Error("aborted");
 
     // Record this resolved alternate for the gallery export. Key is
     // (parent scene id at the choice point) : (choice id). Includes the
@@ -425,12 +385,6 @@ function prefetchScenePath(
     // fresh CDN download. Don't await — let it run in the background; the
     // transition path awaits the same cached promise via getOrCreateBlobUrl.
     void getOrCreateBlobUrl(data.imageUrl);
-
-    // Re-attach locally-held voices the server stripped from known characters.
-    data.characters = mergeCharactersPreserveVoice(
-      baseSession.characters,
-      data.characters,
-    );
 
     // Recursive: if the resulting scene has exactly one change-scene exit,
     // it is a must-pass node — prefetch its child too.
@@ -580,12 +534,6 @@ function PlayInner() {
   const [orientation, setOrientation] = useState<Orientation>("landscape");
   const [lastExitLabel, setLastExitLabel] = useState<string | null>(null);
   // Consecutive server-side TTS misses (null audio / failed /api/beat-audio).
-  // Climbs when the shared server key is rate-limited by MiMo — the exact pain
-  // BYO fixes — so the play page can nudge non-BYO users to add their own key.
-  // Reset to 0 on any successful synth. Only the server path touches it.
-  const [silenceStrikes, setSilenceStrikes] = useState(0);
-  // Once the player dismisses the silence nudge, keep it gone for this session.
-  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [visionClickEnabled, setVisionClickEnabled] = useState(true);
   // Top-of-screen progress toast for the gallery / story export pipeline.
@@ -752,8 +700,7 @@ function PlayInner() {
         let audioUrl: string | null = null;
         if (byo) {
           // Client-direct: provision (once per speaker, cached) + synth against
-          // Xiaomi with the user's own key — no /api/beat-audio round-trip and
-          // the key never touches our server.
+          // Xiaomi with the user's own key — the key never touches our server.
           const voice = await resolveByoVoice(
             provisionedVoicesRef.current,
             byo,
@@ -769,28 +716,8 @@ function PlayInner() {
           );
           audioUrl = `data:${out.mimeType};base64,${out.audioBase64}`;
         } else {
-          const res = await fetch("/api/beat-audio", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              beat: { id: beat.id, line: beat.line, lineDelivery: beat.lineDelivery },
-              voice: speaker.voice,
-            }),
-            signal: abort.signal,
-          });
-          if (res.status === 204) {
-            setSilenceStrikes((n) => Math.min(n + 1, 99));
-            return;
-          }
-          if (!res.ok) {
-            setSilenceStrikes((n) => Math.min(n + 1, 99));
-            return;
-          }
-          const blob = await res.blob();
-          audioUrl = URL.createObjectURL(blob);
-          setSilenceStrikes(0);
+          // No TTS configured — silent.
+          return;
         }
         // Skip the state write if we've been aborted between the await and
         // here — beat ids are scene-local, so a late arrival from a prior
@@ -798,8 +725,6 @@ function PlayInner() {
         // same id.
         if (audioUrl && !abort.signal.aborted) {
           setBeatAudioMap((m) => ({ ...m, [beat.id]: audioUrl }));
-        } else if (audioUrl?.startsWith("blob:")) {
-          URL.revokeObjectURL(audioUrl);
         }
       } catch {
         // aborted / network / Xiaomi rate-limit — silent fallback (no audio)
@@ -888,26 +813,12 @@ function PlayInner() {
   }, [muted, prefetchSceneAudio]);
 
   const handleSettingsSaved = useCallback(
-    (settings: { ttsConfigured: boolean; playerName: string; visionClickEnabled: boolean }) => {
+    (settings: { playerName: string; visionClickEnabled: boolean; ttsConfigured: boolean }) => {
       setVisionClickEnabled(settings.visionClickEnabled);
       const nextPlayerName = settings.playerName || undefined;
       setSession((prev) => prev ? { ...prev, playerName: nextPlayerName } : prev);
-      const cfg = settings.ttsConfigured ? loadClientTtsConfig() : null;
-      byoTtsRef.current = cfg;
-      setByoTtsConfig(cfg);
-      if (cfg) {
-        setSilenceStrikes(0);
-        cancelBeatAudioFetches();
-        setBeatAudioMap((prev) => {
-          for (const url of Object.values(prev)) {
-            if (url.startsWith("blob:")) URL.revokeObjectURL(url);
-          }
-          return {};
-        });
-        prefetchSceneAudio();
-      }
     },
-    [prefetchSceneAudio],
+    [],
   );
 
   function detachRecordedReplay(): void {
@@ -1389,31 +1300,21 @@ function PlayInner() {
             throw new Error(`找不到精选剧情：${cardName}`);
           },
         )
-      : fetch("/api/start", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            ...livePayload,
+      : (async () => {
+          const data = await startSession({
+            ...livePayload!,
             clientTts: !!byoTtsRef.current,
-          }),
-        }).then(async (r) => {
-          if (!r.ok) {
-            const j = (await r.json().catch(() => ({}))) as { error?: string };
-            throw new Error(j.error ?? r.statusText);
-          }
-          const data = (await r.json()) as StartResponse;
-          // Live /api/start doesn't echo ws/sg back — splice in what we sent.
+          });
+          // startSession doesn't echo ws/sg back — splice in what we sent.
           // styleReferenceImage is similarly not in StartResponse; tag it on so
-          // the session we build below carries it for every /api/scene call.
+          // the session we build below carries it for every scene call.
           return {
             ...data,
             worldSetting: livePayload!.worldSetting,
             styleGuide: livePayload!.styleGuide,
             styleReferenceImage: livePayload!.styleReferenceImage,
           };
-        });
+        })();
 
     fetchStart
       .then(async (data) => {
@@ -1559,10 +1460,7 @@ function PlayInner() {
             storyStateAfter: result.storyState,
           },
         ],
-        characters: mergeCharactersPreserveVoice(
-          base.characters,
-          result.characters,
-        ),
+        characters: result.characters,
         storyState: result.storyState,
       };
       visitedBeatsRef.current = [result.scene.entryBeatId];
@@ -1785,21 +1683,11 @@ function PlayInner() {
     clearPool(poolRef.current);
 
     const promise = (async () => {
-      const res = await fetch("/api/scene", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session: stripVoicesForTransport(specSession),
-          clientTts: !!byoTtsRef.current,
-        }),
+      const data = await requestScene({
+        session: specSession,
+        clientTts: !!byoTtsRef.current,
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? res.statusText);
-      }
-      return (await res.json()) as SceneResponse;
+      return data;
     })();
 
     void performSceneTransition(promise, exit, visited, choice.label);
@@ -1817,38 +1705,19 @@ function PlayInner() {
     setPhase("vision-thinking");
 
     try {
-      const classifyRes = await fetch("/api/classify-freeform", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          session: stripVoicesForTransport(session),
-          freeformText: text,
-        }),
+      const decision = await classifyFreeform({
+        session,
+        freeformText: text,
       });
-      if (!classifyRes.ok) {
-        const j = (await classifyRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? classifyRes.statusText);
-      }
-      const decision = (await classifyRes.json()) as FreeformClassifyResponse;
 
       if (decision.classify === "insert-beat") {
         // Interactive beat: NPC responds to the player's action, scene stays
         setPhase("inserting-beat");
-        const insertRes = await fetch("/api/insert-beat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session: stripVoicesForTransport(session),
-            freeformAction: decision.freeformAction,
-            clientTts: !!byoTtsRef.current,
-          }),
+        const { partial, characters: insertChars } = await requestInsertBeat({
+          session,
+          freeformAction: decision.freeformAction,
+          clientTts: !!byoTtsRef.current,
         });
-        if (!insertRes.ok) {
-          const j = (await insertRes.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error ?? insertRes.statusText);
-        }
-        const { partial, characters: insertChars } =
-          (await insertRes.json()) as InsertBeatResponse;
 
         const fromBeatId =
           currentBeatRef.current?.id ?? currentScene.entryBeatId;
@@ -1875,10 +1744,7 @@ function PlayInner() {
           history: session.history.map((h, i, arr) =>
             i === arr.length - 1 ? { ...h, scene: patched, visitedBeatIds: nextVisited } : h,
           ),
-          characters: mergeCharactersPreserveVoice(
-            session.characters,
-            insertChars,
-          ),
+          characters: insertChars,
         };
         setSession(nextSession);
         setCurrentScene(patched);
@@ -1914,19 +1780,11 @@ function PlayInner() {
       };
 
       const promise = (async () => {
-        const res = await fetch("/api/scene", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            session: stripVoicesForTransport(specSession),
-            clientTts: !!byoTtsRef.current,
-          }),
+        const data = await requestScene({
+          session: specSession,
+          clientTts: !!byoTtsRef.current,
         });
-        if (!res.ok) {
-          const j = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error ?? res.statusText);
-        }
-        return (await res.json()) as SceneResponse;
+        return data;
       })();
 
       setPendingClick(null);
@@ -1945,43 +1803,19 @@ function PlayInner() {
 
     try {
       const annotatedImageBase64 = await annotateClick(imageUrl, click);
-      const visionRes = await fetch("/api/vision", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ session: stripVoicesForTransport(session), annotatedImageBase64 }),
+      const decision = await visionDecide({
+        session,
+        annotatedImageBase64,
       });
-      if (!visionRes.ok) {
-        const j = (await visionRes.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        throw new Error(j.error ?? visionRes.statusText);
-      }
-      const decision = (await visionRes.json()) as VisionResponse;
       track("vision_click", { result: decision.classify });
 
       if (decision.classify === "insert-beat") {
         setPhase("inserting-beat");
-        const insertRes = await fetch("/api/insert-beat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            session: stripVoicesForTransport(session),
-            freeformAction: decision.intent.freeformAction,
-            clientTts: !!byoTtsRef.current,
-          }),
+        const { partial, characters: insertChars } = await requestInsertBeat({
+          session,
+          freeformAction: decision.intent.freeformAction,
+          clientTts: !!byoTtsRef.current,
         });
-        if (!insertRes.ok) {
-          const j = (await insertRes.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(j.error ?? insertRes.statusText);
-        }
-        const { partial, characters: insertChars } =
-          (await insertRes.json()) as InsertBeatResponse;
 
         const fromBeatId =
           currentBeatRef.current?.id ?? currentScene.entryBeatId;
@@ -2007,10 +1841,7 @@ function PlayInner() {
           history: session.history.map((h, i, arr) =>
             i === arr.length - 1 ? { ...h, scene: patched } : h,
           ),
-          characters: mergeCharactersPreserveVoice(
-            session.characters,
-            insertChars,
-          ),
+          characters: insertChars,
         };
         setSession(nextSession);
         setCurrentScene(patched);
@@ -2049,23 +1880,11 @@ function PlayInner() {
         clearPool(poolRef.current);
 
         const promise = (async () => {
-          const res = await fetch("/api/scene", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              session: stripVoicesForTransport(specSession),
-              clientTts: !!byoTtsRef.current,
-            }),
+          const data = await requestScene({
+            session: specSession,
+            clientTts: !!byoTtsRef.current,
           });
-          if (!res.ok) {
-            const j = (await res.json().catch(() => ({}))) as {
-              error?: string;
-            };
-            throw new Error(j.error ?? res.statusText);
-          }
-          return (await res.json()) as SceneResponse;
+          return data;
         })();
 
         await performSceneTransition(
@@ -2183,16 +2002,6 @@ function PlayInner() {
   const sceneCount = session?.history.length ?? 0;
   const beatCount = visitedBeatsRef.current.length;
 
-  // Surface the BYO-key nudge only to an unmuted, non-BYO player whose last few
-  // beats came back silent (shared key rate-limited) — the exact pain BYO fixes.
-  // Dismissible for the session.
-  const showSilenceNudge =
-    phase === "ready" &&
-    !muted &&
-    !byoTtsConfig &&
-    !nudgeDismissed &&
-    silenceStrikes >= SILENCE_NUDGE_THRESHOLD;
-
   return (
     <div className="min-h-screen flex flex-col">
       {exportProgress && (
@@ -2298,32 +2107,6 @@ function PlayInner() {
                 />
                 {muted ? "静 · 音" : "有 · 声"}
               </button>
-
-              {/* Silence nudge — a compact pill right beside the mute toggle.
-                  Clicking opens the BYO-key modal in place (no trip to the
-                  homepage). The × dismisses it for the session. */}
-              {showSilenceNudge && (
-                <span className="flex items-center gap-1 animate-fade-in">
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-ember-500/40 bg-ember-500/10 px-2.5 py-1 text-[10px] text-ember-500 hover:bg-ember-500/20 transition-colors"
-                    title="经常没声音？填入你自己的小米 MiMo Key（免费），配音更稳定"
-                  >
-                    <i className="fa-solid fa-volume-xmark text-[9px]" />
-                    经常没声音？自带 Key
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNudgeDismissed(true)}
-                    aria-label="关闭提示"
-                    title="关闭"
-                    className="text-clay-400 hover:text-clay-700 transition-colors"
-                  >
-                    <i className="fa-solid fa-xmark text-[10px]" />
-                  </button>
-                </span>
-              )}
             </>
           }
         />

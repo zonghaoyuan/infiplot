@@ -327,19 +327,15 @@ export type VisionClassify = "insert-beat" | "change-scene";
  *   openai_compatible  text / vision / image  — OpenAI Chat Completions +
  *                      `/images/generations` (self-implemented fetch; the
  *                      default for text/vision when unset)
- *   anthropic          text / vision          — native Anthropic Messages (AI SDK)
- *   google             text / vision / image  — native Gemini (AI SDK); image
- *                      uses the Nano Banana family
- *   openai             image only             — OpenAI gpt-image via AI SDK,
- *                      unlocks reference-image editing (for text/vision use
- *                      openai_compatible, which already speaks OpenAI's format)
+ *   openai             image only             — OpenAI gpt-image via the
+ *                      official OpenAI SDK, unlocks reference-image editing
+ *                      (for text/vision use openai_compatible, which already
+ *                      speaks OpenAI's format)
  *   runware            image only             — Runware task-array protocol
  *                      (self-implemented; the default for runware.ai URLs)
  */
 export type ProviderProtocol =
   | "openai_compatible"
-  | "anthropic"
-  | "google"
   | "openai"
   | "runware";
 

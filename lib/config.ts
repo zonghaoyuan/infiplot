@@ -6,8 +6,6 @@ import type {
 
 const VALID_PROTOCOLS = [
   "openai_compatible",
-  "anthropic",
-  "google",
   "openai",
   "runware",
 ] as const;

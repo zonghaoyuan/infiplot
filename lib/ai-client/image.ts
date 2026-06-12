@@ -1,6 +1,4 @@
-import { generateImage as generateImageSdk } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import OpenAI, { toFile, type Uploadable } from "openai";
 import type { Orientation, ProviderConfig, ProviderProtocol } from "@infiplot/types";
 import { fetchWithRetry } from "./fetchWithRetry";
 import { normalizeBaseUrl } from "./normalizeUrl";
@@ -48,8 +46,8 @@ export type GenerateImageOptions = {
   /**
    * Reference images (UUIDs, URLs, or base64) to condition generation on —
    * typically character portraits + the prior scene image. Runware caps at 4;
-   * we silently truncate beyond that. On the OpenAI/Gemini AI SDK paths these
-   * map to `prompt.images` (the SDK accepts public URLs or data URLs).
+   * we silently truncate beyond that. On the native OpenAI path these are
+   * fetched/decoded and sent to `images.edit`.
    */
   referenceImages?: string[];
   /** 0–1, FLUX needs ≥ 0.8 to actually have an effect. Runware-only. */
@@ -58,7 +56,7 @@ export type GenerateImageOptions = {
    * Output aspect, locked per session. "portrait" → 9:16 vertical for mobile;
    * default/"landscape" → 16:9 widescreen. Mapped to each provider's nearest
    * supported size: Runware 1024×1792, OpenAI-compatible REST 1024x1792,
-   * native gpt-image 1024x1536, Gemini aspectRatio 9:16.
+   * native gpt-image 1024x1536.
    */
   orientation?: Orientation;
 };
@@ -66,8 +64,8 @@ export type GenerateImageOptions = {
 export type GenerateImageResult = {
   /**
    * Image the client can render directly. A Runware CDN URL on the Runware
-   * path; a `data:<mime>;base64,...` URI on the AI SDK paths (OpenAI/Gemini
-   * return raw bytes, not a hosted URL).
+   * path; a `data:<mime>;base64,...` URI on the native OpenAI path when GPT
+   * image models return raw bytes instead of a hosted URL.
    */
   imageUrl: string;
   /**
@@ -117,63 +115,124 @@ export async function generateImage(
   const protocol = resolveImageProtocol(config);
   switch (protocol) {
     case "openai":
-    case "google":
-      return generateImageViaAiSdk(config, prompt, options, protocol);
+      return generateImageOpenAi(config, prompt, options);
     case "runware":
       return generateImageRunware(config, prompt, options);
-    case "anthropic":
-      throw new Error(
-        'IMAGE_PROVIDER "anthropic" does not generate images. Use "openai", "google", "runware", or "openai_compatible".',
-      );
     case "openai_compatible":
     default:
       return generateImageOpenAiCompatible(config, prompt, options);
   }
 }
 
-// Native OpenAI (gpt-image) / Gemini (Nano Banana) via the Vercel AI SDK.
-// Unlike the fetch path, this supports reference-image editing via
-// `prompt.images`. The SDK returns raw bytes (no hosted URL), so we hand the
-// client a data URI and synthesize a UUID; continuity references reuse the
-// data URI rather than a provider UUID.
-async function generateImageViaAiSdk(
+// Native OpenAI (gpt-image) via the official OpenAI SDK. Unlike the compatible
+// fetch path, this supports reference-image editing through `images.edit`.
+// GPT image models return raw bytes, so we hand the client a data URI and
+// synthesize a UUID; continuity references reuse the data URI rather than a
+// provider UUID.
+async function generateImageOpenAi(
   config: ProviderConfig,
   prompt: string,
-  options: GenerateImageOptions | undefined,
-  protocol: "openai" | "google",
+  options?: GenerateImageOptions,
 ): Promise<GenerateImageResult> {
-  const baseURL = normalizeBaseUrl(config.baseUrl, protocol);
-  const imageModel =
-    protocol === "openai"
-      ? createOpenAI({ apiKey: config.apiKey, baseURL }).image(config.model)
-      : createGoogleGenerativeAI({ apiKey: config.apiKey, baseURL }).image(
-          config.model,
-        );
-
-  const refs = (options?.referenceImages ?? []).slice(0, MAX_REFERENCE_IMAGES);
-  const promptArg =
-    refs.length > 0 ? { text: prompt, images: refs } : prompt;
-
-  // Session-locked aspect. gpt-image takes an explicit `size` (portrait /
-  // landscape options are 1024x1536 / 1536x1024); Gemini takes an `aspectRatio`.
-  const portrait = options?.orientation === "portrait";
-  const { image } = await generateImageSdk({
-    model: imageModel,
-    prompt: promptArg,
-    ...(protocol === "openai"
-      ? { size: (portrait ? "1024x1536" : "1536x1024") as `${number}x${number}` }
-      : { aspectRatio: (portrait ? "9:16" : "16:9") as `${number}:${number}` }),
+  const client = new OpenAI({
+    apiKey: config.apiKey,
+    baseURL: normalizeBaseUrl(config.baseUrl, "openai"),
+    maxRetries: 2,
+    dangerouslyAllowBrowser: true,
   });
+  const refs = (options?.referenceImages ?? []).slice(0, MAX_REFERENCE_IMAGES);
+  const portrait = options?.orientation === "portrait";
+  const size = portrait ? "1024x1536" : "1536x1024";
 
-  return {
-    imageUrl: `data:${image.mediaType};base64,${image.base64}`,
-    imageUuid: crypto.randomUUID(),
-  };
+  const response =
+    refs.length > 0
+      ? await client.images.edit({
+          model: config.model,
+          prompt,
+          image: await Promise.all(refs.map(referenceImageToUploadable)),
+          n: 1,
+          size,
+        })
+      : await client.images.generate({
+          model: config.model,
+          prompt,
+          n: 1,
+          size,
+        });
+
+  return imageResponseToResult(response);
+}
+
+async function referenceImageToUploadable(ref: string): Promise<Uploadable> {
+  if (ref.startsWith("data:")) {
+    const response = await fetch(ref);
+    if (!response.ok) {
+      throw new Error(`Failed to read data URL reference image.`);
+    }
+    const mediaType = response.headers.get("content-type") ?? "image/png";
+    return toFile(response, `reference.${extensionFromMediaType(mediaType)}`, {
+      type: mediaType,
+    });
+  }
+
+  if (/^https?:\/\//i.test(ref)) {
+    const response = await fetch(ref);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch reference image ${ref}: HTTP ${response.status}`,
+      );
+    }
+    const mediaType = response.headers.get("content-type") ?? "image/png";
+    return toFile(response, filenameFromUrl(ref, mediaType), {
+      type: mediaType,
+    });
+  }
+
+  throw new Error(
+    `Native OpenAI image editing requires reference image URLs or data URLs; got "${ref.slice(0, 32)}...".`,
+  );
+}
+
+function imageResponseToResult(
+  response: OpenAI.Images.ImagesResponse,
+): GenerateImageResult {
+  const data = response.data?.[0];
+  const b64 = data?.b64_json;
+  if (b64) {
+    const format = response.output_format ?? "png";
+    return {
+      imageUrl: `data:image/${format};base64,${b64}`,
+      imageUuid: crypto.randomUUID(),
+    };
+  }
+
+  const imageUrl = data?.url;
+  if (imageUrl) {
+    return { imageUrl, imageUuid: crypto.randomUUID() };
+  }
+
+  throw new Error(`No image data in OpenAI response.`);
+}
+
+function filenameFromUrl(url: string, mediaType: string): string {
+  try {
+    const name = new URL(url).pathname.split("/").filter(Boolean).at(-1);
+    if (name && /\.[a-z0-9]+$/i.test(name)) return name;
+  } catch {
+    // Fall back to the media type below.
+  }
+  return `reference.${extensionFromMediaType(mediaType)}`;
+}
+
+function extensionFromMediaType(mediaType: string): string {
+  if (mediaType.includes("jpeg") || mediaType.includes("jpg")) return "jpg";
+  if (mediaType.includes("webp")) return "webp";
+  return "png";
 }
 
 // OpenAI-compatible REST route (GPTGod, DALL-E proxies, etc.). Basic
 // text-to-image only — no reference images on this path; for editing/anchoring
-// set IMAGE_PROVIDER=openai (or google) to take the AI SDK path above.
+// set IMAGE_PROVIDER=openai to take the native OpenAI path above.
 async function generateImageOpenAiCompatible(
   config: ProviderConfig,
   prompt: string,
