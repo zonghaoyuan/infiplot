@@ -367,6 +367,19 @@ export type EngineConfig = {
   tts?: TtsConfig;
   /** When true the renderer returns a placeholder PNG instead of calling the image API. */
   mockImage?: boolean;
+  /**
+   * Per-attempt hard timeout (ms) for image-generation requests. Unset → no
+   * client-side timeout (only the provider's own gateway limits apply, e.g.
+   * Runware kills tasks at ~55s with a 504).
+   */
+  imageTimeoutMs?: number;
+  /**
+   * Painter scene-paint hedge threshold (ms). When the Tier-A (referenced)
+   * paint hasn't completed after this long, a second identical request races
+   * the first and the earlier result wins. Unset/0 → hedging disabled.
+   * Derived from healthy-day Runware p95 (~14s); recommended 15000.
+   */
+  imageHedgeMs?: number;
 };
 
 // ──────────────────────────────────────────────────────────────────────
