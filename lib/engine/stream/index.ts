@@ -98,7 +98,11 @@ export async function routeTaggedStream(
         }
 
         if (earliestTag === null) {
-          cursor = fullBuffer.length;
+          // No complete open tag found. Back up cursor by the max possible
+          // partial tag length so a split like "<pl" + "an>" is re-scanned
+          // when the next chunk appends.
+          const maxTagLen = Math.max(...TAG_NAMES.map((n) => openTag(n).length));
+          cursor = Math.max(cursor, fullBuffer.length - maxTagLen + 1);
           break;
         }
 
@@ -177,7 +181,10 @@ export async function routeTaggedStream(
         }
       }
 
-      cursor = fullBuffer.length;
+      // Close tag not found — back up cursor by the max close-tag length
+      // (split like "</pla" + "n>" can complete on next chunk append).
+      const maxCloseLen = Math.max(...TAG_NAMES.map((n) => closeTag(n).length));
+      cursor = Math.max(cursor, fullBuffer.length - maxCloseLen + 1);
       break;
     }
   }

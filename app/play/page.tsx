@@ -35,6 +35,7 @@ import type {
   Scene,
   SceneExit,
   SceneResponse,
+  SceneStreamEvent,
   Session,
   StartResponse,
   TtsConfig,
@@ -70,6 +71,77 @@ function mergeCharactersPreserveVoice(
     if (!prev) return c;
     return { ...c, voice: c.voice ?? prev.voice };
   });
+}
+
+// ── Paradigm D — SSE stream consumption ─────────────────────────────────
+// Consume a /api/scene or /api/start SSE response: parse `event: type\ndata:
+// json\n\n` frames, dispatch progressive events to `onEvent` (plan/beat/
+// background/voice/choices), and resolve with the `done` event's payload.
+//
+// Degrade: if the response is plain JSON (server returned the non-SSE path),
+// fall back to `res.json()` — so this helper works regardless of transport.
+//
+// The `done` and `error` frames are control frames (not part of the
+// SceneStreamEvent display union), so they're typed loosely here.
+async function consumeSceneStream<T>(
+  res: Response,
+  onEvent?: (event: SceneStreamEvent) => void,
+): Promise<T> {
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/event-stream")) {
+    // JSON degrade path — server didn't stream.
+    return (await res.json()) as T;
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("SSE response has no body");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: T | undefined;
+  let streamError: string | undefined;
+
+  const handleFrame = (frame: string): void => {
+    // A frame is one or more `key: value` lines. We only need the `data:` line.
+    const dataLine = frame
+      .split("\n")
+      .find((l) => l.startsWith("data:"));
+    if (!dataLine) return;
+    const json = dataLine.slice("data:".length).trim();
+    if (!json) return;
+    let parsed: { type?: string; result?: unknown; error?: string } & Record<string, unknown>;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return; // skip malformed frame
+    }
+    if (parsed.type === "done") {
+      result = parsed.result as T;
+    } else if (parsed.type === "error") {
+      streamError = parsed.error ?? "stream error";
+    } else if (onEvent) {
+      onEvent(parsed as unknown as SceneStreamEvent);
+    }
+  };
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: true });
+    // SSE frames are separated by a blank line (\n\n).
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      if (frame.trim()) handleFrame(frame);
+    }
+    if (done) break;
+  }
+  // Flush any trailing frame without a final blank line.
+  if (buffer.trim()) handleFrame(buffer);
+
+  if (streamError) throw new Error(streamError);
+  if (result === undefined) throw new Error("SSE stream ended without a done event");
+  return result;
 }
 
 // Consecutive silent (no-audio) beats before we surface the BYO-key nudge to a
@@ -396,6 +468,7 @@ function prefetchScenePath(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "text/event-stream",
       },
       body: JSON.stringify({ session: stripVoicesForTransport(specSession), clientTts, byo }),
       signal: abort.signal,
@@ -404,7 +477,15 @@ function prefetchScenePath(
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(j.error ?? res.statusText);
     }
-    const data = (await res.json()) as SceneResponse;
+    // Prefetch: consume SSE to done → full SceneResponse (or JSON degrade).
+    // No progressive callbacks — speculative scenes aren't visible yet.
+    // Early image preload on `background` event so cache is warm when the
+    // player reaches this scene.
+    const data = await consumeSceneStream<SceneResponse>(res, (event) => {
+      if (event.type === "background" && event.imageUrl) {
+        void getOrCreateBlobUrl(event.imageUrl);
+      }
+    });
 
     // Record this resolved alternate for the gallery export. Key is
     // (parent scene id at the choice point) : (choice id). Includes the
@@ -1246,6 +1327,7 @@ function PlayInner() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Accept: "text/event-stream",
           },
           body: JSON.stringify({
             ...livePayload,
@@ -1256,7 +1338,13 @@ function PlayInner() {
             const j = (await r.json().catch(() => ({}))) as { error?: string };
             throw new Error(j.error ?? r.statusText);
           }
-          const data = (await r.json()) as StartResponse;
+          // First scene: consume SSE → StartResponse, preloading the image
+          // early on `background` so the first paint is warm.
+          const data = await consumeSceneStream<StartResponse>(r, (event) => {
+            if (event.type === "background" && event.imageUrl) {
+              void getOrCreateBlobUrl(event.imageUrl);
+            }
+          });
           // Live /api/start doesn't echo ws/sg back — splice in what we sent.
           // styleReferenceImage is similarly not in StartResponse; tag it on so
           // the session we build below carries it for every /api/scene call.
@@ -1489,6 +1577,7 @@ function PlayInner() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "text/event-stream",
         },
         body: JSON.stringify({
           session: stripVoicesForTransport(specSession),
@@ -1499,7 +1588,13 @@ function PlayInner() {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(j.error ?? res.statusText);
       }
-      return (await res.json()) as SceneResponse;
+      // Cold transition: consume SSE → SceneResponse, preloading the image
+      // early on `background` so performSceneTransition's blob lookup is warm.
+      return await consumeSceneStream<SceneResponse>(res, (event) => {
+        if (event.type === "background" && event.imageUrl) {
+          void getOrCreateBlobUrl(event.imageUrl);
+        }
+      });
     })();
 
     void performSceneTransition(promise, exit, visited, choice.label);
@@ -1616,7 +1711,10 @@ function PlayInner() {
       const promise = (async () => {
         const res = await fetch("/api/scene", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
           body: JSON.stringify({
             session: stripVoicesForTransport(specSession),
             clientTts: !!byoTtsRef.current, byo: getByoPayload(),
@@ -1626,7 +1724,12 @@ function PlayInner() {
           const j = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(j.error ?? res.statusText);
         }
-        return (await res.json()) as SceneResponse;
+        // Freeform change-scene: consume SSE → SceneResponse with early preload.
+        return await consumeSceneStream<SceneResponse>(res, (event) => {
+          if (event.type === "background" && event.imageUrl) {
+            void getOrCreateBlobUrl(event.imageUrl);
+          }
+        });
       })();
 
       setPendingClick(null);
@@ -1752,6 +1855,7 @@ function PlayInner() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              Accept: "text/event-stream",
             },
             body: JSON.stringify({
               session: stripVoicesForTransport(specSession),
@@ -1764,7 +1868,12 @@ function PlayInner() {
             };
             throw new Error(j.error ?? res.statusText);
           }
-          return (await res.json()) as SceneResponse;
+          // Vision change-scene: consume SSE → SceneResponse with early preload.
+          return await consumeSceneStream<SceneResponse>(res, (event) => {
+            if (event.type === "background" && event.imageUrl) {
+              void getOrCreateBlobUrl(event.imageUrl);
+            }
+          });
         })();
 
         await performSceneTransition(
