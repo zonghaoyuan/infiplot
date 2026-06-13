@@ -183,6 +183,7 @@ export function PlayCanvas({
   playerName,
   visionClickEnabled = true,
   onOpenSettings,
+  onImageReady,
   aboveCanvas,
   aboveCanvasLeft,
   belowCanvas,
@@ -207,6 +208,7 @@ export function PlayCanvas({
   // 选择节点点击背景是否触发识图。关闭时背景点击保持静默，用户只能点选项。
   visionClickEnabled?: boolean;
   onOpenSettings?: () => void;
+  onImageReady?: () => void;
   // 渲染在图片正上方、右对齐的 slot（画面外、紧贴右上角）。
   aboveCanvas?: ReactNode;
   // 渲染在图片正上方、左对齐的 slot（画面外、紧贴左上角），与 aboveCanvas 水平镜像。
@@ -407,6 +409,13 @@ export function PlayCanvas({
             alt="Generated scene"
             onClick={handleImageClick}
             draggable={false}
+            onLoad={() => {
+              if (!onImageReady) return;
+              const el = imgRef.current;
+              if (!el) { onImageReady(); return; }
+              const notify = () => { if (imgRef.current === el) onImageReady(); };
+              el.decode().then(notify, notify);
+            }}
             className={`block select-none animate-fade-in transition-opacity duration-700 ease-out ${
               imageClickable ? "cursor-pointer" : interactive ? "cursor-default" : "cursor-wait"
             } ${dimmed ? "opacity-40" : "opacity-100"}`}

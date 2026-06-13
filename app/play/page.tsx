@@ -81,6 +81,12 @@ const useIsomorphicLayoutEffect =
 // 20s + the <img> aspect-video fallback together remove that failure mode.
 const IMAGE_PRELOAD_TIMEOUT_MS = 20000;
 
+// After blob/preload resolves the <img> still needs to decode the bitmap.
+// This gate keeps the "transitioning" overlay visible until decode fires,
+// so the user never sees progressive paint or a blank flash. 3s is generous
+// (decode is typically <100ms for a locally-held blob).
+const IMAGE_READY_TIMEOUT_MS = 3000;
+
 // ──────────────────────────────────────────────────────────────────────
 //  Two ways an <img> gets its pixels, picked per-URL by shouldProxy():
 //
@@ -595,6 +601,27 @@ function PlayInner() {
   // to revoke its blob: URL when the scene swaps. We track the ORIGINAL URL,
   // not the blob URL, because blobUrlCache is keyed by original URL.
   const lastImageOriginalUrlRef = useRef<string | null>(null);
+
+  // Image-ready gate: keeps the "transitioning" overlay visible until the
+  // actual <img> element has decoded its bitmap, so the user never sees
+  // progressive paint or a blank flash between scenes.
+  const imageReadyResolverRef = useRef<(() => void) | null>(null);
+  function waitForImageReady(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        imageReadyResolverRef.current = null;
+        resolve();
+      };
+      imageReadyResolverRef.current = done;
+      setTimeout(done, IMAGE_READY_TIMEOUT_MS);
+    });
+  }
+  const handleImageReady = useCallback(() => {
+    imageReadyResolverRef.current?.();
+  }, []);
 
   const currentBeat = useMemo<Beat | null>(() => {
     if (!currentScene || !currentBeatId) return null;
@@ -1211,7 +1238,9 @@ function PlayInner() {
           setSession(initial);
           setCurrentScene(first.scene);
           setCurrentBeatId(first.scene.entryBeatId);
+          const ready = waitForImageReady();
           setImageUrl(blobUrl);
+          await ready;
           setPhase("ready");
           track("scene_reached", { scene_index: 1 });
         } catch (e) {
@@ -1346,9 +1375,9 @@ function PlayInner() {
         setSession(initial);
         setCurrentScene(data.scene);
         setCurrentBeatId(data.scene.entryBeatId);
+        const ready = waitForImageReady();
         setImageUrl(blobUrl);
-        // beatAudioMap is populated lazily by the per-beat fetch effect once
-        // currentScene becomes non-null (see fetchBeatAudio).
+        await ready;
         setPhase("ready");
         track("scene_reached", { scene_index: initial.history.length });
       })
@@ -1467,9 +1496,10 @@ function PlayInner() {
       setSession(newSession);
       setCurrentScene(result.scene);
       setCurrentBeatId(result.scene.entryBeatId);
+      const ready = waitForImageReady();
       setImageUrl(blobUrl);
-      // beatAudioMap reset + per-beat fetches kicked off by the scene effect.
       setLastExitLabel(exitLabel);
+      await ready;
       setPhase("ready");
       track("scene_reached", { scene_index: newSession.history.length });
     } catch (e) {
@@ -1545,8 +1575,10 @@ function PlayInner() {
         setSession(nextSession);
         setCurrentScene(next.scene);
         setCurrentBeatId(next.scene.entryBeatId);
+        const ready = waitForImageReady();
         setImageUrl(blobUrl);
         setLastExitLabel(choice.label);
+        await ready;
         setPhase("ready");
         track("scene_reached", { scene_index: nextSession.history.length });
       } catch (e) {
@@ -1958,6 +1990,7 @@ function PlayInner() {
           playerName={session?.playerName}
           visionClickEnabled={visionClickEnabled}
           onOpenSettings={() => setSettingsOpen(true)}
+          onImageReady={handleImageReady}
           fullViewport
           dialogueHistory={dialogueHistory}
           disabledChoiceIds={disabledReplayChoiceIds}
@@ -2050,6 +2083,7 @@ function PlayInner() {
           playerName={session?.playerName}
           visionClickEnabled={visionClickEnabled}
           onOpenSettings={() => setSettingsOpen(true)}
+          onImageReady={handleImageReady}
           dialogueHistory={dialogueHistory}
           disabledChoiceIds={disabledReplayChoiceIds}
           freeformDisabled={replayLocked}
