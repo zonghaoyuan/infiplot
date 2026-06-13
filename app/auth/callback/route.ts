@@ -8,6 +8,12 @@ import { createClient } from "@/lib/supabase/server";
 function safeNext(raw: string | null): string {
   if (!raw || !raw.startsWith("/")) return "/";
   if (raw.startsWith("//") || raw.startsWith("/\\")) return "/";
+  // Reject control chars (CR/LF etc.) — defense-in-depth against header
+  // injection if `next` ever reaches a context that doesn't re-encode it.
+  for (let i = 0; i < raw.length; i++) {
+    const code = raw.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return "/";
+  }
   return raw;
 }
 
