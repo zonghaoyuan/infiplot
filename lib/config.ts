@@ -21,6 +21,15 @@ function readOptionalVar(name: string): string | undefined {
   return v && v.length > 0 ? v : undefined;
 }
 
+// Invalid/non-positive values are treated as unset (feature stays off) rather
+// than failing boot — these knobs are tuning aids, not required config.
+function readOptionalPositiveInt(name: string): number | undefined {
+  const v = readOptionalVar(name);
+  if (!v) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+}
+
 // Optional *_PROVIDER selector. Unset → undefined, and each ai-client adapter
 // applies its own default (text/vision → openai_compatible; image → inferred
 // from the base URL). Validated eagerly so a typo fails fast at boot rather
@@ -69,5 +78,7 @@ export function loadEngineConfig(): EngineConfig {
     },
     tts: loadTtsConfig(),
     mockImage: readOptionalVar("MOCK_IMAGE") === "true",
+    imageTimeoutMs: readOptionalPositiveInt("IMAGE_TIMEOUT_MS"),
+    imageHedgeMs: readOptionalPositiveInt("IMAGE_HEDGE_MS"),
   };
 }

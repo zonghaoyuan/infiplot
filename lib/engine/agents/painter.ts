@@ -123,6 +123,10 @@ export function collectReferenceImages(
   return refs.slice(0, MAX_REFERENCE_IMAGES);
 }
 
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function tryGenerate(
   config: ProviderConfig,
   prompt: string,
@@ -132,10 +136,91 @@ async function tryGenerate(
   try {
     return await generateImage(config, prompt, options);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[painter] ${label} failed: ${msg}`);
+    console.warn(`[painter] ${label} failed: ${errMsg(err)}`);
     return null;
   }
+}
+
+// Hedged Tier-A: fire leg 1; if it hasn't settled after hedgeMs, race an
+// identical leg 2 and take whichever finishes first. This rescues straggler
+// paints (a single task stuck on a slow worker) without waiting out the
+// provider's own gateway limit (Runware kills tasks at ~55s with a 504).
+//
+// Deliberately NOT retry-on-error: a leg that fails fast (429/503 queue
+// saturation, 4xx) falls through to Tier B immediately — hedging into a
+// saturated queue only adds load. Each leg runs with retries=0 so the hedge
+// itself is the only retry layer (no retry×retry multiplication).
+async function tryGenerateHedged(
+  config: ProviderConfig,
+  prompt: string,
+  options: GenerateImageOptions,
+  label: string,
+  hedgeMs: number,
+): Promise<GenerateImageResult | null> {
+  type Settled =
+    | { leg: 1 | 2; ok: GenerateImageResult }
+    | { leg: 1 | 2; err: unknown };
+
+  const t0 = Date.now();
+  const controllers: (AbortController | undefined)[] = [undefined, undefined];
+  const fire = (leg: 1 | 2): Promise<Settled> => {
+    const ac = new AbortController();
+    controllers[leg - 1] = ac;
+    return generateImage(config, prompt, {
+      ...options,
+      retries: 0,
+      signal: ac.signal,
+    }).then(
+      (ok) => ({ leg, ok }) as Settled,
+      (err) => ({ leg, err }) as Settled,
+    );
+  };
+
+  const leg1 = fire(1);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const hedgeTimer = new Promise<"hedge">((resolve) => {
+    timer = setTimeout(() => resolve("hedge"), hedgeMs);
+  });
+
+  const first = await Promise.race([leg1, hedgeTimer]);
+  if (first !== "hedge") {
+    clearTimeout(timer);
+    if ("ok" in first) return first.ok;
+    console.warn(`[painter] ${label} failed: ${errMsg(first.err)}`);
+    return null;
+  }
+
+  console.warn(
+    `[painter] hedge fired: ${label} still pending after ${hedgeMs}ms`,
+  );
+  const leg2 = fire(2);
+
+  let result = await Promise.race([leg1, leg2]);
+  if ("err" in result) {
+    // First settler failed — give the survivor its full chance.
+    console.warn(
+      `[painter] hedge leg${result.leg} failed: ${errMsg(result.err)}`,
+    );
+    result = await (result.leg === 1 ? leg2 : leg1);
+  }
+
+  if ("ok" in result) {
+    const loserIdx = result.leg === 1 ? 1 : 0;
+    controllers[loserIdx]?.abort();
+    const loser = result.leg === 1 ? leg2 : leg1;
+    loser.then(
+      (s) => "err" in s && console.debug(`[painter] hedge loser leg${s.leg} aborted`),
+      () => {},
+    );
+    console.log(
+      `[painter] hedge won by leg${result.leg} in ${Date.now() - t0}ms`,
+    );
+    return result.ok;
+  }
+  console.warn(
+    `[painter] ${label} failed (both hedge legs): ${errMsg(result.err)}`,
+  );
+  return null;
 }
 
 export type PainterResult =
@@ -167,14 +252,25 @@ export async function runPainter(
 
   // Tier A — with referenceImages (priorSceneImage + character portraits).
   // FLUX.2 [klein] 9B KV's KV cache accelerates this multi-reference path
-  // ~2.5× compared to the non-KV variant.
+  // ~2.5× compared to the non-KV variant. When IMAGE_HEDGE_MS is configured,
+  // the scene paint is hedged (see tryGenerateHedged); portraits are not.
   if (refs.length > 0) {
-    const r = await tryGenerate(
-      config.image,
-      prompt,
-      { referenceImages: refs, orientation: input.orientation },
-      `referenceImages (${refs.length})`,
-    );
+    const tierAOptions: GenerateImageOptions = {
+      referenceImages: refs,
+      orientation: input.orientation,
+      timeoutMs: config.imageTimeoutMs,
+    };
+    const label = `referenceImages (${refs.length})`;
+    const r =
+      config.imageHedgeMs && config.imageHedgeMs > 0
+        ? await tryGenerateHedged(
+            config.image,
+            prompt,
+            tierAOptions,
+            label,
+            config.imageHedgeMs,
+          )
+        : await tryGenerate(config.image, prompt, tierAOptions, label);
     if (r) return { kind: "real", imageUrl: r.imageUrl, imageUuid: r.imageUuid };
   }
 
@@ -183,6 +279,7 @@ export async function runPainter(
   // Errors here propagate to the caller.
   const r = await generateImage(config.image, prompt, {
     orientation: input.orientation,
+    timeoutMs: config.imageTimeoutMs,
   });
   return { kind: "real", imageUrl: r.imageUrl, imageUuid: r.imageUuid };
 }

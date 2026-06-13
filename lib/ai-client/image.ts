@@ -59,6 +59,15 @@ export type GenerateImageOptions = {
    * native gpt-image 1024x1536.
    */
   orientation?: Orientation;
+  /**
+   * Per-attempt hard deadline (ms). A timed-out attempt is retryable.
+   * Unset → no client-side timeout (historical behavior).
+   */
+  timeoutMs?: number;
+  /** Retry-attempt override for this call (default 2). 0 = single attempt. */
+  retries?: number;
+  /** External cancellation, e.g. aborting the losing leg of a hedged race. */
+  signal?: AbortSignal;
 };
 
 export type GenerateImageResult = {
@@ -143,22 +152,33 @@ async function generateImageOpenAi(
   const refs = (options?.referenceImages ?? []).slice(0, MAX_REFERENCE_IMAGES);
   const portrait = options?.orientation === "portrait";
   const size = portrait ? "1024x1536" : "1536x1024";
+  const requestOptions = {
+    signal: options?.signal,
+    timeout: options?.timeoutMs,
+    ...(options?.retries !== undefined ? { maxRetries: options.retries } : {}),
+  };
 
   const response =
     refs.length > 0
-      ? await client.images.edit({
-          model: config.model,
-          prompt,
-          image: await Promise.all(refs.map(referenceImageToUploadable)),
-          n: 1,
-          size,
-        })
-      : await client.images.generate({
-          model: config.model,
-          prompt,
-          n: 1,
-          size,
-        });
+      ? await client.images.edit(
+          {
+            model: config.model,
+            prompt,
+            image: await Promise.all(refs.map(referenceImageToUploadable)),
+            n: 1,
+            size,
+          },
+          requestOptions,
+        )
+      : await client.images.generate(
+          {
+            model: config.model,
+            prompt,
+            n: 1,
+            size,
+          },
+          requestOptions,
+        );
 
   return imageResponseToResult(response);
 }
@@ -257,6 +277,9 @@ async function generateImageOpenAiCompatible(
       // Session-locked aspect (16:9 default, 9:16 portrait for mobile).
       size: options?.orientation === "portrait" ? "1024x1792" : "1792x1024",
     }),
+    retries: options?.retries,
+    timeoutMs: options?.timeoutMs,
+    signal: options?.signal,
   });
 
   const text = await res.text();
@@ -326,6 +349,9 @@ async function generateImageRunware(
       Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify([task]),
+    retries: options?.retries,
+    timeoutMs: options?.timeoutMs,
+    signal: options?.signal,
   });
 
   const text = await res.text();
