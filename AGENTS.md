@@ -144,7 +144,7 @@ Use `.env.example` as the source of truth. Never commit `.env.local`, API keys, 
 - `NEXT_PUBLIC_IMAGE_PROXY_URL` and `NEXT_PUBLIC_IMAGE_PROXY_ALLOWED_HOSTS` opt into browser-side image proxying for allowed hosts.
 - Analytics uses optional Umami `NEXT_PUBLIC_UMAMI_*` values and must stay content-free/privacy-preserving.
 - `GALLERY_SECRET` enables encrypted `.infiplot` share files for gallery and playable story export/import.
-- `NEXT_PUBLIC_*` values are inlined at build time.
+- `NEXT_PUBLIC_*` values are inlined into the client bundle at build time, not read at runtime. Vercel injects them from project settings automatically, but Docker-based deploys (the `Dockerfile`, used by OpenDeploy and any self-hosted Docker target) only see a build arg that the `Dockerfile` explicitly declares. **Every `NEXT_PUBLIC_*` var the app reads must be declared in the `builder` stage of the `Dockerfile` as a matching `ARG ...=""` + `ENV ...=$...` pair before `RUN pnpm build`.** When you add, rename, or remove a `NEXT_PUBLIC_*` var anywhere in the code, update that `Dockerfile` block in the same change — an omitted var is silently empty on Docker deploys (no build error), so it fails only at runtime in the browser. Server-only vars (`TEXT_*`, `IMAGE_*`, `VISION_*`, `TTS_*`, `GALLERY_SECRET`, `MOCK_IMAGE`, etc.) are read at runtime and must NOT go in the `Dockerfile`; they are set as runtime env on the host. On OpenDeploy specifically, `NEXT_PUBLIC_*` must be set as `build_variables` (via `services config patch`), not `runtime_variables` (`env patch --set` only sets runtime and will not reach `next build`).
 
 ## File Dependency Map
 
@@ -171,4 +171,5 @@ PRs should include a short behavior summary, validation commands run, linked iss
 - Do not leak browser-provided TTS keys to the server or send retained voice audio through scene/vision/insert-beat session payloads.
 - Do not break session-locked orientation or style-reference propagation when changing start/play flows.
 - Do not regenerate large assets in `public/` unless the user requested asset work.
+- Do not add or rename a `NEXT_PUBLIC_*` var without also declaring it in the `Dockerfile` `builder` stage (`ARG` + `ENV` before `pnpm build`); otherwise it is silently empty on Docker/OpenDeploy deploys.
 - Do not mix prompt refactors, provider-client rewrites, UI restyling, and deployment changes in one narrow task.
