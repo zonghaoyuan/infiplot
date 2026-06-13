@@ -1,21 +1,21 @@
-import { chat } from "@infiplot/ai-client";
+import { chatStream } from "@infiplot/ai-client";
 import type {
   Beat,
   BeatActiveCharacter,
   BeatChoice,
   BeatChoiceEffect,
   BeatNext,
+  ChatStreamResult,
   ProviderConfig,
   Session,
   StoryStatePatch,
   WriterPlan,
+  WriterScenePlan,
 } from "@infiplot/types";
 import { parseJsonLoose } from "../jsonParser";
 import {
-  WRITER_BEATS_SYSTEM,
-  WRITER_PLAN_SYSTEM,
-  buildWriterBeatsUserMessage,
-  buildWriterPlanUserMessage,
+  WRITER_STREAM_SYSTEM,
+  buildWriterStreamUserMessage,
 } from "../prompts";
 
 // ──────────────────────────────────────────────────────────────────────
@@ -409,110 +409,7 @@ function renameBeatId(beats: Beat[], from: string, to: string): Beat[] {
   });
 }
 
-// ── Phase A — plan the scene skeleton. Fast (small output): just enough for
-// the Cinematographer + character design + Painter to start before the
-// dialogue exists. The cast is unioned with the entry roster/speaker so a
-// character named in the entry but omitted from `cast` still gets designed.
-export async function runWriterPlan(
-  config: ProviderConfig,
-  session: Session,
-): Promise<WriterPlan> {
-  const raw = await chat(
-    config,
-    [
-      { role: "system", content: WRITER_PLAN_SYSTEM },
-      { role: "user", content: buildWriterPlanUserMessage(session) },
-    ],
-    { temperature: 0.9, tag: "writer-plan" },
-  );
-
-  const parsed = parseJsonLoose<RawPlan>(raw);
-
-  const entryActiveCharacters =
-    coerceActiveCharacters(parsed.entryActiveCharacters) ?? [];
-
-  // Normalize POV variants → "你"; NPC names pass through. "你" is a valid entry
-  // speaker (Pattern B — player talking), but is never a designed cast member.
-  const rawEntrySpeaker = parsed.entrySpeaker?.trim() || undefined;
-  const entrySpeaker = rawEntrySpeaker
-    ? normalizeSpeakerName(rawEntrySpeaker)
-    : undefined;
-
-  const cast = coerceCast(parsed.cast);
-  const castSet = new Set(cast);
-  const addToCast = (name: string): void => {
-    if (!isPovName(name) && !castSet.has(name)) {
-      castSet.add(name);
-      cast.push(name);
-    }
-  };
-  for (const c of entryActiveCharacters) addToCast(c.name);
-  if (entrySpeaker) addToCast(entrySpeaker);
-
-  return {
-    sceneSummary: parsed.sceneSummary?.trim() || "未指定场景概要",
-    sceneKey: normalizeSceneKey(parsed.sceneKey),
-    entryBeatId: parsed.entryBeatId?.trim() || "b1",
-    cast,
-    entryActiveCharacters,
-    entrySpeaker,
-  };
-}
-
-// ── Phase B — expand the plan into the full beats[] graph + storyStatePatch.
-// Overlapped with the image pipeline by the director. The plan's entry id is
-// pinned onto a real beat so the already-painted entry frame resolves.
-export async function runWriterBeats(
-  config: ProviderConfig,
-  session: Session,
-  plan: WriterPlan,
-): Promise<WriterBeatsOutput> {
-  const raw = await chat(
-    config,
-    [
-      { role: "system", content: WRITER_BEATS_SYSTEM },
-      { role: "user", content: buildWriterBeatsUserMessage(session, plan) },
-    ],
-    { temperature: 0.9, tag: "writer-beats" },
-  );
-
-  const parsed = parseJsonLoose<RawBeats>(raw);
-  const rawBeats = Array.isArray(parsed.beats) ? parsed.beats : [];
-  if (rawBeats.length === 0) {
-    throw new Error("Writer (beats) returned no beats");
-  }
-
-  let beats = ensureUniqueChoiceIds(
-    repairBeats(
-      ensureUniqueBeatIds(
-        rawBeats.map((b, i) => coerceBeat(b, i, rawBeats.length)),
-      ),
-    ),
-  );
-
-  // The Painter already composed the entry frame from plan.entryBeatId + its
-  // roster, so the scene's entry MUST resolve to that id. If Phase B ignored
-  // it, rename the first beat to it (no collision — id is absent by the guard).
-  if (!beats.some((b) => b.id === plan.entryBeatId)) {
-    beats = renameBeatId(beats, beats[0]!.id, plan.entryBeatId);
-  }
-
-  // 把入场 beat 的 roster 钉成 plan 的：画师合成进帧的正是
-  // plan.entryActiveCharacters，运行时入场 beat 必须显示同一批人（与上面钉
-  // id 同理）。speaker 故意不钉——它和 line/TTS 耦合，强行覆盖会错配台词。
-  const entryRoster =
-    plan.entryActiveCharacters.length > 0 ? plan.entryActiveCharacters : undefined;
-  beats = beats.map((b) =>
-    b.id === plan.entryBeatId ? { ...b, activeCharacters: entryRoster } : b,
-  );
-
-  return {
-    beats,
-    storyStatePatch: coerceStoryStatePatch(parsed.storyStatePatch),
-  };
-}
-
-// Phase B fallback — when runWriterBeats fails entirely, keep the scene
+// Fallback — when the Writer stream fails to yield usable beats, keep the scene
 // playable with a single entry beat synthesized from the plan: narrate the
 // planned summary and offer one change-scene exit so the player can advance.
 export function synthesizeFallbackBeats(plan: WriterPlan): Beat[] {
@@ -532,3 +429,140 @@ export function synthesizeFallbackBeats(plan: WriterPlan): Beat[] {
 
 // Re-export POV constants for downstream filters (director's orphan voices).
 export { POV_DISPLAY_NAME, POV_VARIANTS, isPovName, normalizeSpeakerName };
+
+// ──────────────────────────────────────────────────────────────────────
+//  Paradigm D — single-pass streaming Writer
+// ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Streaming Writer: single LLM call producing `<plan>/<beats>/<choices>`
+ * tagged output. The caller (director) feeds the textStream to StreamRouter
+ * which dispatches downstream agents as tags close.
+ *
+ * Uses `chatStream` (Task 2) + `buildWriterStreamUserMessage` (ContextProvider).
+ * Temperature and tag mirror the existing chat() calls.
+ */
+export function runWriterStream(
+  config: ProviderConfig,
+  session: Session,
+): ChatStreamResult {
+  return chatStream(
+    config,
+    [
+      { role: "system", content: WRITER_STREAM_SYSTEM },
+      { role: "user", content: buildWriterStreamUserMessage(session) },
+    ],
+    { temperature: 0.9, tag: "writer-stream" },
+  );
+}
+
+/**
+ * Coerce a raw parsed plan (from StreamRouter's `<plan>` segment) into a
+ * clean WriterScenePlan. Reuses the existing Phase A coercion pipeline.
+ */
+export function coercePlanFromRaw(raw: Record<string, unknown>): WriterScenePlan {
+  const entryActiveCharacters =
+    coerceActiveCharacters(raw.entryActiveCharacters as RawActiveCharacter[]) ?? [];
+
+  const rawEntrySpeaker =
+    typeof raw.entrySpeaker === "string" ? raw.entrySpeaker.trim() : undefined;
+  const entrySpeaker = rawEntrySpeaker
+    ? normalizeSpeakerName(rawEntrySpeaker)
+    : undefined;
+
+  const cast = coerceCast(raw.cast);
+  const castSet = new Set(cast);
+  const addToCast = (name: string): void => {
+    if (!isPovName(name) && !castSet.has(name)) {
+      castSet.add(name);
+      cast.push(name);
+    }
+  };
+  for (const c of entryActiveCharacters) addToCast(c.name);
+  if (entrySpeaker) addToCast(entrySpeaker);
+
+  const characterIntents = Array.isArray(raw.characterIntents)
+    ? (raw.characterIntents as Array<Record<string, unknown>>)
+        .filter((ci) => typeof ci.name === "string" && (ci.name as string).trim())
+        .map((ci) => ({
+          name: (ci.name as string).trim(),
+          mood: typeof ci.mood === "string" ? ci.mood.trim() || undefined : undefined,
+          motivation:
+            typeof ci.motivation === "string"
+              ? ci.motivation.trim() || undefined
+              : undefined,
+          speakingTone:
+            typeof ci.speakingTone === "string"
+              ? ci.speakingTone.trim() || undefined
+              : undefined,
+        }))
+    : undefined;
+
+  return {
+    sceneSummary:
+      typeof raw.sceneSummary === "string"
+        ? raw.sceneSummary.trim() || "未指定场景概要"
+        : "未指定场景概要",
+    sceneKey: normalizeSceneKey(
+      typeof raw.sceneKey === "string" ? raw.sceneKey : undefined,
+    ),
+    entryBeatId:
+      typeof raw.entryBeatId === "string"
+        ? raw.entryBeatId.trim() || "b1"
+        : "b1",
+    cast,
+    entryActiveCharacters,
+    entrySpeaker,
+    characterIntents,
+  };
+}
+
+/**
+ * Coerce raw parsed beats (from StreamRouter's `<beats>` segment) into clean
+ * Beat[] + optional StoryStatePatch. Reuses the full Phase B pipeline:
+ * coerceBeat → ensureUniqueBeatIds → repairBeats → ensureUniqueChoiceIds →
+ * entry-id pinning.
+ */
+export function coerceBeatsFromRaw(
+  raw: unknown,
+  plan: WriterScenePlan,
+): WriterBeatsOutput {
+  // <beats> segment can be either a bare Beat[] or { beats, storyStatePatch }.
+  let rawBeats: RawBeat[] = [];
+  let rawPatch: RawStoryStatePatch | undefined;
+
+  if (Array.isArray(raw)) {
+    rawBeats = raw;
+  } else if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    rawBeats = Array.isArray(obj.beats) ? (obj.beats as RawBeat[]) : [];
+    rawPatch = obj.storyStatePatch as RawStoryStatePatch | undefined;
+  }
+
+  if (rawBeats.length === 0) {
+    return { beats: synthesizeFallbackBeats(plan), storyStatePatch: undefined };
+  }
+
+  let beats = ensureUniqueChoiceIds(
+    repairBeats(
+      ensureUniqueBeatIds(
+        rawBeats.map((b, i) => coerceBeat(b, i, rawBeats.length)),
+      ),
+    ),
+  );
+
+  if (!beats.some((b) => b.id === plan.entryBeatId)) {
+    beats = renameBeatId(beats, beats[0]!.id, plan.entryBeatId);
+  }
+
+  const entryRoster =
+    plan.entryActiveCharacters.length > 0 ? plan.entryActiveCharacters : undefined;
+  beats = beats.map((b) =>
+    b.id === plan.entryBeatId ? { ...b, activeCharacters: entryRoster } : b,
+  );
+
+  return {
+    beats,
+    storyStatePatch: coerceStoryStatePatch(rawPatch),
+  };
+}

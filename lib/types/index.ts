@@ -1,3 +1,5 @@
+import type { LanguageModelUsage } from "ai";
+
 // ──────────────────────────────────────────────────────────────────────
 //  Beat — one dialogue / narration moment within a Scene.
 //  Multiple beats share the same background image; tapping or choosing
@@ -153,6 +155,36 @@ export type WriterPlan = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
+//  Paradigm D — Writer single-pass streaming plan extensions.
+//
+//  In paradigm D the Writer streams one tagged response: <plan> → <beats>
+//  → <choices>. WriterScenePlan is the parsed <plan> segment: the existing
+//  WriterPlan skeleton PLUS per-character scene intents, handed to the
+//  downstream media translators the instant </plan> closes.
+// ──────────────────────────────────────────────────────────────────────
+
+/** Per-scene performance intent for one character, authored by the Writer in
+ *  the <plan> segment. Ephemeral (this scene only) — distinct from the
+ *  persistent CharacterPersona card. Feeds downstream media translators. */
+export type CharacterIntent = {
+  name: string;
+  /** 本幕情绪基调。 */
+  mood?: string;
+  /** 本幕动机 / 目的。 */
+  motivation?: string;
+  /** 本幕说话基调（指导对白质感 + TTS lineDelivery）。 */
+  speakingTone?: string;
+};
+
+/** Parsed <plan> tag: the existing WriterPlan shape plus per-character scene
+ *  intents. The optional extension keeps any degraded / minimal plan valid —
+ *  downstream consumers see a WriterPlan superset. */
+export type WriterScenePlan = WriterPlan & {
+  /** 各角色本幕表现意图，供 </plan> 闭合时分发下游媒体翻译官。 */
+  characterIntents?: CharacterIntent[];
+};
+
+// ──────────────────────────────────────────────────────────────────────
 //  Characters & voices (TTS)
 // ──────────────────────────────────────────────────────────────────────
 
@@ -161,6 +193,30 @@ export type CharacterVoice = {
   /** Xiaomi MiMo design output stored as reference audio for later clones. */
   referenceAudioBase64: string;
   mimeType: string;
+};
+
+// ──────────────────────────────────────────────────────────────────────
+//  CharacterPersona — narrative / story dimension of a Character.
+//  Merged into Character via intersection (all optional). Filled primarily
+//  by the Writer's <plan> 思维链 (paradigm D); the CharacterDesigner then
+//  realizes it into visual + voice cards. Absent on legacy sessions →
+//  callers degrade to "name only". SENTINEL append-only: adding persona
+//  only appends bytes to the stable prompt prefix — never reorders.
+// ──────────────────────────────────────────────────────────────────────
+
+export type CharacterPersona = {
+  /** 背景 / 身份 / 核心设定。 */
+  persona?: string;
+  /** 性格标签，如 ["傲娇", "腹黑", "重情义"]。 */
+  personalityTraits?: string[];
+  /** 说话风格 / 口头禅 — 对白质感的关键。 */
+  speakingStyle?: string;
+  /** 2-3 条代表性对白，作为 few-shot 锚定语气。 */
+  sampleDialogue?: string[];
+  /** 与玩家("你")的关系 / 态度。 */
+  relationshipToPlayer?: string;
+  /** 隐藏信息 / 伏笔，可驱动后续反转（默认不外显）。 */
+  secrets?: string[];
 };
 
 export type Character = {
@@ -192,7 +248,7 @@ export type Character = {
   basePortraitUrl?: string;
   /** Xiaomi MiMo voice reference audio. */
   voice?: CharacterVoice;
-};
+} & CharacterPersona;
 
 /** A single beat's synthesized audio, attached to the response. */
 export type BeatAudio = {
@@ -529,3 +585,63 @@ export type InsertBeatResponse = {
   partial: InsertBeatPartial;
   characters: Character[];
 };
+
+// ──────────────────────────────────────────────────────────────────────
+//  Paradigm D — streaming primitives (chatStream / StreamRouter / SSE)
+//
+//  Output-side counterpart to prompt caching's input-side stable prefix
+//  (the two are orthogonal). chatStream yields incremental text + an
+//  end-of-stream usage promise. The StreamRouter slices the Writer's
+//  tagged stream into plan/beats/choices and dispatches downstream. API
+//  routes serialize assembled fragments as SSE events for progressive
+//  client playback.
+// ──────────────────────────────────────────────────────────────────────
+
+/** Return shape of the streaming chat primitive (ai-client `chatStream`).
+ *  `textStream` yields incremental chunks; `usage` resolves at stream end
+ *  with AI SDK v6 token usage (or undefined when the provider omits it) so
+ *  `summarizeSdkUsage` cache accounting works unchanged. */
+export type ChatStreamResult = {
+  textStream: AsyncIterable<string>;
+  usage: Promise<LanguageModelUsage | undefined>;
+};
+
+/** Callbacks the StreamRouter fires as it slices the Writer's tagged stream.
+ *  All optional so a caller can subscribe to a subset. */
+export type StreamRouterHandlers = {
+  /** `</plan>` closed — dispatch downstream media translators in parallel. */
+  onPlan?: (plan: WriterScenePlan) => void;
+  /** `<beats>` incremental text — push to client for progressive playback. */
+  onBeat?: (beatChunk: string) => void;
+  /** `</beats>` closed — 正文 finalized. */
+  onBeatsComplete?: (beats: Beat[]) => void;
+  /** `</choices>` closed. */
+  onChoices?: (choices: BeatChoice[]) => void;
+};
+
+/** Aggregate result of routing one Writer stream to completion. `degraded` is
+ *  true when tag parsing fell back (missing / misordered / unclosed / timeout),
+ *  per the degrade-before-main-path reliability rule. */
+export type StreamRouterResult = {
+  plan?: WriterScenePlan;
+  beats: Beat[];
+  choices?: BeatChoice[];
+  /** Raw parsed content of the <beats> segment before coercion. May be a bare
+   *  Beat[] or a { beats, storyStatePatch } object — consumer applies
+   *  coerceBeatsFromRaw to get the full WriterBeatsOutput. */
+  rawBeatsSegment?: unknown;
+  degraded: boolean;
+};
+
+/** Server → client SSE events for progressive scene playback (paradigm D).
+ *  `TDone` is the terminal full-assembly payload — `SceneResponse` for
+ *  `/api/scene`, `StartResponse` for `/api/start`. The prefetch path
+ *  consumes events to `done` and reassembles a complete response. */
+export type SceneStreamEvent<TDone = SceneResponse> =
+  | { type: "plan"; plan: WriterScenePlan }
+  | { type: "beat"; beat: Beat }
+  | { type: "background"; imageUrl: string; sceneKey?: string }
+  | { type: "voice"; name: string; voice: CharacterVoice }
+  | { type: "choices"; choices: BeatChoice[] }
+  | { type: "done"; response: TDone }
+  | { type: "error"; message: string; degraded?: boolean };

@@ -1,4 +1,4 @@
-export { chat } from "./chat";
+export { chat, chatStream } from "./chat";
 export { generateImage } from "./image";
 export type { GenerateImageOptions, GenerateImageResult } from "./image";
 export { interpretClick, analyzeImageDataUrl } from "./vision";

@@ -2,6 +2,7 @@ import { chat, generateImage } from "@infiplot/ai-client";
 import { provisionVoice } from "@infiplot/tts-client";
 import type {
   Character,
+  CharacterIntent,
   CharacterVoice,
   EngineConfig,
   Session,
@@ -46,6 +47,7 @@ async function runDesignLLM(
   config: EngineConfig,
   session: Session,
   charName: string,
+  intent?: CharacterIntent,
 ): Promise<CharacterDesignOutput> {
   const raw = await chat(
     config.text,
@@ -53,12 +55,20 @@ async function runDesignLLM(
       { role: "system", content: CHARACTER_DESIGNER_SYSTEM },
       {
         role: "user",
-        content: buildCharacterDesignerUserMessage(charName, session),
+        content: buildCharacterDesignerUserMessage(charName, session, intent),
       },
     ],
     { temperature: 0.7, tag: "character-designer" },
   );
-  return parseJsonLoose<CharacterDesignOutput>(raw);
+  // parseJsonLoose can throw on irreparable JSON; degrade to an empty card so
+  // designCharacterCard's fallbacks (name-inference voice, no portrait) kick in.
+  try {
+    return parseJsonLoose<CharacterDesignOutput>(raw);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[characterDesigner] design JSON parse failed for ${charName}: ${msg}`);
+    return {};
+  }
 }
 
 // Generate the per-character base portrait. The portrait is a "concept
@@ -125,9 +135,10 @@ export async function designCharacterCard(
   config: EngineConfig,
   session: Session,
   charName: string,
+  intent?: CharacterIntent,
 ): Promise<CharacterCard> {
   const tDesign = Date.now();
-  const design = await runDesignLLM(config, session, charName);
+  const design = await runDesignLLM(config, session, charName, intent);
   tlog(`[charDesigner ${charName}] design LLM`, tDesign);
 
   return {

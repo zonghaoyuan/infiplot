@@ -3,14 +3,16 @@ import { coerceOrientation } from "@infiplot/types";
 import type {
   Beat,
   Character,
+  CharacterIntent,
   EngineConfig,
   InsertBeatPartial,
   ProviderConfig,
   Scene,
+  SceneStreamEvent,
   Session,
   StoryState,
   StoryStatePatch,
-  WriterPlan,
+  WriterScenePlan,
 } from "@infiplot/types";
 import type { CharacterCard } from "./agents/characterDesigner";
 import {
@@ -23,13 +25,15 @@ import { runCinematographer } from "./agents/cinematographer";
 import { runPainter } from "./agents/painter";
 import type { WriterBeatsOutput } from "./agents/writer";
 import {
+  coerceBeatsFromRaw,
+  coercePlanFromRaw,
   isPovName,
   normalizeSpeakerName,
   POV_DISPLAY_NAME,
-  runWriterBeats,
-  runWriterPlan,
+  runWriterStream,
   synthesizeFallbackBeats,
 } from "./agents/writer";
+import { routeTaggedStream } from "./stream";
 import { parseJsonLoose } from "./jsonParser";
 import { INSERT_BEAT_SYSTEM, buildInsertBeatUserMessage } from "./prompts";
 
@@ -97,6 +101,14 @@ export function mergeCharacters(
       basePortraitUrl: u.basePortraitUrl ?? prev.basePortraitUrl,
       basePortraitUuid: u.basePortraitUuid ?? prev.basePortraitUuid,
       voiceDescription: u.voiceDescription || prev.voiceDescription,
+      // Paradigm D: preserve persona fields when later designs omit them
+      // (same logic as portrait/voice preservation).
+      persona: u.persona ?? prev.persona,
+      personalityTraits: u.personalityTraits ?? prev.personalityTraits,
+      speakingStyle: u.speakingStyle ?? prev.speakingStyle,
+      sampleDialogue: u.sampleDialogue ?? prev.sampleDialogue,
+      relationshipToPlayer: u.relationshipToPlayer ?? prev.relationshipToPlayer,
+      secrets: u.secrets ?? prev.secrets,
     });
   }
   return Array.from(byName.values());
@@ -157,6 +169,19 @@ export type SceneResult = {
   storyState: StoryState;
 };
 
+// Absolute-worst-case plan when the stream produced no usable <plan> at all
+// (StreamRouter degraded with no extractable plan). Keeps the pipeline alive.
+function minimalFallbackPlan(): WriterScenePlan {
+  return {
+    sceneSummary: "未指定场景概要",
+    sceneKey: undefined,
+    entryBeatId: "b1",
+    cast: [],
+    entryActiveCharacters: [],
+    entrySpeaker: undefined,
+  };
+}
+
 // ──────────────────────────────────────────────────────────────────────
 //  directScene — the multi-agent pipeline. Used by orchestrator's
 //  startSession and requestScene.
@@ -165,48 +190,84 @@ export type SceneResult = {
 export async function directScene(
   config: EngineConfig,
   session: Session,
+  emit?: (event: SceneStreamEvent) => void,
 ): Promise<SceneResult> {
   const tTotal = Date.now();
 
-  // ── Phase A — Writer PLAN (serial). The image pipeline needs the scene
-  // summary + entry roster + cast to start, but NOT the dialogue beats. This
-  // call is small (skeleton only), so it returns fast and unblocks everything.
-  const tPlan = Date.now();
-  const plan = await runWriterPlan(config.text, session);
-  tlog("[directScene] Phase A (plan)", tPlan);
+  // ══════════════════════════════════════════════════════════════════════
+  //  Paradigm D — single Writer stream + StreamRouter dispatch
+  //
+  //  One LLM call produces <plan> → <beats> → <choices>. StreamRouter
+  //  cuts the tags; </plan> closure resolves the plan deferred, unlocking
+  //  the downstream image pipeline IN PARALLEL with the still-streaming
+  //  <beats>. Beats are coerced after routing completes.
+  // ══════════════════════════════════════════════════════════════════════
 
-  // ── Phase B — Writer BEATS, launched NOW so its (longer) output overlaps the
-  // ENTIRE image pipeline below. Only needed to assemble the final Scene, so we
-  // await it last. A failure degrades to a single playable beat from the plan.
-  const tBeats = Date.now();
-  const beatsPromise: Promise<WriterBeatsOutput> = runWriterBeats(
-    config.text,
-    session,
-    plan,
-  )
-    .then((out) => {
-      tlog("[directScene] Phase B (beats)", tBeats);
-      return out;
-    })
-    .catch((err): WriterBeatsOutput => {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[directScene] Phase B (beats) failed, using fallback: ${msg}`,
-      );
-      return { beats: synthesizeFallbackBeats(plan), storyStatePatch: undefined };
-    });
+  // ── Step 1 — kick off the Writer stream + routing ─────────────────
+  const tStream = Date.now();
+  const writerResult = runWriterStream(config.text, session);
 
-  // NEW characters to design come from the PLAN's cast (so design fires in
-  // parallel with Phase B, not after the beats are written). Existing
-  // characters keep their cards / portraits / voices across scenes.
+  // Deferred that settles when onPlan fires (or when routing completes
+  // without a plan — degraded fallback).
+  let planSettled = false;
+  let resolvePlan!: (p: WriterScenePlan) => void;
+  const planPromise = new Promise<WriterScenePlan>((res) => {
+    resolvePlan = res;
+  });
+
+  // Closure-captured coerced plan so onBeatsComplete can coerce+emit beats
+  // DURING streaming (before painter finishes → text-first progressive play).
+  let coercedPlanRef: WriterScenePlan | undefined;
+  let earlyBeatsOut: WriterBeatsOutput | undefined;
+
+  const routingPromise = routeTaggedStream(writerResult.textStream, {
+    onPlan: (rawPlan) => {
+      try {
+        const coerced = coercePlanFromRaw(rawPlan as unknown as Record<string, unknown>);
+        coercedPlanRef = coerced;
+        planSettled = true;
+        emit?.({ type: "plan", plan: coerced });
+        resolvePlan(coerced);
+      } catch {
+        planSettled = true;
+        resolvePlan(minimalFallbackPlan());
+      }
+    },
+    onBeatsComplete: (rawBeatsArr) => {
+      // Tags are ordered (plan before beats), so the plan is already coerced.
+      const p = coercedPlanRef ?? minimalFallbackPlan();
+      try {
+        const out = coerceBeatsFromRaw(rawBeatsArr, p);
+        earlyBeatsOut = out;
+        for (const b of out.beats) emit?.({ type: "beat", beat: b });
+      } catch {
+        // coercion failure → Step 6 re-coerces from rawBeatsSegment
+      }
+    },
+  }).then((result) => {
+    // If plan never fired (stream error / no plan tag), settle the deferred
+    // from the degraded extraction or a minimal fallback.
+    if (!planSettled) {
+      const extracted = result.plan
+        ? coercePlanFromRaw(result.plan as unknown as Record<string, unknown>)
+        : minimalFallbackPlan();
+      resolvePlan(extracted);
+    }
+    return result;
+  });
+
+  // ── Step 2 — await plan (settles at </plan> close — EARLY) ────────
+  const plan = await planPromise;
+  tlog("[directScene] plan (stream → </plan>)", tStream);
+
+  // From here the pipeline is structurally identical to the old Phase A
+  // flow: plan drives character design + cinematographer + painter, all
+  // overlapping with the Writer's still-streaming <beats>.
+
   const newCharNames = plan.cast.filter(
     (n) => !session.characters.some((c) => c.name === n),
   );
 
-  // Entry-beat composition is the PLAN's (Phase B is constrained to honor it).
-  // The Painter needs a Beat-shaped object for reference collection, but the
-  // real beat isn't written until Phase B — so synthesize one from the plan
-  // (collectReferenceImages only reads speaker + activeCharacters).
   const entryBeatActive = plan.entryActiveCharacters;
   const entryBeatSpeaker = plan.entrySpeaker;
   const entryBeatForPaint: Beat = {
@@ -216,32 +277,30 @@ export async function directScene(
     next: { type: "continue", nextBeatId: plan.entryBeatId },
   };
 
-  // For sceneKey-based visual continuity, look up the prior matching scene's
-  // image to slot into Painter's referenceImages (max 4 of which include
-  // character portraits too).
   const { priorSceneReference, priorSceneKey } = pickPriorSceneReference(
     session,
     plan.sceneKey,
   );
 
-  // ── Stage 2 — character cards (LLM) ∥ Cinematographer ──────────────────
-  // Both are cheap LLM calls and neither needs the other's output, so they
-  // run concurrently. The cards give us each new character's visualDescription
-  // TEXT; portraits + voices are deferred to Stage 3 so they can overlap the
-  // paint instead of blocking it.
+  // ── Step 3 — character cards (LLM) ∥ Cinematographer (parallel) ───
+  // CharacterDesigner now receives the Writer's intent for each character
+  // (paradigm D: media translator, not inventor).
   const tParallel = Date.now();
 
+  const findIntent = (name: string): CharacterIntent | undefined =>
+    plan.characterIntents?.find((ci) => ci.name === name);
+
   const cardPromises = newCharNames.map((name) =>
-    designCharacterCard(config, session, name).catch((err): CharacterCard => {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[directScene] designCharacterCard(${name}) failed: ${msg}`);
-      // Last-resort fallback: a name + generic voice card so the speaker isn't
-      // unknown. No visualDescription → no portrait is attempted for them.
-      return {
-        name,
-        voiceDescription: `请根据角色名「${name}」推断其性别、年龄与气质。所属世界观：${session.worldSetting}`,
-      };
-    }),
+    designCharacterCard(config, session, name, findIntent(name)).catch(
+      (err): CharacterCard => {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[directScene] designCharacterCard(${name}) failed: ${msg}`);
+        return {
+          name,
+          voiceDescription: `请根据角色名「${name}」推断其性别、年龄与气质。所属世界观：${session.worldSetting}`,
+        };
+      },
+    ),
   );
 
   const cinemaPromise = runCinematographer(config.text, {
@@ -259,8 +318,6 @@ export async function directScene(
   ]);
   tlog("[directScene] CharacterCards+Cinematographer parallel", tParallel);
 
-  // Working registry: existing characters + new cards. visualDescription text
-  // is present now; portraits + voices fill in over the next two phases.
   let characters = mergeCharacters(
     session.characters,
     cards.map((c) => ({
@@ -270,11 +327,9 @@ export async function directScene(
     })),
   );
 
-  // ── Stage 3 — portraits + voices, scheduled around the Painter ─────────
+  // ── Step 4 — portraits + voices, scheduled around Painter ─────────
   const tProvision = Date.now();
 
-  // Entry-beat character names: the ONLY portraits the Painter references
-  // (collectReferenceImages slots in the entry beat's speaker + activeChars).
   const entryNames = new Set<string>();
   if (entryBeatSpeaker && !isPovName(entryBeatSpeaker)) {
     entryNames.add(entryBeatSpeaker);
@@ -288,8 +343,6 @@ export async function directScene(
     basePortraitUrl?: string;
     basePortraitUuid?: string;
   };
-  // Kick off portrait gen for every NEW char that has a visualDescription.
-  // Entry-beat portraits block the Painter; the rest overlap it.
   const entryPortraitPromises: Promise<NamedPortrait>[] = [];
   const restPortraitPromises: Promise<NamedPortrait>[] = [];
   for (const card of cards) {
@@ -304,7 +357,6 @@ export async function directScene(
     (entryNames.has(card.name) ? entryPortraitPromises : restPortraitPromises).push(p);
   }
 
-  // Kick off voice provisioning for every NEW char (never on the paint path).
   const voicePromises = cards.map((card) =>
     provisionCharacterVoice(config, card.voiceDescription, card.name).then(
       (voice): Character => ({
@@ -315,26 +367,20 @@ export async function directScene(
     ),
   );
 
-  // Block the Painter ONLY on entry-beat portraits (its referenceImages).
   const entryPortraits = await Promise.all(entryPortraitPromises);
   characters = mergeCharacters(
     characters,
     entryPortraits.map((p) => ({
       name: p.name,
-      voiceDescription: "", // preserved from the card by mergeCharacters
+      voiceDescription: "",
       basePortraitUrl: p.basePortraitUrl,
       basePortraitUuid: p.basePortraitUuid,
     })),
   );
   tlog("[directScene] entry-beat portraits", tProvision);
 
-  // ── Stage 4 — Painter (depends on cinemaOut + on-stage visual cards +
-  // entry portraits). On-stage = the plan's cast (everyone who'll appear),
-  // filtered to those now in the registry, so the archetype block covers them.
+  // ── Step 5 — Painter ──────────────────────────────────────────────
   const onStageCharacters = characters.filter((c) => plan.cast.includes(c.name));
-
-  // Session-locked orientation (set at session start). Threads into both the
-  // Painter prompt's framing rules and the generated image's pixel dimensions.
   const orientation = coerceOrientation(session.orientation);
 
   const tPainter = Date.now();
@@ -352,9 +398,11 @@ export async function directScene(
   );
   tlog("[directScene] Painter", tPainter);
 
-  // Fold in the work that overlapped the paint: remaining portraits + all
-  // voices. Awaited before returning so the session the client persists is
-  // fully provisioned for later scenes.
+  // Emit background as soon as it's painted — the client can swap the
+  // placeholder for the real scene image while beats/voices are still settling.
+  emit?.({ type: "background", imageUrl: painted.imageUrl, sceneKey: plan.sceneKey });
+
+  // Overlapped: rest portraits + voices
   const tOverlap = Date.now();
   const [restPortraits, voicedChars] = await Promise.all([
     Promise.all(restPortraitPromises),
@@ -372,20 +420,43 @@ export async function directScene(
   characters = mergeCharacters(characters, voicedChars);
   tlog("[directScene] overlapped portraits+voices", tOverlap);
 
-  // ── Await Phase B — it overlapped the whole image pipeline above. ──────
-  const beatsOut = await beatsPromise;
+  // Emit each freshly-provisioned voice so the client can preload audio.
+  for (const vc of voicedChars) {
+    if (vc.voice) emit?.({ type: "voice", name: vc.name, voice: vc.voice });
+  }
+
+  // ── Step 6 — await routing completion + coerce beats ──────────────
+  // routeTaggedStream ran concurrently with the entire image pipeline.
+  // onBeatsComplete likely already fired (emitting beats for progressive
+  // playback); this await retrieves the final result + rawBeatsSegment.
+  const streamResult = await routingPromise;
+
+  // Reuse early-coerced beats when available (onBeatsComplete path);
+  // otherwise coerce from rawBeatsSegment (degrade / onBeatsComplete missed).
+  const beatsOut: WriterBeatsOutput = earlyBeatsOut
+    ?? coerceBeatsFromRaw(streamResult.rawBeatsSegment ?? streamResult.beats, plan);
   const beats = beatsOut.beats;
 
-  // entryBeatId is guaranteed present (runWriterBeats pins it onto a beat), but
-  // keep the defensive fallback for the synthesized-fallback path.
+  // If earlyBeatsOut was missed but rawBeatsSegment is available, emit beats
+  // now (late but still before done — the client gets them for rendering).
+  if (!earlyBeatsOut && beats.length > 0) {
+    for (const b of beats) emit?.({ type: "beat", beat: b });
+  }
+
+  // Emit choices (from streamResult or from the last beat's choice exits).
+  if (streamResult.choices?.length) {
+    emit?.({ type: "choices", choices: streamResult.choices });
+  }
+
+  if (streamResult.degraded) {
+    console.warn("[directScene] Writer stream was degraded — beats may be fallback");
+  }
+
   const entryBeatId = beats.some((b) => b.id === plan.entryBeatId)
     ? plan.entryBeatId
     : beats[0]!.id;
 
-  // Orphan-speaker voices: a beat speaker Phase B used that isn't in the
-  // registry. Should be rare — the prompt constrains speakers to the cast, and
-  // every cast member was provisioned above — so this is a defensive net,
-  // serial but skipped entirely (zero latency) in the common case.
+  // Orphan-speaker voices (defensive net — should be rare).
   const orphanSpeakers = [
     ...new Set(beats.map((b) => b.speaker).filter((n): n is string => Boolean(n))),
   ].filter((n) => !isPovName(n) && !characters.some((c) => c.name === n));
@@ -398,11 +469,6 @@ export async function directScene(
 
   const scene: Scene = {
     id: newSceneId(),
-    // scenePrompt is the cinematographer's English compositional output;
-    // the Writer's sceneSummary stays in the session log via beats[]/
-    // history. Keeping the original field name preserves compat with
-    // anything that already reads scene.scenePrompt (e.g., insert-beat
-    // user prompt).
     scenePrompt: cinemaOut.integratedPrompt,
     beats,
     entryBeatId,
@@ -412,9 +478,6 @@ export async function directScene(
     orientation,
   };
 
-  // Merge the Writer's volatile memory rewrite onto the carried bible so the
-  // throughline survives the next scene cut (orchestrator returns it; the
-  // client persists it back into the session).
   const storyState = applyStoryStatePatch(
     session.storyState,
     beatsOut.storyStatePatch,

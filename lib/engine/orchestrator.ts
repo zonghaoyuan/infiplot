@@ -7,6 +7,7 @@ import type {
   FreeformClassifyResponse,
   InsertBeatRequest,
   InsertBeatResponse,
+  SceneStreamEvent,
   Session,
   SceneRequest,
   SceneResponse,
@@ -49,6 +50,7 @@ function tlog(label: string, t0: number): void {
 export async function startSession(
   config: EngineConfig,
   req: StartRequest,
+  emit?: (event: SceneStreamEvent) => void,
 ): Promise<StartResponse> {
   const tTotal = Date.now();
 
@@ -96,6 +98,7 @@ export async function startSession(
   const { scene, sceneImageUrl, characters, storyState } = await directScene(
     config,
     session,
+    emit,
   );
 
   tlog("[start] TOTAL", tTotal);
@@ -116,12 +119,14 @@ export async function startSession(
 export async function requestScene(
   config: EngineConfig,
   req: SceneRequest,
+  emit?: (event: SceneStreamEvent) => void,
 ): Promise<SceneResponse> {
   const tTotal = Date.now();
 
   const { scene, sceneImageUrl, characters, storyState } = await directScene(
     config,
     req.session,
+    emit,
   );
 
   tlog("[scene] TOTAL", tTotal);
