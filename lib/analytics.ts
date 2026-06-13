@@ -54,6 +54,7 @@ type AnalyticsEventData = {
   fullscreen_toggle: { on: boolean };
   play_heartbeat: never;
   gallery_export: { scene_count: number; audio_count: number };
+  login_success: { provider: "google" | "github" | "email" };
   play_error: {
     source: "scene" | "start" | "vision" | "insert_beat" | "freeform" | "prefetch";
     kind: "network" | "timeout" | "http_5xx" | "http_4xx" | "abort" | "unknown";

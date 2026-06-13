@@ -2,6 +2,7 @@ import { visionDecide } from "@infiplot/engine";
 import type { VisionRequest } from "@infiplot/types";
 import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
+import { requireUser } from "@/lib/supabase/guard";
 
 export const runtime = "nodejs";
 
@@ -11,6 +12,9 @@ export const runtime = "nodejs";
 const MAX_ANNOTATED_BYTES = 3 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  const auth = await requireUser();
+  if (auth instanceof NextResponse) return auth;
+
   let body: VisionRequest;
   try {
     body = (await req.json()) as VisionRequest;

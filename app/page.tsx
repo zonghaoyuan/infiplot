@@ -16,6 +16,10 @@ import { analyzeImageDataUrl } from "@infiplot/ai-client";
 import { readStoredModelConfig, resolveEngineConfig } from "@/lib/clientModelConfig";
 import { STYLE_EXTRACTION_PROMPT } from "@/lib/styleExtraction";
 import { STORY_SHARE_STORAGE_KEY, parseStoryShareDoc } from "@/lib/storyShare";
+import { AUTH_ENABLED } from "@/lib/supabase/config";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { AuthModal } from "@/components/AuthModal";
+import { UserChip } from "@/components/UserChip";
 
 /* ============================================================================
    InfiPlot · 首页（编辑式视觉风格 · 居中构图，呼应低保真原型）
@@ -847,6 +851,51 @@ function CategorySelect({
 
 /* ---------- style picker modal ---------- */
 
+const PENDING_START_KEY = "infiplot:pending-start";
+const PENDING_PARSE_KEY = "infiplot:pending-parse";
+
+// True when auth is disabled (self-host with blank Supabase env) or the visitor
+// already has a session. Gates the vision call behind login.
+async function isAuthed(): Promise<boolean> {
+  if (!AUTH_ENABLED) return true;
+  const sb = createSupabaseClient();
+  const { data } = await sb.auth.getUser();
+  return !!data.user;
+}
+
+// Shared by the StyleModal uploader and the post-login resume path: turns a
+// resized data URL into an English style prompt, via the browser engine when a
+// BYO model config is present, otherwise the server route.
+async function extractStylePromptFromImage(resized: string): Promise<string> {
+  const modelCfg = readStoredModelConfig();
+  if (modelCfg) {
+    const config = resolveEngineConfig(modelCfg, null);
+    const raw = await analyzeImageDataUrl(
+      config.vision,
+      resized,
+      STYLE_EXTRACTION_PROMPT,
+    );
+    let parsed: { stylePrompt?: string };
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = { stylePrompt: raw };
+    }
+    return (parsed.stylePrompt ?? "").trim();
+  }
+  const r = await fetch("/api/parse-style-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageDataUrl: resized }),
+  });
+  if (!r.ok) {
+    const data = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `HTTP ${r.status}`);
+  }
+  const data = (await r.json()) as { stylePrompt?: string };
+  return (data.stylePrompt ?? "").trim();
+}
+
 function StyleModal({
   items,
   value,
@@ -856,6 +905,7 @@ function StyleModal({
   setCustomStyleGuide,
   customStyleRefImage,
   setCustomStyleRefImage,
+  onRequireAuth,
 }: {
   items: string[];
   value: number;
@@ -865,6 +915,7 @@ function StyleModal({
   setCustomStyleGuide: (s: string) => void;
   customStyleRefImage: string;
   setCustomStyleRefImage: (s: string) => void;
+  onRequireAuth: () => void;
 }) {
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(false);
@@ -979,31 +1030,18 @@ function StyleModal({
     setParsing(true);
     try {
       const resized = await resizeImageToDataUrl(file);
-      const modelCfg = readStoredModelConfig();
-      let stylePrompt: string;
-      if (modelCfg) {
-        const config = resolveEngineConfig(modelCfg, null);
-        const raw = await analyzeImageDataUrl(config.vision, resized, STYLE_EXTRACTION_PROMPT);
-        let parsed: { stylePrompt?: string };
+      // The parse is a paid vision call, so require login first. The resize is
+      // already done — stash it so login can auto-resume the parse on return.
+      if (!(await isAuthed())) {
         try {
-          parsed = JSON.parse(raw);
+          sessionStorage.setItem(PENDING_PARSE_KEY, resized);
         } catch {
-          parsed = { stylePrompt: raw };
+          /* too big to stash — user re-uploads after login */
         }
-        stylePrompt = (parsed.stylePrompt ?? "").trim();
-      } else {
-        const r = await fetch("/api/parse-style-image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl: resized }),
-        });
-        if (!r.ok) {
-          const data = await r.json().catch(() => ({}));
-          throw new Error(data.error || `HTTP ${r.status}`);
-        }
-        const data = (await r.json()) as { stylePrompt?: string };
-        stylePrompt = (data.stylePrompt ?? "").trim();
+        onRequireAuth();
+        return;
       }
+      const stylePrompt = await extractStylePromptFromImage(resized);
       if (!stylePrompt) throw new Error("视觉模型返回了空的风格描述");
       setDraft(stylePrompt);
       setCustomStyleRefImage(resized);
@@ -1281,6 +1319,8 @@ export default function HomePage() {
   const [ttsConfigured, setTtsConfigured] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [visionClickEnabled, setVisionClickEnabled] = useState(true);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"start" | null>(null);
 
   const styleRow = OPTS.findIndex((o) => o.modal);
   const voiceRow = OPTS.findIndex((o) => o.label === "语音配音");
@@ -1350,7 +1390,118 @@ export default function HomePage() {
     }
   };
 
-  const start = () => {
+  // ── Auth-gated resume (OAuth round-trips lose all React state) ──────────
+  // An OAuth login unmounts the homepage and discards everything the user
+  // typed. We snapshot the form before redirecting and replay it on return.
+  // The email-OTP path keeps state in place and resumes synchronously via
+  // AuthModal.onSuccess instead.
+  const [autoStartPending, setAutoStartPending] = useState(false);
+
+  const persistPendingStart = () => {
+    const snap = { prompt, sel, customStyleGuide, customStyleRefImage, playerName };
+    try {
+      sessionStorage.setItem(PENDING_START_KEY, JSON.stringify(snap));
+    } catch {
+      // Quota is usually blown by the data-URL style ref; drop it, keep text.
+      try {
+        sessionStorage.setItem(
+          PENDING_START_KEY,
+          JSON.stringify({ ...snap, customStyleRefImage: "" }),
+        );
+      } catch {
+        /* still too big — give up on resume, the form just clears */
+      }
+    }
+  };
+
+  const resumePendingParse = async () => {
+    const resized = sessionStorage.getItem(PENDING_PARSE_KEY);
+    if (!resized) return;
+    sessionStorage.removeItem(PENDING_PARSE_KEY);
+    try {
+      const stylePrompt = await extractStylePromptFromImage(resized);
+      if (!stylePrompt) return;
+      setCustomStyleGuide(stylePrompt);
+      setCustomStyleRefImage(resized);
+      const customIdx = ART_STYLES.indexOf("自定义风格");
+      if (styleRow >= 0 && customIdx >= 0) {
+        setSel((s) => s.map((v, j) => (j === styleRow ? customIdx : v)));
+      }
+      track("style_image_upload", { ok: true });
+    } catch {
+      /* resume parse failed — stay silent, user can re-upload */
+    }
+  };
+
+  const resumePendingStart = () => {
+    const raw = sessionStorage.getItem(PENDING_START_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(PENDING_START_KEY);
+    try {
+      const snap = JSON.parse(raw) as {
+        prompt?: string;
+        sel?: number[];
+        customStyleGuide?: string;
+        customStyleRefImage?: string;
+        playerName?: string;
+      };
+      setPrompt(snap.prompt ?? "");
+      if (Array.isArray(snap.sel)) setSel(snap.sel);
+      setCustomStyleGuide(snap.customStyleGuide ?? "");
+      setCustomStyleRefImage(snap.customStyleRefImage ?? "");
+      if (snap.playerName) setPlayerName(snap.playerName);
+      // Defer start() to the next render so it reads the restored state.
+      setAutoStartPending(true);
+    } catch {
+      /* corrupt snapshot — ignore */
+    }
+  };
+
+  // On mount after an OAuth redirect: if a pending action was left and the user
+  // is now signed in, restore and continue; otherwise clear stale snapshots.
+  useEffect(() => {
+    if (!AUTH_ENABLED) return;
+    const hasPending =
+      sessionStorage.getItem(PENDING_START_KEY) !== null ||
+      sessionStorage.getItem(PENDING_PARSE_KEY) !== null;
+    if (!hasPending) return;
+    let cancelled = false;
+    void (async () => {
+      if (!(await isAuthed())) {
+        sessionStorage.removeItem(PENDING_START_KEY);
+        sessionStorage.removeItem(PENDING_PARSE_KEY);
+        return;
+      }
+      if (cancelled) return;
+      await resumePendingParse();
+      resumePendingStart();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Run the resumed start() only after restored form state has committed.
+  useEffect(() => {
+    if (!autoStartPending) return;
+    setAutoStartPending(false);
+    void start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStartPending]);
+
+  const start = async () => {
+    if (AUTH_ENABLED) {
+      const sb = createSupabaseClient();
+      const { data } = await sb.auth.getUser();
+      if (!data.user) {
+        persistPendingStart();
+        setPendingAction("start");
+        setAuthModalOpen(true);
+        return;
+      }
+    }
+
     // 空输入时落回 Typewriter 当前闪动的示例——用户看到啥就玩啥，
     // 不会再出现「点开始 → 剧情和占位文字毫无关系」的体验断层。
     const userPrompt =
@@ -1525,6 +1676,7 @@ export default function HomePage() {
           >
             <i className="fa-brands fa-x-twitter" />
           </a>
+          <UserChip onLoginClick={() => setAuthModalOpen(true)} />
         </div>
       </header>
 
@@ -1794,6 +1946,7 @@ export default function HomePage() {
           setCustomStyleGuide={setCustomStyleGuide}
           customStyleRefImage={customStyleRefImage}
           setCustomStyleRefImage={setCustomStyleRefImage}
+          onRequireAuth={() => setAuthModalOpen(true)}
         />
       )}
       {settingsOpen && (
@@ -1809,6 +1962,35 @@ export default function HomePage() {
               const onIdx = OPTS[voiceRow]!.items.indexOf("开启");
               if (onIdx >= 0)
                 setSel((s) => s.map((v, j) => (j === voiceRow ? onIdx : v)));
+            }
+          }}
+        />
+      )}
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => {
+            setAuthModalOpen(false);
+            setPendingAction(null);
+            try {
+              sessionStorage.removeItem(PENDING_START_KEY);
+              sessionStorage.removeItem(PENDING_PARSE_KEY);
+            } catch {
+              /* ignore */
+            }
+          }}
+          onSuccess={() => {
+            setAuthModalOpen(false);
+            // Email-OTP stays on the page, so resume inline: parse first (it
+            // reads its own snapshot), then the pending start.
+            void resumePendingParse();
+            if (pendingAction === "start") {
+              setPendingAction(null);
+              try {
+                sessionStorage.removeItem(PENDING_START_KEY);
+              } catch {
+                /* ignore */
+              }
+              start();
             }
           }}
         />

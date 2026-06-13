@@ -5,6 +5,7 @@ import type {
 } from "@infiplot/types";
 import { NextResponse } from "next/server";
 import { loadEngineConfig } from "@/lib/config";
+import { requireUser } from "@/lib/supabase/guard";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,9 @@ Do NOT describe the characters, objects, or scene contents. Output exactly one J
 {"stylePrompt": "<comma-separated English visual-style attributes, ~30-60 words>"}`;
 
 export async function POST(req: Request) {
+  const auth = await requireUser();
+  if (auth instanceof NextResponse) return auth;
+
   let body: ParseStyleImageRequest;
   try {
     body = (await req.json()) as ParseStyleImageRequest;

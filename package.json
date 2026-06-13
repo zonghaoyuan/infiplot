@@ -20,6 +20,8 @@
     "deploy:cf": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12",
+    "@supabase/supabase-js": "^2.108",
     "jsonrepair": "^3.14.0",
     "jszip": "^3.10.1",
     "next": "^16.0.0",

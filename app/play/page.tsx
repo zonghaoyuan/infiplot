@@ -35,6 +35,7 @@ import {
   visionDecide,
   classifyFreeform,
   requestInsertBeat,
+  AuthRequiredError,
 } from "@/lib/engineClient";
 import type {
   Beat,
@@ -50,6 +51,9 @@ import type {
   TtsConfig,
 } from "@infiplot/types";
 import { track } from "@/lib/analytics";
+import { AUTH_ENABLED } from "@/lib/supabase/config";
+import { AuthModal } from "@/components/AuthModal";
+import { UserChip } from "@/components/UserChip";
 
 const MUTED_STORAGE_KEY = "infiplot:muted";
 
@@ -601,11 +605,28 @@ function PlayInner() {
   // Consecutive server-side TTS misses (null audio / failed /api/beat-audio).
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [visionClickEnabled, setVisionClickEnabled] = useState(true);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const authResolveRef = useRef<(() => void) | null>(null);
   // Top-of-screen progress toast for the gallery / story export pipeline.
   // null when idle; { done, total, label } while collecting beat audio.
   const [exportProgress, setExportProgress] = useState<
     { done: number; total: number; label: string } | null
   >(null);
+
+  // `retry` re-runs the action that hit the 401, replayed by AuthModal.onSuccess
+  // after the user signs in. Omitted by callers whose path can't actually 401
+  // (initial load already gated on the homepage, recorded replay is local).
+  const handleAuthError = useCallback(
+    (e: unknown, retry?: () => void): boolean => {
+      if (e instanceof AuthRequiredError) {
+        authResolveRef.current = retry ?? null;
+        setAuthModalOpen(true);
+        return true;
+      }
+      return false;
+    },
+    [],
+  );
 
   const startedRef = useRef(false);
   const poolRef = useRef<Map<string, PrefetchEntry>>(new Map());
@@ -1336,8 +1357,10 @@ function PlayInner() {
           setPhase("ready");
           track("scene_reached", { scene_index: 1 });
         } catch (e) {
-          trackPlayError("start", e, t0);
-          setError(e instanceof Error ? e.message : String(e));
+          if (!handleAuthError(e)) {
+            trackPlayError("start", e, t0);
+            setError(e instanceof Error ? e.message : String(e));
+          }
         }
       })();
       return;
@@ -1476,8 +1499,10 @@ function PlayInner() {
         track("scene_reached", { scene_index: initial.history.length });
       })
       .catch((e) => {
-        trackPlayError("start", e, startT0);
-        setError(String(e));
+        if (!handleAuthError(e)) {
+          trackPlayError("start", e, startT0);
+          setError(String(e));
+        }
       });
   }, [params, router]);
 
@@ -1546,6 +1571,7 @@ function PlayInner() {
     exit: SceneExit,
     visitedForCurrent: string[],
     exitLabel: string,
+    retry?: () => void,
   ) {
     const sceneT0 = Date.now();
     setPhase("transitioning");
@@ -1605,8 +1631,10 @@ function PlayInner() {
         setPhase("ready");
         return;
       }
-      trackPlayError("scene", e, sceneT0);
-      setError(String(e));
+      if (!handleAuthError(e, retry)) {
+        trackPlayError("scene", e, sceneT0);
+        setError(String(e));
+      }
       setPhase("ready");
     }
   }
@@ -1682,8 +1710,10 @@ function PlayInner() {
         setPhase("ready");
         track("scene_reached", { scene_index: nextSession.history.length });
       } catch (e) {
-        trackPlayError("scene", e, replayT0);
-        setError(e instanceof Error ? e.message : String(e));
+        if (!handleAuthError(e)) {
+          trackPlayError("scene", e, replayT0);
+          setError(e instanceof Error ? e.message : String(e));
+        }
         setPhase("ready");
       }
     })();
@@ -1798,7 +1828,9 @@ function PlayInner() {
 
     const cached = consumeChoice(poolRef.current, choice.id);
     if (cached) {
-      void performSceneTransition(cached, exit, visited, choice.label);
+      void performSceneTransition(cached, exit, visited, choice.label, () =>
+        onSelectChoice(choice),
+      );
       return;
     }
 
@@ -1823,7 +1855,9 @@ function PlayInner() {
       return data;
     })();
 
-    void performSceneTransition(promise, exit, visited, choice.label);
+    void performSceneTransition(promise, exit, visited, choice.label, () =>
+      onSelectChoice(choice),
+    );
   }
 
   async function onFreeformInput(text: string) {
@@ -1922,10 +1956,18 @@ function PlayInner() {
       })();
 
       setPendingClick(null);
-      void performSceneTransition(promise, exit, visited, decision.freeformAction);
+      void performSceneTransition(
+        promise,
+        exit,
+        visited,
+        decision.freeformAction,
+        () => onFreeformInput(text),
+      );
     } catch (e) {
-      trackPlayError("freeform", e, freeformT0);
-      setError(String(e));
+      if (!handleAuthError(e, () => onFreeformInput(text))) {
+        trackPlayError("freeform", e, freeformT0);
+        setError(String(e));
+      }
       setPhase("ready");
     }
   }
@@ -2028,11 +2070,14 @@ function PlayInner() {
           exit,
           visited,
           decision.intent.freeformAction,
+          () => onBackgroundClick(click),
         );
       }
     } catch (e) {
-      trackPlayError("vision", e, visionT0);
-      setError(String(e));
+      if (!handleAuthError(e, () => onBackgroundClick(click))) {
+        trackPlayError("vision", e, visionT0);
+        setError(String(e));
+      }
       setPendingClick(null);
       setPhase("ready");
     }
@@ -2165,10 +2210,13 @@ function PlayInner() {
             Infi<em className="italic font-light text-ember-500">Plot</em>
           </span>
         </Link>
-        <div className="flex items-center gap-3 text-[10px] smallcaps text-clay-500 num">
-          <span>第 · {String(sceneCount).padStart(3, "0")} · 幕</span>
-          <span className="text-clay-300">·</span>
-          <span>{String(beatCount).padStart(3, "0")} · 拍</span>
+        <div className="flex items-center gap-3">
+          <div className="text-[10px] smallcaps text-clay-500 num flex items-center gap-3">
+            <span>第 · {String(sceneCount).padStart(3, "0")} · 幕</span>
+            <span className="text-clay-300">·</span>
+            <span>{String(beatCount).padStart(3, "0")} · 拍</span>
+          </div>
+          <UserChip onLoginClick={() => setAuthModalOpen(true)} />
         </div>
       </header>
 
@@ -2272,6 +2320,21 @@ function PlayInner() {
           onClose={() => setSettingsOpen(false)}
           onSaved={handleSettingsSaved}
           footerNote="保存后配音 Key 会立即生效，用你自己的额度合成当前这一幕的配音。"
+        />
+      )}
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => {
+            setAuthModalOpen(false);
+            // User dismissed login — drop the retry, don't re-run the action.
+            authResolveRef.current = null;
+          }}
+          onSuccess={() => {
+            setAuthModalOpen(false);
+            const retry = authResolveRef.current;
+            authResolveRef.current = null;
+            retry?.();
+          }}
         />
       )}
     </div>

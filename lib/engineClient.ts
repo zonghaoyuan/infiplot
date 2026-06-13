@@ -31,6 +31,13 @@ function getClientConfig(): EngineConfig | null {
   return resolveEngineConfig(modelCfg, ttsCfg);
 }
 
+export class AuthRequiredError extends Error {
+  constructor() {
+    super("Unauthorized");
+    this.name = "AuthRequiredError";
+  }
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
@@ -38,6 +45,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    if (res.status === 401) throw new AuthRequiredError();
     let message = `HTTP ${res.status}`;
     try {
       const data = (await res.json()) as { error?: string };
