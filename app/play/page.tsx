@@ -40,6 +40,7 @@ import type {
   StartResponse,
   TtsConfig,
   VisionResponse,
+  WriterScenePlan,
 } from "@infiplot/types";
 import { track } from "@/lib/analytics";
 
@@ -717,6 +718,10 @@ function PlayInner() {
   const currentSceneRef = useRef<Scene | null>(null);
   const currentBeatRef = useRef<Beat | null>(null);
   const visitedBeatsRef = useRef<string[]>([]);
+  // C2: tracks whether this generation's partial scene was already committed
+  // (text-first progressive rendering), so the done handler reconciles instead
+  // of re-rendering from scratch (avoids a visible jump).
+  const partialCommittedRef = useRef(false);
   // Original (CDN) URL of the currently-rendered scene image. Used as the key
   // to revoke its blob: URL when the scene swaps. We track the ORIGINAL URL,
   // not the blob URL, because blobUrlCache is keyed by original URL.
@@ -1338,16 +1343,55 @@ function PlayInner() {
             const j = (await r.json().catch(() => ({}))) as { error?: string };
             throw new Error(j.error ?? r.statusText);
           }
-          // First scene: consume SSE → StartResponse, preloading the image
-          // early on `background` so the first paint is warm.
+          // Text-first progressive rendering for live start (C2).
+          // Closure-captured state for progressive assembly.
+          let partialPlan: WriterScenePlan | undefined;
+          let partialBeats: Beat[] = [];
+          let partialCommitted = false;
+
           const data = await consumeSceneStream<StartResponse>(r, (event) => {
-            if (event.type === "background" && event.imageUrl) {
-              void getOrCreateBlobUrl(event.imageUrl);
+            if (event.type === "plan") {
+              partialPlan = event.plan;
+            } else if (event.type === "beat") {
+              partialBeats.push(event.beat);
+              // C2: once we have the entry beat (and thus a complete beats graph),
+              // render text-first with placeholder background. Beats arrive in
+              // burst (onBeatsComplete fires them all at once), so the first beat
+              // triggers the partial commit.
+              if (
+                !partialCommitted &&
+                partialPlan &&
+                partialBeats.some((b) => b.id === partialPlan!.entryBeatId)
+              ) {
+                partialCommitted = true;
+                partialCommittedRef.current = true;
+                const partialScene: Scene = {
+                  id: `scene_partial_${Date.now()}`,
+                  scenePrompt: partialPlan.sceneSummary,
+                  beats: partialBeats,
+                  entryBeatId: partialPlan.entryBeatId,
+                  sceneKey: partialPlan.sceneKey,
+                  orientation: sessionOrientation,
+                };
+                // Text-first commit: render beats on placeholder background.
+                // DO NOT setSession yet — session remains null until done (prevents
+                // prefetch effect from firing on incomplete state + audio fetch from
+                // using incomplete characters).
+                visitedBeatsRef.current = [partialPlan.entryBeatId];
+                setCurrentScene(partialScene);
+                setCurrentBeatId(partialPlan.entryBeatId);
+                setImageUrl(null);
+                setPhase("ready");
+              }
+            } else if (event.type === "background" && event.imageUrl) {
+              // Preload + swap real image over the placeholder.
+              void getOrCreateBlobUrl(event.imageUrl).then((blobUrl) => {
+                lastImageOriginalUrlRef.current = event.imageUrl!;
+                setImageUrl(blobUrl);
+              });
             }
           });
           // Live /api/start doesn't echo ws/sg back — splice in what we sent.
-          // styleReferenceImage is similarly not in StartResponse; tag it on so
-          // the session we build below carries it for every /api/scene call.
           return {
             ...data,
             worldSetting: livePayload!.worldSetting,
@@ -1358,40 +1402,71 @@ function PlayInner() {
 
     fetchStart
       .then(async (data) => {
-        // Resolve to a paintable src before committing to state. Proxy path:
-        // a fully-local blob: URL the browser paints atomically (no row-by-row
-        // "层层加载"). Direct path (default): the preloaded original URL.
-        const blobUrl = await getOrCreateBlobUrl(data.imageUrl);
-        lastImageOriginalUrlRef.current = data.imageUrl;
+        // C2: done reconcile — if partial already committed (text-first),
+        // only set authoritative session/characters/storyState; scene/image
+        // were already rendered. Otherwise (degrade / no SSE), render whole.
+        if (partialCommittedRef.current) {
+          // Partial path: image already set by background event (or still null).
+          // Build authoritative session and reconcile currentScene with done.
+          const initial: Session = {
+            id: data.sessionId,
+            createdAt: Date.now(),
+            worldSetting: data.worldSetting,
+            styleGuide: data.styleGuide,
+            history: [
+              {
+                scene: data.scene,
+                visitedBeatIds: [data.scene.entryBeatId],
+              },
+            ],
+            characters: data.characters,
+            storyState: data.storyState,
+            styleReferenceImage: data.styleReferenceImage,
+            orientation: data.scene.orientation ?? sessionOrientation,
+            playerName: livePayload?.playerName || readStoredPlayerName() || undefined,
+          };
+          setSession(initial);
+          // Reconcile: replace partial scene with authoritative done scene
+          // (beats should match, but done is source of truth).
+          setCurrentScene(data.scene);
+          track("scene_reached", { scene_index: initial.history.length });
+          partialCommittedRef.current = false;
+        } else {
+          // Whole-scene path (degrade / JSON / SSE but no partial commit):
+          // await image before commit.
+          const blobUrl = await getOrCreateBlobUrl(data.imageUrl);
+          lastImageOriginalUrlRef.current = data.imageUrl;
 
-        const initial: Session = {
-          id: data.sessionId,
-          createdAt: Date.now(),
-          worldSetting: data.worldSetting,
-          styleGuide: data.styleGuide,
-          history: [
-            {
-              scene: data.scene,
-              visitedBeatIds: [data.scene.entryBeatId],
-            },
-          ],
-          characters: data.characters,
-          storyState: data.storyState,
-          styleReferenceImage: data.styleReferenceImage,
-          orientation: data.scene.orientation ?? sessionOrientation,
-          playerName: livePayload?.playerName || readStoredPlayerName() || undefined,
-        };
-        visitedBeatsRef.current = [data.scene.entryBeatId];
-        setSession(initial);
-        setCurrentScene(data.scene);
-        setCurrentBeatId(data.scene.entryBeatId);
-        setImageUrl(blobUrl);
-        // beatAudioMap is populated lazily by the per-beat fetch effect once
-        // currentScene becomes non-null (see fetchBeatAudio).
-        setPhase("ready");
-        track("scene_reached", { scene_index: initial.history.length });
+          const initial: Session = {
+            id: data.sessionId,
+            createdAt: Date.now(),
+            worldSetting: data.worldSetting,
+            styleGuide: data.styleGuide,
+            history: [
+              {
+                scene: data.scene,
+                visitedBeatIds: [data.scene.entryBeatId],
+              },
+            ],
+            characters: data.characters,
+            storyState: data.storyState,
+            styleReferenceImage: data.styleReferenceImage,
+            orientation: data.scene.orientation ?? sessionOrientation,
+            playerName: livePayload?.playerName || readStoredPlayerName() || undefined,
+          };
+          visitedBeatsRef.current = [data.scene.entryBeatId];
+          setSession(initial);
+          setCurrentScene(data.scene);
+          setCurrentBeatId(data.scene.entryBeatId);
+          setImageUrl(blobUrl);
+          setPhase("ready");
+          track("scene_reached", { scene_index: initial.history.length });
+        }
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => {
+        partialCommittedRef.current = false;
+        setError(String(e));
+      });
   }, [params, router]);
 
   // ── Prefetch on scene entry: L1 + recursive L2/L3 for must-pass ──────
@@ -1399,6 +1474,11 @@ function PlayInner() {
     const s = session;
     const scene = currentScene;
     if (!s || !scene) return;
+    // C2: during a text-first partial commit, session/scene are not yet
+    // authoritative (done hasn't reconciled). Skip prefetch until done flips
+    // partialCommittedRef back to false (which re-triggers this effect with
+    // the authoritative scene/session id).
+    if (partialCommittedRef.current) return;
 
     const exits = findAllChangeSceneChoices(scene);
     for (const choice of exits) {
@@ -1468,6 +1548,38 @@ function PlayInner() {
       const base = sessionRef.current;
       if (!base) throw new Error("Session lost mid-transition");
 
+      // C2: if a partial scene was already committed for this cold transition
+      // (text-first), the scene/text/image are already rendered. done only
+      // reconciles authoritative session/characters/storyState + final scene.
+      if (partialCommittedRef.current) {
+        // Image may have been swapped by the background event; ensure final.
+        const blobUrl = await getOrCreateBlobUrl(result.imageUrl);
+        const priorOriginal = lastImageOriginalUrlRef.current;
+        if (priorOriginal && priorOriginal !== result.imageUrl) {
+          revokeBlobUrlFor(priorOriginal);
+        }
+        lastImageOriginalUrlRef.current = result.imageUrl;
+        const closedHistory = base.history.map((h, i, arr) =>
+          i === arr.length - 1
+            ? { ...h, scene: result.scene, visitedBeatIds: [result.scene.entryBeatId] }
+            : h,
+        );
+        const reconciled: Session = {
+          ...base,
+          history: closedHistory,
+          characters: mergeCharactersPreserveVoice(base.characters, result.characters),
+          storyState: result.storyState,
+        };
+        setSession(reconciled);
+        setCurrentScene(result.scene);
+        setImageUrl(blobUrl);
+        setLastExitLabel(exitLabel);
+        setPhase("ready");
+        partialCommittedRef.current = false;
+        track("scene_reached", { scene_index: reconciled.history.length });
+        return;
+      }
+
       // Pull full image bytes into a local blob: URL before committing. For
       // prefetched scenes the speculative getOrCreateBlobUrl in
       // prefetchScenePath already has this in flight (often resolved), so
@@ -1514,6 +1626,7 @@ function PlayInner() {
       setPhase("ready");
       track("scene_reached", { scene_index: newSession.history.length });
     } catch (e) {
+      partialCommittedRef.current = false;
       if ((e as { name?: string }).name === "AbortError") {
         setPhase("ready");
         return;
@@ -1588,11 +1701,65 @@ function PlayInner() {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(j.error ?? res.statusText);
       }
-      // Cold transition: consume SSE → SceneResponse, preloading the image
-      // early on `background` so performSceneTransition's blob lookup is warm.
+      // C2: text-first progressive rendering for cold transition.
+      let partialPlan: WriterScenePlan | undefined;
+      let partialBeats: Beat[] = [];
+      let partialCommitted = false;
+
       return await consumeSceneStream<SceneResponse>(res, (event) => {
-        if (event.type === "background" && event.imageUrl) {
-          void getOrCreateBlobUrl(event.imageUrl);
+        if (event.type === "plan") {
+          partialPlan = event.plan;
+        } else if (event.type === "beat") {
+          partialBeats.push(event.beat);
+          // Once entry beat arrives, commit partial scene (text-first).
+          // performSceneTransition will reconcile when done arrives.
+          if (
+            !partialCommitted &&
+            partialPlan &&
+            partialBeats.some((b) => b.id === partialPlan!.entryBeatId)
+          ) {
+            partialCommitted = true;
+            partialCommittedRef.current = true;
+            const partialScene: Scene = {
+              id: `scene_partial_${Date.now()}`,
+              scenePrompt: partialPlan.sceneSummary,
+              beats: partialBeats,
+              entryBeatId: partialPlan.entryBeatId,
+              sceneKey: partialPlan.sceneKey,
+              orientation: session.orientation,
+            };
+            // Cold transition partial: close current history + append partial.
+            const closedHistory = session.history.map((h, i, arr) =>
+              i === arr.length - 1
+                ? { ...h, visitedBeatIds: visited, exit }
+                : h,
+            );
+            const partialSession: Session = {
+              ...session,
+              history: [
+                ...closedHistory,
+                {
+                  scene: partialScene,
+                  visitedBeatIds: [partialPlan.entryBeatId],
+                },
+              ],
+            };
+            visitedBeatsRef.current = [partialPlan.entryBeatId];
+            setSession(partialSession);
+            setCurrentScene(partialScene);
+            setCurrentBeatId(partialPlan.entryBeatId);
+            setImageUrl(null);
+            setPhase("ready");
+          }
+        } else if (event.type === "background" && event.imageUrl) {
+          // Preload + swap real image over placeholder (or warm cache for
+          // performSceneTransition if partial hasn't committed yet).
+          void getOrCreateBlobUrl(event.imageUrl).then((blobUrl) => {
+            if (partialCommitted) {
+              lastImageOriginalUrlRef.current = event.imageUrl!;
+              setImageUrl(blobUrl);
+            }
+          });
         }
       });
     })();

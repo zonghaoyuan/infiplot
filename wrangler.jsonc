@@ -55,8 +55,8 @@
   // Committed to git for team-wide consistency. API keys go in Secrets below.
   "vars": {
     "NEXT_PRIVATE_MINIMAL_MODE": "1",
-    "TEXT_BASE_URL": "https://api.deepseek.com/v1",
-    "TEXT_MODEL": "deepseek-v4-flash",
+    "TEXT_BASE_URL": "https://api.openai-next.com/v1",
+    "TEXT_MODEL": "gemini-3.1-flash-lite-preview",
     "IMAGE_BASE_URL": "https://api.runware.ai/v1",
     "IMAGE_MODEL": "runware:400@6",
     "VISION_BASE_URL": "https://token-plan-sgp.xiaomimimo.com/v1",

@@ -2,6 +2,7 @@ import { chat } from "@infiplot/ai-client";
 import { coerceOrientation } from "@infiplot/types";
 import type {
   Beat,
+  BeatChoice,
   Character,
   CharacterIntent,
   EngineConfig,
@@ -359,11 +360,17 @@ export async function directScene(
 
   const voicePromises = cards.map((card) =>
     provisionCharacterVoice(config, card.voiceDescription, card.name).then(
-      (voice): Character => ({
-        name: card.name,
-        voiceDescription: card.voiceDescription,
-        voice,
-      }),
+      (voice): Character => {
+        const result = {
+          name: card.name,
+          voiceDescription: card.voiceDescription,
+          voice,
+        };
+        // Emit voice as soon as it's provisioned (not blocked by painter).
+        // Client can preload audio while image is still rendering.
+        if (voice) emit?.({ type: "voice", name: card.name, voice });
+        return result;
+      },
     ),
   );
 
@@ -420,11 +427,6 @@ export async function directScene(
   characters = mergeCharacters(characters, voicedChars);
   tlog("[directScene] overlapped portraits+voices", tOverlap);
 
-  // Emit each freshly-provisioned voice so the client can preload audio.
-  for (const vc of voicedChars) {
-    if (vc.voice) emit?.({ type: "voice", name: vc.name, voice: vc.voice });
-  }
-
   // ── Step 6 — await routing completion + coerce beats ──────────────
   // routeTaggedStream ran concurrently with the entire image pipeline.
   // onBeatsComplete likely already fired (emitting beats for progressive
@@ -435,7 +437,7 @@ export async function directScene(
   // otherwise coerce from rawBeatsSegment (degrade / onBeatsComplete missed).
   const beatsOut: WriterBeatsOutput = earlyBeatsOut
     ?? coerceBeatsFromRaw(streamResult.rawBeatsSegment ?? streamResult.beats, plan);
-  const beats = beatsOut.beats;
+  let beats = beatsOut.beats;
 
   // If earlyBeatsOut was missed but rawBeatsSegment is available, emit beats
   // now (late but still before done — the client gets them for rendering).
@@ -446,6 +448,46 @@ export async function directScene(
   // Emit choices (from streamResult or from the last beat's choice exits).
   if (streamResult.choices?.length) {
     emit?.({ type: "choices", choices: streamResult.choices });
+  }
+
+  // ── C1-ext: merge <choices> segment into the last beat's `next` ────
+  // The Writer's <choices> segment produces scene-level exits (advance-beat /
+  // change-scene) that are NOT embedded in the beats graph. Without merging,
+  // the UI (which renders beat.next.choices) never shows them. Attach them
+  // to the final beat so the player can actually pick them.
+  if (streamResult.choices?.length && beats.length > 0) {
+    const validChoices = streamResult.choices.filter(
+      (c): c is BeatChoice =>
+        typeof c.label === "string" &&
+        c.label.length > 0 &&
+        c.effect != null &&
+        (c.effect.kind === "advance-beat" || c.effect.kind === "change-scene"),
+    );
+    if (validChoices.length > 0) {
+      const withIds = validChoices.map((c, i) => ({
+        ...c,
+        id: c.id || `sc${i + 1}`,
+      }));
+      const lastIdx = beats.length - 1;
+      const last = beats[lastIdx]!;
+      const existing =
+        last.next.type === "choice" ? last.next.choices : [];
+      const isFallbackOnly =
+        existing.length <= 1 &&
+        existing.every((c) => c.label === "继续");
+      const merged = isFallbackOnly ? withIds : [...existing, ...withIds];
+      const seen = new Set<string>();
+      const deduped = merged.filter((c) => {
+        if (seen.has(c.label)) return false;
+        seen.add(c.label);
+        return true;
+      });
+      beats = beats.map((b, i) =>
+        i === lastIdx
+          ? { ...b, next: { type: "choice" as const, choices: deduped } }
+          : b,
+      );
+    }
   }
 
   if (streamResult.degraded) {
@@ -465,6 +507,10 @@ export async function directScene(
       orphanSpeakers.map((n) => provisionVoiceForName(config, session, n)),
     );
     characters = mergeCharacters(characters, orphanChars);
+    // Emit orphan voices so the client can preload their audio.
+    for (const oc of orphanChars) {
+      if (oc.voice) emit?.({ type: "voice", name: oc.name, voice: oc.voice });
+    }
   }
 
   const scene: Scene = {

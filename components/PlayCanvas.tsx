@@ -212,6 +212,9 @@ export function PlayCanvas({
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  // C3: TTS late-arrival guard — true when audioSrc arrived after typingDone,
+  // meaning the player already finished reading. Prevents "replay" autoplay.
+  const audioLateRef = useRef(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [freeformOpen, setFreeformOpen] = useState(false);
   const [freeformText, setFreeformText] = useState("");
@@ -246,13 +249,31 @@ export function PlayCanvas({
     return () => clearTimeout(timer);
   }, [audioSrc]);
 
+  // ── C3: TTS late-arrival guard ────────────────────────────────────────
+  // Reset the "late" flag whenever the beat changes — a fresh beat starts
+  // eligible for autoplay (cache-hit or in-typing arrival both play normally).
+  useEffect(() => {
+    audioLateRef.current = false;
+  }, [beat?.id]);
+
+  // When audioSrc becomes available, decide if it's "late": if the typewriter
+  // already finished (typingDone) for this beat, the player has read the line,
+  // so the audio arrived too late — mark it so the autoplay effects skip it.
+  // If it arrives while still typing (or pre-loaded before typing finished),
+  // it's not late and plays in sync.
+  useEffect(() => {
+    if (audioSrc && typingDone) {
+      audioLateRef.current = true;
+    }
+  }, [audioSrc, typingDone]);
+
   // ── Mute toggle ───────────────────────────────────────────────────────
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
     el.muted = muted;
     el.playbackRate = SPEECH_RATE;
-    if (!muted && audioSrc && el.paused) {
+    if (!muted && audioSrc && el.paused && !audioLateRef.current) {
       el.play().catch(() => {
         // autoplay blocked — silent until next interaction
       });
@@ -268,7 +289,7 @@ export function PlayCanvas({
       ? (el.duration * 1000) / SPEECH_RATE
       : 0;
     setAudioDurationMs(ms > 0 ? ms : 0);
-    if (!muted) {
+    if (!muted && !audioLateRef.current) {
       el.play().catch(() => {
         // autoplay blocked
       });
