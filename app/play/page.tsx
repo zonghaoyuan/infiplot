@@ -1715,7 +1715,7 @@ function PlayInner() {
       setPhase("ready");
       track("scene_reached", { scene_index: newSession.history.length });
     } catch (e) {
-      console.error("[transition-debug]", e);
+      alert(`[debug] ${(e as Error)?.name}: ${(e as Error)?.message}`);
       if ((e as { name?: string }).name === "AbortError") {
         setPhase("ready");
         return;
