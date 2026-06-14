@@ -399,9 +399,12 @@ export function PlayCanvas({
         >
           {/* The stable wrapper owns the frame size. Keeping overlay geometry
               independent of <img> decode/source swaps prevents controls from
-              jumping when a newly generated image is committed. */}
+              jumping when a newly generated image is committed. The key uses
+              a short high-entropy slice (matching the <audio> element) so data
+              URIs from the gpt-image/mock paths — which can be several MB —
+              don't become React's reconciliation key. */}
           <img
-            key={imageUrl}
+            key={imageUrl.slice(-48)}
             ref={imgRef}
             src={imageUrl}
             width={intrinsicW}
