@@ -130,7 +130,7 @@ for (const f of files) {
       if (localWebpExists && !FORCE) {
         outSize = statSync(localWebp).size;
       } else {
-        const res = await fetch(remoteUrl);
+        const res = await fetch(remoteUrl, { signal: AbortSignal.timeout(30_000) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = Buffer.from(await res.arrayBuffer());
         bytesIn += buf.length;
@@ -140,16 +140,7 @@ for (const f of files) {
         const longEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
         const resized =
           longEdge > MAX_EDGE
-            ? img.resize({
-                width:
-                  (meta.width ?? 0) >= (meta.height ?? 0)
-                    ? MAX_EDGE
-                    : undefined,
-                height:
-                  (meta.height ?? 0) > (meta.width ?? 0)
-                    ? MAX_EDGE
-                    : undefined,
-              })
+            ? img.resize({ width: MAX_EDGE, height: MAX_EDGE, fit: "inside" })
             : img;
         await resized.webp({ quality: QUALITY, effort: 5 }).toFile(localWebp);
 
