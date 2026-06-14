@@ -215,7 +215,7 @@ InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Visio
 - [x] 一键部署与自定义模型配置
 - [x] 前端直配 API Key 与模型
 - [x] 移动端 Web 适配
-- [x] 剧情分享（.infiplot 格式）
+- [x] 剧情分享（`.infiplot` 格式）
 
 **未实现**
 

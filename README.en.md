@@ -204,7 +204,7 @@ See the [Bring-your-own voice Key guide](docs/xiaomi-tts-key.md) for how to obta
 - [x] One-click deploy & custom model config
 - [x] Frontend API Key & model setup
 - [x] Mobile web support
-- [x] Story sharing (.infiplot format)
+- [x] Story sharing (`.infiplot` format)
 
 **To Do**
 
