@@ -249,6 +249,7 @@ function revokeBlobUrlFor(originalUrl: string): void {
 // ──────────────────────────────────────────────────────────────────────
 
 const PREFETCH_MAX_DEPTH = 3;
+const PREFETCH_MAX_DEPTH_MOBILE = 1;
 
 type PrefetchEntry = {
   promise: Promise<SceneResponse>;
@@ -375,7 +376,10 @@ function prefetchScenePath(
   depth: number,
   clientTts: boolean,
 ): void {
-  if (depth >= PREFETCH_MAX_DEPTH) return;
+  const maxDepth = baseSession.orientation === "portrait"
+    ? PREFETCH_MAX_DEPTH_MOBILE
+    : PREFETCH_MAX_DEPTH;
+  if (depth >= maxDepth) return;
   const key = pathKey(steps);
   if (pool.has(key)) return;
 
@@ -404,7 +408,7 @@ function prefetchScenePath(
 
     // Recursive: if the resulting scene has exactly one change-scene exit,
     // it is a must-pass node — prefetch its child too.
-    if (depth + 1 < PREFETCH_MAX_DEPTH) {
+    if (depth + 1 < maxDepth) {
       const sole = findSoleChangeSceneChoice(data.scene);
       if (sole && sole.effect.kind === "change-scene") {
         const nextStep: ScenePathStep = {
@@ -469,6 +473,10 @@ function consumeChoice(
       survivors.set(key.slice(choiceId.length + 1), entry);
     } else {
       entry.abort.abort();
+      // Revoke blob URL for already-resolved prefetches to free image memory
+      entry.promise
+        .then((data) => { if (data.imageUrl) revokeBlobUrlFor(data.imageUrl); })
+        .catch(() => {});
     }
   }
   pool.clear();
@@ -477,7 +485,12 @@ function consumeChoice(
 }
 
 function clearPool(pool: Map<string, PrefetchEntry>): void {
-  for (const e of pool.values()) e.abort.abort();
+  for (const e of pool.values()) {
+    e.abort.abort();
+    e.promise
+      .then((data) => { if (data.imageUrl) revokeBlobUrlFor(data.imageUrl); })
+      .catch(() => {});
+  }
   pool.clear();
 }
 
