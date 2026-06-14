@@ -79,7 +79,7 @@ Maintain graceful degradation. Existing flows tolerate malformed AI JSON, failed
 
 `sceneKey` identifies a physical space such as `"classroom-dusk"`. If a new scene shares a key with prior history, the prior scene image should be reused as a reference. Character portraits are also references.
 
-Runware allows at most 4 references. Preserve the priority: style reference image, prior scene, speaker portrait, then other NPCs. Prefer image URLs for `referenceImages` when needed because Runware can fail to recognize UUIDs. The OpenAI/Gemini image paths can also accept references through the AI SDK, but they return data URIs and synthetic UUIDs, so repeated session transport is heavier than Runware's URL/UUID loop.
+Runware allows at most 4 references. Preserve the priority: style reference image, prior scene, speaker portrait, then other NPCs. Prefer image URLs for `referenceImages` when needed because Runware can fail to recognize UUIDs. The native OpenAI image path (gpt-image) can also accept references via `images.edit`, but returns data URIs and synthetic UUIDs, so repeated session transport is heavier than Runware's URL/UUID loop.
 
 Writer prompt caching depends on `buildWriterPlanUserMessage()` and `buildWriterBeatsUserMessage()` keeping their stable prefixes intact: world, style, story spine, archived history, known scene keys, and character list. The dynamic suffix contains current state, last beat, exit hint, and the current plan. Do not reorder or reformat stable prefix sections casually; it can destroy cache hit rates.
 
@@ -136,8 +136,8 @@ Comment only non-obvious sequencing, provider quirks, fallback behavior, or arch
 
 Use `.env.example` as the source of truth. Never commit `.env.local`, API keys, uploaded user content, or generated secrets.
 
-- Text and Vision use `TEXT_*` and `VISION_*`; default protocol is `openai_compatible`, with native `anthropic` and `google` available via `TEXT_PROVIDER` / `VISION_PROVIDER`.
-- Image uses `IMAGE_*`; supported protocols are `runware`, `openai_compatible`, native `openai`, and native `google`. When `IMAGE_PROVIDER` is unset, Runware is inferred from `*.runware.ai` URLs and otherwise falls back to OpenAI-compatible image generations.
+- Text and Vision use `TEXT_*` and `VISION_*` over the `openai_compatible` protocol (the only supported text/vision protocol); Claude and Gemini are reached via their own OpenAI-compatible endpoints with the `*_PROVIDER` var unset.
+- Image uses `IMAGE_*`; supported protocols are `runware`, `openai_compatible`, and native `openai`. When `IMAGE_PROVIDER` is unset, Runware is inferred from `*.runware.ai` URLs and otherwise falls back to OpenAI-compatible image generations.
 - `IMAGE_TIMEOUT_MS` (per-attempt hard deadline) and `IMAGE_HEDGE_MS` (Painter scene-paint hedging: race a second request when the first is still pending after the threshold) are both OFF when unset — the default path must stay byte-identical to historical behavior. Hedging applies only to the Tier-A scene paint, never to portraits, and never fires after a fast failure (saturation guard). Client-side engine configs (`resolveEngineConfig`) intentionally do not set these fields.
 - TTS supports Xiaomi MiMo (voicedesign + voiceclone) or StepFun (preset voices auto-selected by keyword scoring), inferred from `TTS_BASE_URL` (host containing `stepfun.com` → StepFun, otherwise → MiMo). `CharacterVoice` is a discriminated union on `provider`; synth dispatches on the voice's own tag so a session may carry both shapes through a provider switch. Blank config means silent mode.
 - `MOCK_IMAGE=true` skips image generation and returns a placeholder for cheap local iteration.

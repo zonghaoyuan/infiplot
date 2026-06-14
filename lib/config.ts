@@ -40,8 +40,14 @@ function readProvider(name: string): ProviderProtocol | undefined {
   if ((VALID_PROTOCOLS as readonly string[]).includes(v)) {
     return v as ProviderProtocol;
   }
+  // anthropic/google were removed with the Vercel AI SDK — nudge users who
+  // still set them toward the OpenAI-compatible endpoints (see .env.example).
+  const hint =
+    v === "anthropic" || v === "google"
+      ? ` — use openai_compatible with their OpenAI-compatible endpoint instead`
+      : "";
   throw new Error(
-    `Invalid ${name}: "${v}". Must be one of: ${VALID_PROTOCOLS.join(", ")}`,
+    `Invalid ${name}: "${v}". Must be one of: ${VALID_PROTOCOLS.join(", ")}${hint}`,
   );
 }
 
