@@ -197,15 +197,24 @@ See the [Bring-your-own voice Key guide](docs/xiaomi-tts-key.md) for how to obta
 
 ## Roadmap
 
-- [ ] Make generation latency imperceptible
-- [ ] Compatibility with more model providers
-- [ ] Free-form player input mid-story
-- [ ] Mobile browser support
-- [ ] User accounts and login
-- [ ] Upgrade from static images to motion video
-- [ ] Voice interaction
-- [ ] Share the story you're playing
-- [ ] Mobile app
+**Completed**
+
+- [x] Latency optimized to ~10s
+- [x] Vision-based image interaction
+- [x] One-click deploy & custom model config
+- [x] Frontend API Key & model setup
+- [x] Mobile web support
+- [x] Story sharing (.infiplot format)
+
+**To Do**
+
+- [ ] Mobile app & creator platform
+- [ ] ComfyUI custom image generation
+- [ ] Open Deploy quick deployment
+- [ ] Reduce latency to under 5s
+- [ ] Story save & resume
+- [ ] Custom character cards & world settings
+- [ ] Prompt cache hit-rate optimization
 
 ---
 
