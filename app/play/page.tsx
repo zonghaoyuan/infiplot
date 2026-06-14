@@ -2253,6 +2253,21 @@ function PlayInner() {
             footerNote="保存后配音 Key 会立即生效，用你自己的额度合成当前这一幕的配音。"
           />
         )}
+        {authModalOpen && (
+          <AuthModal
+            onClose={() => {
+              setAuthModalOpen(false);
+              // User dismissed login — drop the retry, don't re-run the action.
+              authResolveRef.current = null;
+            }}
+            onSuccess={() => {
+              setAuthModalOpen(false);
+              const retry = authResolveRef.current;
+              authResolveRef.current = null;
+              retry?.();
+            }}
+          />
+        )}
       </div>
     );
   }
