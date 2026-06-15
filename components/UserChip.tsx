@@ -5,11 +5,7 @@ import { AUTH_ENABLED } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
-export function UserChip({
-  onLoginClick,
-}: {
-  onLoginClick: () => void;
-}) {
+export function UserChip() {
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -32,20 +28,7 @@ export function UserChip({
     setMenuOpen(false);
   }, []);
 
-  if (!AUTH_ENABLED) return null;
-
-  if (!user) {
-    return (
-      <button
-        type="button"
-        onClick={onLoginClick}
-        className="flex items-center gap-1.5 rounded-full border border-cream-50/15 bg-cream-50/[0.06] px-3 py-1.5 text-[11px] text-cream-50/70 transition-colors hover:bg-cream-50/[0.12] hover:text-cream-50/90"
-      >
-        <i className="fa-solid fa-right-to-bracket text-[10px]" />
-        登录
-      </button>
-    );
-  }
+  if (!AUTH_ENABLED || !user) return null;
 
   const label =
     user.user_metadata?.full_name ??

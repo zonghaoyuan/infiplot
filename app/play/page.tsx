@@ -2574,7 +2574,7 @@ function PlayInner() {
             <span className="text-clay-300">·</span>
             <span>{String(beatCount).padStart(3, "0")} · 拍</span>
           </div>
-          <UserChip onLoginClick={() => setAuthModalOpen(true)} />
+          <UserChip />
         </div>
       </header>
 

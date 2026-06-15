@@ -1666,7 +1666,7 @@ export default function HomePage() {
           >
             <i className="fa-brands fa-x-twitter" />
           </a>
-          <UserChip onLoginClick={() => setAuthModalOpen(true)} />
+          <UserChip />
         </div>
       </header>
 
