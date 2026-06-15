@@ -329,7 +329,7 @@ async function generateImageRunware(
     CFGScale: 3.5,
     numberResults: 1,
     outputType: "URL",
-    outputFormat: "PNG",
+    outputFormat: "WEBP",
     includeCost: false,
   };
 

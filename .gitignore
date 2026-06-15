@@ -33,3 +33,5 @@ pitch/
 # OpenDeploy-only build with hardcoded public proxy URL — local, never commit
 # (a public fork would route image traffic through our Cloudflare Worker).
 Dockerfile.opendeploy
+
+piolium/
