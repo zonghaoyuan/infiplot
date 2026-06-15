@@ -1652,7 +1652,7 @@ export default function HomePage() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="GitHub"
-            className="hidden sm:inline-flex text-lg text-clay-500 hover:text-ember-500 transition-colors"
+            className="inline-flex text-lg text-clay-500 hover:text-ember-500 transition-colors"
           >
             <i className="fa-brands fa-github" />
           </a>
@@ -1661,7 +1661,7 @@ export default function HomePage() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="X / Twitter"
-            className="hidden sm:inline-flex text-base text-clay-500 hover:text-ember-500 transition-colors"
+            className="inline-flex text-base text-clay-500 hover:text-ember-500 transition-colors"
           >
             <i className="fa-brands fa-x-twitter" />
           </a>
