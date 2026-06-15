@@ -1313,6 +1313,7 @@ export default function HomePage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"start" | null>(null);
 
+
   const styleRow = OPTS.findIndex((o) => o.modal);
   const voiceRow = OPTS.findIndex((o) => o.label === "语音配音");
   const paceRow = OPTS.findIndex((o) => o.label === "内容节奏");
@@ -1775,6 +1776,8 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+
+
 
           {/* 使用提示：可被用户永久关闭（localStorage:infiplot:hintClosed） */}
           {!hintClosed && (

@@ -59,21 +59,21 @@ export function UserChip({
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full border border-cream-50/15 bg-cream-50/[0.06] pl-1.5 pr-3 py-1 text-[11px] text-cream-50/80 transition-colors hover:bg-cream-50/[0.12]"
+        className="flex items-center justify-center rounded-full border border-cream-50/15 bg-cream-50/[0.06] p-0.5 text-cream-50/80 transition-colors hover:bg-cream-50/[0.12]"
+        title={label}
       >
         {avatarUrl ? (
           <img
             src={avatarUrl}
             alt=""
-            className="h-5 w-5 rounded-full object-cover"
+            className="h-4 w-4 rounded-full object-cover"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[rgba(175,138,72,0.6)] text-[10px] font-medium text-cream-50">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[rgba(175,138,72,0.6)] text-[9px] font-medium text-cream-50">
             {initial}
           </span>
         )}
-        <span className="max-w-[100px] truncate">{label}</span>
       </button>
       {menuOpen && (
         <>
