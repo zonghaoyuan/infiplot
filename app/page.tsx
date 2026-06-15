@@ -828,7 +828,7 @@ function CategorySelect({
         />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-2 z-30 min-w-[150px] py-1.5 bg-cream-50 border border-clay-900/15 rounded-sm shadow-xl shadow-clay-900/10">
+        <div className="absolute left-0 top-full mt-2 z-30 min-w-[150px] max-w-[calc(100vw-2rem)] py-1.5 bg-cream-50 border border-clay-900/15 rounded-sm shadow-xl shadow-clay-900/10">
           {items.map((it, i) => (
             <button
               key={i}
@@ -1080,7 +1080,7 @@ function StyleModal({
           (shown ? "opacity-100 scale-100" : "opacity-0 scale-95")
         }
       >
-        <div className="flex items-center gap-5 px-6 md:px-8 py-5 border-b border-clay-900/10">
+        <div className="flex items-center gap-3 md:gap-5 px-5 md:px-8 py-4 md:py-5 border-b border-clay-900/10">
           {view === "custom" ? (
             <div className="flex flex-1 items-center gap-3">
               <button
@@ -1097,11 +1097,11 @@ function StyleModal({
             <>
               <div className="flex flex-1 flex-col">
                 <span className="font-serif text-xl md:text-2xl text-clay-900">选择绘画风格</span>
-                <span className="text-[11px] text-clay-500 mt-1 tracking-wide">
+                <span className="hidden md:block text-[11px] text-clay-500 mt-1 tracking-wide">
                   默认「自动」· 由 AI 根据故事自动匹配画风；选择「自定义风格」可输入描述或上传参考图
                 </span>
               </div>
-              <div className="relative w-[280px] max-w-[46vw]">
+              <div className="relative w-[150px] max-w-[40vw] md:w-[280px] md:max-w-[46vw]">
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
@@ -1150,7 +1150,7 @@ function StyleModal({
                 {parseError}
               </span>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {customStyleRefImage ? (
                 <div className="flex items-center gap-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1206,7 +1206,7 @@ function StyleModal({
                   const v = e.target.value;
                   if (v && STYLE_MAP[v]) setDraft(STYLE_MAP[v]);
                 }}
-                className="h-8 w-44 rounded-sm border border-clay-900/15 bg-cream-50 px-2 font-sans text-[12px] text-clay-700 outline-none transition-colors focus:border-ember-500"
+                className="h-8 w-36 md:w-44 rounded-sm border border-clay-900/15 bg-cream-50 px-2 font-sans text-[12px] text-clay-700 outline-none transition-colors focus:border-ember-500"
               >
                 <option value="">从预设风格导入…</option>
                 {Object.keys(STYLE_MAP).map((s) => (
@@ -1638,14 +1638,16 @@ export default function HomePage() {
     router.push(`/play?card=${imgPrefix}${idx}`);
   };
 
+  // overflow-x-hidden 在 wrapper 层兜底：body 的 overflow-x-hidden 在移动端会因
+  // 规范的 overflow 传播而失效，wrapper 是最靠近溢出源（右下操作集群）的块级剪裁点。
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-x-hidden">
       {/* ================== HEADER ================== */}
       <header className="mx-auto w-full max-w-[1640px] px-6 md:px-16 pt-7 md:pt-10 flex items-center justify-between">
         <span className="font-serif text-2xl md:text-[34px] leading-none tracking-tight text-clay-900">
           Infi<em className="italic font-light text-ember-500">Plot</em>
         </span>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4 md:gap-5">
           <button
             type="button"
             onClick={() => {
@@ -1663,7 +1665,7 @@ export default function HomePage() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="GitHub"
-            className="text-lg text-clay-500 hover:text-ember-500 transition-colors"
+            className="hidden sm:inline-flex text-lg text-clay-500 hover:text-ember-500 transition-colors"
           >
             <i className="fa-brands fa-github" />
           </a>
@@ -1672,7 +1674,7 @@ export default function HomePage() {
             target="_blank"
             rel="noopener noreferrer"
             aria-label="X / Twitter"
-            className="text-base text-clay-500 hover:text-ember-500 transition-colors"
+            className="hidden sm:inline-flex text-base text-clay-500 hover:text-ember-500 transition-colors"
           >
             <i className="fa-brands fa-x-twitter" />
           </a>
@@ -1681,7 +1683,7 @@ export default function HomePage() {
       </header>
 
       {/* ================== HERO 控制区（居中，呼应原型布局） ================== */}
-      <section className="px-6 md:px-16 pt-16 md:pt-24 pb-10 md:pb-14">
+      <section className="px-6 md:px-16 pt-12 md:pt-24 pb-10 md:pb-14">
         <div className="mx-auto max-w-[1100px] text-center">
           <h1 className="font-serif font-light text-[32px] md:text-[56px] leading-[1.12] tracking-tight text-clay-900">
             今天想体验什么故事？
@@ -1709,10 +1711,10 @@ export default function HomePage() {
                 rows={1}
                 placeholder=" "
                 spellCheck={false}
-                className="block w-full resize-none overflow-hidden border-b border-clay-900/25 bg-transparent py-3 md:py-4 pr-28 font-serif text-lg md:text-2xl lining-nums text-clay-900 outline-none transition-colors focus:border-ember-500"
+                className="block w-full resize-none overflow-hidden border-b border-clay-900/25 bg-transparent py-3 md:py-4 pr-36 font-serif text-lg md:text-2xl lining-nums text-clay-900 outline-none transition-colors focus:border-ember-500"
               />
               {!prompt && (
-                <div className="pointer-events-none absolute left-0 right-0 top-0 overflow-hidden whitespace-nowrap py-3 md:py-4 pr-28 font-serif text-lg md:text-2xl text-clay-400">
+                <div className="pointer-events-none absolute left-0 right-0 top-0 overflow-hidden whitespace-nowrap py-3 md:py-4 pr-36 font-serif text-lg md:text-2xl text-clay-400">
                   <Typewriter
                     phrase={phrases[phraseIdx] ?? ""}
                     onCycle={() =>
@@ -1721,13 +1723,6 @@ export default function HomePage() {
                   />
                 </div>
               )}
-              <button
-                type="submit"
-                className="absolute right-0 bottom-2 md:bottom-3 inline-flex items-center gap-2 rounded-sm bg-clay-900 px-5 py-2 md:py-2.5 font-sans text-sm md:text-[15px] text-cream-50 transition-colors hover:bg-ember-500"
-              >
-                开始
-                <i className="fa-solid fa-arrow-right text-xs" />
-              </button>
               <input
                 ref={storyImportRef}
                 type="file"
@@ -1735,16 +1730,27 @@ export default function HomePage() {
                 className="hidden"
                 onChange={(e) => void handleStoryImport(e.target.files?.[0])}
               />
-              <button
-                type="button"
-                onClick={() => storyImportRef.current?.click()}
-                className="group absolute right-[-2.25rem] bottom-2 md:bottom-3 inline-flex items-center justify-center rounded-sm border border-clay-900/20 px-2 py-2 md:py-2.5 text-clay-400 transition-colors hover:border-ember-500 hover:text-ember-500"
-              >
-                <i className="fa-solid fa-file-import text-sm" />
-                <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-clay-900 px-2 py-1 font-sans text-[11px] text-cream-50 opacity-0 transition-opacity group-hover:opacity-100">
-                  载入剧情
-                </span>
-              </button>
+              {/* 右下操作集群：载入剧情 + 开始，统一锚定 right-0，杜绝 right-[-...]
+                  负偏移导致的移动端横向溢出。 */}
+              <div className="absolute right-0 bottom-2 md:bottom-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => storyImportRef.current?.click()}
+                  className="group relative inline-flex items-center justify-center rounded-sm border border-clay-900/15 bg-cream-50/70 backdrop-blur-sm px-2 py-2 md:py-2.5 text-clay-400 transition-colors hover:border-ember-500 hover:bg-cream-50/90 hover:text-ember-500"
+                >
+                  <i className="fa-solid fa-file-import text-sm" />
+                  <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-clay-900 px-2 py-1 font-sans text-[11px] text-cream-50 opacity-0 transition-opacity group-hover:opacity-100">
+                    载入剧情
+                  </span>
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 rounded-sm bg-clay-900 px-5 py-2 md:py-2.5 font-sans text-sm md:text-[15px] text-cream-50 transition-colors hover:bg-ember-500"
+                >
+                  开始
+                  <i className="fa-solid fa-arrow-right text-xs" />
+                </button>
+              </div>
             </div>
             {storyImportError && (
               <p className="mt-2 text-right text-xs leading-relaxed text-ember-500">
@@ -1785,7 +1791,7 @@ export default function HomePage() {
 
           {/* 使用提示：可被用户永久关闭（localStorage:infiplot:hintClosed） */}
           {!hintClosed && (
-            <div className="relative mx-auto mt-10 md:mt-12 max-w-[640px] rounded-sm border border-clay-900/10 bg-cream-100/50 px-8 py-3.5">
+            <div className="relative mx-auto mt-10 md:mt-12 max-w-[640px] rounded-sm border border-clay-900/10 bg-cream-100/50 px-5 md:px-8 py-3.5">
               <p className="font-serif text-[13px] md:text-sm leading-relaxed text-clay-500">
                 输入想法、配置风格，点击「开始」即可游玩{AUTH_ENABLED && "（测试期间，登录即可免费畅玩）"}；也可以从下方精选故事集挑一篇快速体验{" "}
                 <em className="not-italic text-ember-500">InfiPlot</em>。
