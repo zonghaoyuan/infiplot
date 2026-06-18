@@ -1837,14 +1837,8 @@ export default function HomePage() {
         </span>
         <div className="flex items-center gap-4 md:gap-5">
           <LanguageSwitcher variant="compact" />
-          <Link
-            href="/stories"
-            aria-label="我的剧情"
-            title="我的剧情"
-            className="text-base text-clay-500 hover:text-ember-500 transition-colors cursor-pointer"
-          >
-            <i className="fa-solid fa-book-bookmark" />
-          </Link>
+          {/* Story persistence UI hidden until auth integration is ready.
+             Code in app/stories/, app/api/stories/, lib/db/ is retained. */}
           <button
             type="button"
             onClick={() => {

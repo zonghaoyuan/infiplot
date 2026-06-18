@@ -11,77 +11,79 @@
   "observability": {
     "enabled": true
   },
-  // Placement Hint: pin Worker execution near Azure East Asia (Hong Kong),
-  // the lowest-latency Cloudflare region for mainland China users. Provides a
-  // stable, China-adjacent execution location for SSR + API routes.
-  // Note: static assets always serve from the edge nearest the user regardless.
-  "placement": {
-    "region": "azure:eastasia"
-  },
+  // Placement Hint: uncomment to pin Worker execution to a specific region.
+  // Example: "azure:eastasia" for lowest latency to mainland China.
+  // Static assets always serve from the edge nearest the user regardless.
+  // "placement": {
+  //   "region": "azure:eastasia"
+  // },
   // CPU time limit: Workers Paid plan default is 30s, which is sufficient.
   // InfiPlot scene pipeline is I/O-bound (5-6 LLM API calls with 3-15s each),
   // actual CPU work (JSON parse, string ops) ~200ms. No cpu_ms override needed.
-  // Previous 60000ms was a Vercel maxDuration (wall-time) to Cloudflare cpu_ms
-  // (pure CPU) misconfiguration — those are fundamentally different metrics.
   // "limits": {
   //   "cpu_ms": 30000
   // },
 
-  // ── Cloudflare D1 database ───────────────────────────────────────────
-  // User stories persistence (REQ-4) + featured stories metadata (REQ-5).
-  // Create via: wrangler d1 create infiplot-db
-  // Then paste the returned database_id below.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "infiplot-db",
-      "database_id": "79921d13-1066-443b-8bc4-c6bb09bc1392"
-    }
-  ],
-
-  // ── Cloudflare R2 bucket ─────────────────────────────────────────────
-  // User-generated scene images / portraits (REQ-4, REQ-6 optional).
-  // Create via: wrangler r2 bucket create infiplot-assets
-  // Phase 1: R2 code exists but not called — safe to skip R2 setup for now.
-  "r2_buckets": [
-    {
-      "binding": "R2_BUCKET",
-      "bucket_name": "infiplot-assets"
-    }
-  ],
-
-  // ── Non-sensitive runtime configuration ──────────────────────────────
-  // Base URLs, model names, and feature flags (no API keys).
-  // Committed to git for team-wide consistency. API keys go in Secrets below.
+  // ── Runtime variables ───────────────────────────────────────────────
+  // Empty strings are placeholders — set real values via Cloudflare Dashboard
+  // (Settings → Variables) or .dev.vars for local development.
+  // The app reports the missing variable name on first request if left empty.
   "vars": {
     "NEXT_PRIVATE_MINIMAL_MODE": "1",
-    "TEXT_BASE_URL": "https://api.openai-next.com/v1",
-    "TEXT_MODEL": "gemini-3.1-flash-lite-preview",
-    "IMAGE_BASE_URL": "https://api.runware.ai/v1",
-    "IMAGE_MODEL": "runware:400@6",
-    "VISION_BASE_URL": "https://token-plan-sgp.xiaomimimo.com/v1",
-    "VISION_MODEL": "mimo-v2.5",
-    "TTS_BASE_URL": "https://token-plan-sgp.xiaomimimo.com/v1",
-    "TTS_SPEECH_MODEL": "mimo-v2.5-tts",
-    "MOCK_IMAGE": "false"
+    "MOCK_IMAGE": "false",
+    "TEXT_BASE_URL": "",
+    "TEXT_MODEL": "",
+    "IMAGE_BASE_URL": "",
+    "IMAGE_MODEL": "",
+    "VISION_BASE_URL": "",
+    "VISION_MODEL": "",
+    "TTS_BASE_URL": "",
+    "TTS_SPEECH_MODEL": ""
   },
 
   // ── Secrets (set via Dashboard or `wrangler secret put`) ─────────────
-  // After first deploy: Dashboard → Settings → Variables → Add Secret (encrypt)
   // Required (3):  TEXT_API_KEY, IMAGE_API_KEY, VISION_API_KEY
-  // Optional (2):  TTS_API_KEY (配音), GALLERY_SECRET (分享文件加密)
+  // Optional (2):  TTS_API_KEY (voice synthesis), GALLERY_SECRET (story share encryption)
   //
-  // See DEPLOYMENT-SECRETS.md for detailed setup instructions.
-  // Never commit real keys to git; they belong in encrypted Secrets only.
+  // ── Optional non-secret tuning (set via Dashboard if needed) ─────────
+  // IMAGE_TIMEOUT_MS   — per-attempt image generation timeout (default: off)
+  // IMAGE_HEDGE_MS     — hedge a second image request after this delay (default: off)
+  //
+  // ── Build-time variables (NOT runtime — set during `pnpm build:cf`) ──
+  // NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  // NEXT_PUBLIC_IMAGE_PROXY_URL, NEXT_PUBLIC_UMAMI_SRC,
+  // NEXT_PUBLIC_UMAMI_WEBSITE_ID, NEXT_PUBLIC_UMAMI_DOMAINS
+  //
+  // See .dev.vars.example for a full reference of all variables.
   // ────────────────────────────────────────────────────────────────────
 
-  // ── Cloudflare KV namespace ──────────────────────────────────────────
-  // Reserved for future caching / rate limiting. Not used in Phase 1.
-  // Create via: wrangler kv namespace create KV
-  "kv_namespaces": [
-    {
-      "binding": "KV",
-      "id": "c952d810a8a942faa507042b87845ce9"
-    }
-  ]
+  // ── Cloudflare D1 database (story persistence — optional) ───────────
+  // Not required for core gameplay. Uncomment and fill in your ID if needed:
+  //   wrangler d1 create infiplot-db
+  // "d1_databases": [
+  //   {
+  //     "binding": "DB",
+  //     "database_name": "infiplot-db",
+  //     "database_id": "<your-d1-database-id>"
+  //   }
+  // ],
+
+  // ── Cloudflare R2 bucket (asset storage — optional) ─────────────────
+  // Not required for core gameplay. Uncomment if needed:
+  //   wrangler r2 bucket create infiplot-assets
+  // "r2_buckets": [
+  //   {
+  //     "binding": "R2_BUCKET",
+  //     "bucket_name": "infiplot-assets"
+  //   }
+  // ],
+
+  // ── Cloudflare KV namespace (reserved for future use) ───────────────
+  // Uncomment if needed: wrangler kv namespace create KV
+  // "kv_namespaces": [
+  //   {
+  //     "binding": "KV",
+  //     "id": "<your-kv-namespace-id>"
+  //   }
+  // ]
 }
