@@ -36,20 +36,41 @@ jobs:
     env:
       HAS_CLA_BOT_TOKEN: ${{ secrets.CLA_BOT_TOKEN != '' }}
     steps:
+      # Guard: on the canonical repo, a missing CLA_BOT_TOKEN must FAIL the
+      # job rather than silently skipping. Otherwise, once this job becomes a
+      # required status check, a lost/expired token would let CLA checks pass
+      # green and CLA enforcement would degrade invisibly. Forks (and renamed
+      # copies) still skip cleanly below.
+      - name: "Fail when CLA token is missing on canonical repo"
+        if: ${{ github.repository == 'zonghaoyuan/infiplot' && env.HAS_CLA_BOT_TOKEN != 'true' }}
+        run: |
+          echo "CLA_BOT_TOKEN is required for CLA enforcement on ${{ github.repository }}." >&2
+          echo "Configure it under Settings → Secrets and variables → Actions." >&2
+          exit 1
       - name: "CLA Assistant"
-        # SKIPPED when no secrets are configured. Keep the whole predicate
-        # inside a single ${{ }} so && / || are evaluated as a boolean
-        # expression, not string-concatenated.
+        # SKIPPED when no secrets are configured (e.g. on forks). Keep the
+        # whole predicate inside a single ${{ }} so && / || are evaluated as a
+        # boolean expression, not string-concatenated.
         if: ${{ env.HAS_CLA_BOT_TOKEN == 'true' && ((github.event_name == 'issue_comment' && (github.event.comment.body == 'recheckcla' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')) || github.event_name == 'pull_request_target') }}
-        uses: contributor-assistant/cla-assistant-action@v2.6.1
+        # Pinned to a full commit SHA (not a movable tag) because this step
+        # runs under pull_request_target with a writable PAT. Canonical repo:
+        # contributor-assistant/github-action (the action's original home; note
+        # `contributor-assistant/cla-assistant-action` does NOT exist and would
+        # 404). The repo is archived, but v2.6.1 still functions; re-evaluate
+        # only if it breaks against a future GitHub API change.
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08  # v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_BOT_TOKEN }}
         with:
-          # Signatures are stored in-repo (self-hosted mode); version-N lets us
-          # roll the CLA text forward by bumping the path and re-collecting.
+          # Signatures are stored on a dedicated UNPROTECTED orphan branch
+          # (cla-signatures), NOT on main/staging. The action cannot push to
+          # branch-protection-protected branches, so we route signature writes
+          # to cla-signatures instead (see contributor-assistant/github-action#150).
+          # version-N lets us roll the CLA text forward by bumping the path
+          # and re-collecting.
           path-to-signatures: "cla-signatures/version-1.json"
-          branch: "main"
+          branch: "cla-signatures"
           # Link to the authoritative English CLA. Chinese reference:
           # https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.zh.md
           path-to-cla-document: "https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.md"
