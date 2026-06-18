@@ -11,6 +11,10 @@
   "observability": {
     "enabled": true
   },
+  // Preserve Dashboard-set variables across deployments (Vercel-like behavior).
+  // Only vars explicitly listed in "vars" below are overwritten; all others
+  // (set via Dashboard or `wrangler secret put`) survive redeployments.
+  "keep_vars": true,
   // Placement Hint: uncomment to pin Worker execution to a specific region.
   // Example: "azure:eastasia" for lowest latency to mainland China.
   // Static assets always serve from the edge nearest the user regardless.
@@ -25,34 +29,33 @@
   // },
 
   // ── Runtime variables ───────────────────────────────────────────────
-  // Empty strings are placeholders — set real values via Cloudflare Dashboard
-  // (Settings → Variables) or .dev.vars for local development.
-  // The app reports the missing variable name on first request if left empty.
+  // Structural vars with safe defaults are listed here. All provider-specific
+  // vars (TEXT_BASE_URL, TEXT_MODEL, IMAGE_*, VISION_*, TTS_*, etc.) should be
+  // set via Cloudflare Dashboard (Settings → Variables) or .dev.vars for local
+  // dev. With "keep_vars": true above, Dashboard values survive redeployments.
   "vars": {
     "NEXT_PRIVATE_MINIMAL_MODE": "1",
-    "MOCK_IMAGE": "false",
-    "TEXT_BASE_URL": "",
-    "TEXT_MODEL": "",
-    "IMAGE_BASE_URL": "",
-    "IMAGE_MODEL": "",
-    "VISION_BASE_URL": "",
-    "VISION_MODEL": "",
-    "TTS_BASE_URL": "",
-    "TTS_SPEECH_MODEL": ""
+    "MOCK_IMAGE": "false"
   },
 
   // ── Secrets (set via Dashboard or `wrangler secret put`) ─────────────
   // Required (3):  TEXT_API_KEY, IMAGE_API_KEY, VISION_API_KEY
   // Optional (2):  TTS_API_KEY (voice synthesis), GALLERY_SECRET (story share encryption)
   //
-  // ── Optional non-secret tuning (set via Dashboard if needed) ─────────
-  // IMAGE_TIMEOUT_MS   — per-attempt image generation timeout (default: off)
-  // IMAGE_HEDGE_MS     — hedge a second image request after this delay (default: off)
+  // ── Runtime variables (set via Dashboard) ────────────────────────────
+  // Required (6):  TEXT_BASE_URL, TEXT_MODEL, IMAGE_BASE_URL, IMAGE_MODEL,
+  //                VISION_BASE_URL, VISION_MODEL
+  // Optional (4):  TTS_BASE_URL, TTS_SPEECH_MODEL (voice synthesis),
+  //                IMAGE_TIMEOUT_MS, IMAGE_HEDGE_MS (image generation tuning)
   //
-  // ── Build-time variables (NOT runtime — set during `pnpm build:cf`) ──
-  // NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  // NEXT_PUBLIC_IMAGE_PROXY_URL, NEXT_PUBLIC_UMAMI_SRC,
-  // NEXT_PUBLIC_UMAMI_WEBSITE_ID, NEXT_PUBLIC_UMAMI_DOMAINS
+  // ── Build-time variables (set as Build Variables in Workers Builds) ──
+  // These are inlined at build time, NOT runtime. Set them in Dashboard under
+  // Settings → Build → Build variables, or as env vars during `pnpm build:cf`.
+  // All are optional — the app degrades gracefully without them:
+  //   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (auth)
+  //   NEXT_PUBLIC_IMAGE_PROXY_URL (browser image proxying)
+  //   NEXT_PUBLIC_UMAMI_SRC, NEXT_PUBLIC_UMAMI_WEBSITE_ID,
+  //   NEXT_PUBLIC_UMAMI_DOMAINS (analytics)
   //
   // See .dev.vars.example for a full reference of all variables.
   // ────────────────────────────────────────────────────────────────────
