@@ -954,11 +954,6 @@ function GalleryInner() {
   }, [doc, downloadingScenes]);
 
   // ── Import a friend-shared `.infiplot` file ──────────────────────────
-  // The file is AES-GCM ciphertext only this deployment can decrypt; we POST
-  // the raw bytes to /api/gallery-unpack and let the server hand us back the
-  // doc as a JSON string. GCM's auth tag means a tampered or wrong-key file
-  // surfaces as a 400 with a human-readable error here — no need to verify
-  // anything client-side.
   const loadDocFromFile = useCallback(async (file: File) => {
     setImporting(true);
     setImportError(null);

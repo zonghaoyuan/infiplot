@@ -4,18 +4,7 @@ export const runtime = "nodejs";
 
 const MAX_DOC_BYTES = 5_000_000;
 
-// Encrypt a gallery doc into the shareable `.infiplot` binary format.
-// Stateless: input is the doc string, output is the encrypted bytes — server
-// keeps nothing. The secret must be configured (no insecure fallback).
 export async function POST(req: Request): Promise<Response> {
-  const secret = process.env.GALLERY_SECRET;
-  if (!secret) {
-    return Response.json(
-      { error: "图集分享未启用 (GALLERY_SECRET 未配置)" },
-      { status: 503 },
-    );
-  }
-
   let docStr: string;
   try {
     const body = (await req.json()) as { docStr?: unknown };
@@ -34,10 +23,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const bytes = await packDoc(docStr, secret);
-  // Copy into a fresh ArrayBuffer so TS 5.7's stricter BodyInit typing accepts
-  // it (Uint8Array.buffer is ArrayBufferLike, which the BodyInit overloads
-  // don't narrow). Cheap — one extra alloc + memcpy of ~50-200KB.
+  const bytes = await packDoc(docStr);
   const ab = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(ab).set(bytes);
   return new Response(ab, {

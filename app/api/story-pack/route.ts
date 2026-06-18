@@ -5,14 +5,6 @@ export const runtime = "nodejs";
 const MAX_DOC_BYTES = 12_000_000;
 
 export async function POST(req: Request): Promise<Response> {
-  const secret = process.env.GALLERY_SECRET;
-  if (!secret) {
-    return Response.json(
-      { error: "剧情分享未启用 (GALLERY_SECRET 未配置)" },
-      { status: 503 },
-    );
-  }
-
   const contentLength = req.headers.get("content-length");
   if (contentLength && Number(contentLength) > MAX_DOC_BYTES + 1024) {
     return Response.json(
@@ -39,7 +31,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const bytes = await packDoc(docStr, secret);
+  const bytes = await packDoc(docStr);
   const ab = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(ab).set(bytes);
   return new Response(ab, {

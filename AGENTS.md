@@ -94,7 +94,8 @@ Common routes live under `app/api/`:
 - `POST /api/beat-audio`: lazy TTS for a displayed beat; returns binary audio, or `204` when silent. `voice` is now OPTIONAL — when the server runs StepFun, the client omits the ~220KB Xiaomi reference audio and sends `stepfunVoiceId` / `voiceDescription` instead (saves Fast Origin Transfer bandwidth). The engine re-provisions on a provider mismatch before synthesizing.
 - `POST /api/parse-style-image`: extracts a style prompt from uploaded reference art.
 - `GET /api/tts-provider`: returns `{ provider: "stepfun" | "xiaomi" | null }` (the server's TTS provider, inferred from `TTS_BASE_URL`). Probed once at `/play` mount (non-BYO) so `fetchBeatAudio` can shape its request body — skip the ~220KB Xiaomi reference audio when the server runs StepFun. BYO client TTS takes precedence over this signal.
-- `POST /api/story-pack` / `POST /api/story-unpack`: stateless AES-GCM packing/unpacking for playable story share `.infiplot` files; uses `GALLERY_SECRET`.
+- `POST /api/story-pack` / `POST /api/story-unpack`: stateless packing/unpacking for playable story share `.infiplot` files (plaintext + SHA-256 integrity check, no encryption).
+- `POST /api/gallery-pack` / `POST /api/gallery-unpack`: same format as story-pack/unpack but for gallery share files (5 MB pack limit vs story's 12 MB).
 
 When changing public types or route payloads, update all route callers and client consumers in the same change.
 
@@ -145,7 +146,7 @@ Use `.env.example` as the source of truth. Never commit `.env.local`, API keys, 
 - `MOCK_IMAGE=true` skips image generation and returns a placeholder for cheap local iteration.
 - `NEXT_PUBLIC_IMAGE_PROXY_URL` and `NEXT_PUBLIC_IMAGE_PROXY_ALLOWED_HOSTS` opt into browser-side image proxying for allowed hosts.
 - Analytics uses optional Umami `NEXT_PUBLIC_UMAMI_*` values and must stay content-free/privacy-preserving.
-- `GALLERY_SECRET` enables encrypted `.infiplot` share files for gallery and playable story export/import.
+- `.infiplot` share files use plaintext + SHA-256 integrity (no encryption, no secret needed); the feature is always enabled.
 - `NEXT_PUBLIC_*` values are inlined at build time.
 
 ## File Dependency Map
