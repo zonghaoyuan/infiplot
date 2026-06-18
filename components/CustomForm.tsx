@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { track } from "@/lib/analytics";
 import { useI18n } from "@/lib/i18n/client";
+import { useLocalePath } from "@/lib/i18n/hooks";
 
 export function CustomForm() {
   const router = useRouter();
   const { t } = useI18n();
+  const lp = useLocalePath();
   const [worldSetting, setWorldSetting] = useState("");
   const [styleGuide, setStyleGuide] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -26,7 +28,7 @@ export function CustomForm() {
       JSON.stringify({ worldSetting, styleGuide }),
     );
     track("game_start", { source: "custom" });
-    router.push("/play?custom=1");
+    router.push(lp("/play?custom=1"));
   }
 
   return (

@@ -46,7 +46,7 @@ export const ja = {
     genders: {
       male: "男性向け",
       female: "女性向け",
-      x: "X",
+      x: "ユニバーサル",
     },
 
     // Option values - art styles
@@ -282,6 +282,10 @@ export const ja = {
       noMemory: "シナリオ共有ファイルに初期シナリオ記憶が不足しているため、ロードできません。",
       packFailed: "シナリオ共有のパッケージ化に失敗しました",
     },
+
+    // Saved story errors
+    savedStoryNotFound: "保存されたシナリオが見つかりません",
+    savedStoryCorrupted: "シナリオデータが破損しています",
 
     // Export progress
     exportProgress: {

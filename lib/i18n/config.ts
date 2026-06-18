@@ -1,53 +1,12 @@
 // Supported locales for InfiPlot
 export const DEFAULT_LOCALE = "zh-CN" as const;
 
-export type Locale =
-  | "en"
-  | "zh-CN"
-  | "zh-TW"
-  | "zh-HK"
-  | "ja"
-  | "ko"
-  | "es"
-  | "fr"
-  | "de"
-  | "pt-BR"
-  | "pt"
-  | "ru"
-  | "it"
-  | "vi"
-  | "th"
-  | "id"
-  | "tr"
-  | "pl"
-  | "nl"
-  | "uk"
-  | "hi"
-  | "cs";
+export type Locale = "zh-CN" | "en" | "ja";
 
 export const LOCALE_NAMES: Record<Locale, string> = {
-  "en": "English",
   "zh-CN": "简体中文",
-  "zh-TW": "繁體中文（台灣）",
-  "zh-HK": "繁體中文（香港）",
+  "en": "English",
   "ja": "日本語",
-  "ko": "한국어",
-  "es": "Español",
-  "fr": "Français",
-  "de": "Deutsch",
-  "pt-BR": "Português (Brasil)",
-  "pt": "Português",
-  "ru": "Русский",
-  "it": "Italiano",
-  "vi": "Tiếng Việt",
-  "th": "ภาษาไทย",
-  "id": "Bahasa Indonesia",
-  "tr": "Türkçe",
-  "pl": "Polski",
-  "nl": "Nederlands",
-  "uk": "Українська",
-  "hi": "हिन्दी",
-  "cs": "Čeština",
 };
 
 export const LOCALES: Locale[] = Object.keys(LOCALE_NAMES) as Locale[];

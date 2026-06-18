@@ -1,43 +1,43 @@
 import type { Locale } from "./config";
-import { DEFAULT_LOCALE, getInitialLocale } from "./config";
+import { DEFAULT_LOCALE, LOCALES } from "./config";
 import { getNestedValue, formatTranslation } from "./utils";
 
-// Server-side translation cache
+// Server-side translation cache (functions stripped for client serialization)
 const translationCache = new Map<Locale, Record<string, unknown>>();
+
+// Make translations serializable for the server→client boundary.
+// Functions are pre-evaluated with empty params so the SSR HTML contains
+// real text (the base variant without optional auth/analytics additions).
+// The client loads the full locale (with live functions) via useEffect.
+function makeSerializable(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === "function") {
+      try { out[k] = (v as (p: Record<string, never>) => string)({}); } catch { /* skip */ }
+    } else if (v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = makeSerializable(v as Record<string, unknown>);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
 
 // Get locale from request headers
 export function getLocaleFromHeaders(headers: Headers): Locale {
   // Check for custom locale header
   const customLocale = headers.get("x-locale");
-  if (customLocale) {
+  if (customLocale && (LOCALES as readonly string[]).includes(customLocale)) {
     return customLocale as Locale;
   }
 
   // Check Accept-Language header
   const acceptLanguage = headers.get("accept-language");
   if (acceptLanguage) {
-    const browserLang = acceptLanguage.split(",")[0]?.split("-")[0];
-    // Map common language codes to our locales
     const localeMap: Record<string, Locale> = {
       en: "en",
       zh: "zh-CN",
       ja: "ja",
-      ko: "ko",
-      es: "es",
-      fr: "fr",
-      de: "de",
-      pt: "pt",
-      ru: "ru",
-      it: "it",
-      vi: "vi",
-      th: "th",
-      id: "id",
-      tr: "tr",
-      pl: "pl",
-      nl: "nl",
-      uk: "uk",
-      hi: "hi",
-      cs: "cs",
     };
 
     const browserLangBase = acceptLanguage.split(",")[0]?.split("-")[0];
@@ -58,7 +58,6 @@ export async function loadTranslations(locale: Locale): Promise<Record<string, u
   }
 
   try {
-    // Dynamic import based on locale
     let translations;
     switch (locale) {
       case "zh-CN":
@@ -67,77 +66,19 @@ export async function loadTranslations(locale: Locale): Promise<Record<string, u
       case "en":
         translations = (await import("./locales/en")).en;
         break;
-      case "zh-TW":
-        translations = (await import("./locales/zh-TW")).zhTW;
-        break;
-      case "zh-HK":
-        translations = (await import("./locales/zh-HK")).zhHK;
-        break;
       case "ja":
         translations = (await import("./locales/ja")).ja;
         break;
-      case "ko":
-        translations = (await import("./locales/ko")).ko;
-        break;
-      case "es":
-        translations = (await import("./locales/es")).es;
-        break;
-      case "fr":
-        translations = (await import("./locales/fr")).fr;
-        break;
-      case "de":
-        translations = (await import("./locales/de")).de;
-        break;
-      case "pt-BR":
-        translations = (await import("./locales/pt-BR")).ptBR;
-        break;
-      case "pt":
-        translations = (await import("./locales/pt")).pt;
-        break;
-      case "ru":
-        translations = (await import("./locales/ru")).ru;
-        break;
-      case "it":
-        translations = (await import("./locales/it")).it;
-        break;
-      case "vi":
-        translations = (await import("./locales/vi")).vi;
-        break;
-      case "th":
-        translations = (await import("./locales/th")).th;
-        break;
-      case "id":
-        translations = (await import("./locales/id")).id;
-        break;
-      case "tr":
-        translations = (await import("./locales/tr")).tr;
-        break;
-      case "pl":
-        translations = (await import("./locales/pl")).pl;
-        break;
-      case "nl":
-        translations = (await import("./locales/nl")).nl;
-        break;
-      case "uk":
-        translations = (await import("./locales/uk")).uk;
-        break;
-      case "hi":
-        translations = (await import("./locales/hi")).hi;
-        break;
-      case "cs":
-        translations = (await import("./locales/cs")).cs;
-        break;
       default:
-        console.warn(`Translations for ${locale} not found, using English fallback`);
-        translations = (await import("./locales/en")).en;
+        translations = (await import("./locales/zh-CN")).zhCN;
         break;
     }
 
-    translationCache.set(locale, translations as Record<string, unknown>);
-    return translations as Record<string, unknown>;
+    const serializable = makeSerializable(translations as Record<string, unknown>);
+    translationCache.set(locale, serializable);
+    return serializable;
   } catch (error) {
     console.error(`Failed to load translations for ${locale}:`, error);
-    // Fallback to default locale
     const fallback = await import("./locales/zh-CN");
     return fallback.zhCN as Record<string, unknown>;
   }
@@ -172,5 +113,5 @@ export function createTranslator(translations: Record<string, unknown>) {
 
 // Get initial locale for server components
 export function getServerLocale(): Locale {
-  return DEFAULT_LOCALE; // Will be overridden by middleware in production
+  return DEFAULT_LOCALE;
 }

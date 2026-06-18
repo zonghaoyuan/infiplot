@@ -46,7 +46,7 @@ export const zhCN = {
     genders: {
       male: "男性向",
       female: "女性向",
-      x: "X",
+      x: "通用",
     },
 
     // Option values - art styles
@@ -282,6 +282,10 @@ export const zhCN = {
       noMemory: "剧情分享文件缺少初始剧情记忆，无法载入。",
       packFailed: "剧情分享打包失败",
     },
+
+    // Saved story errors
+    savedStoryNotFound: "找不到保存的剧情",
+    savedStoryCorrupted: "剧情数据损坏",
 
     // Export progress
     exportProgress: {

@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import { Analytics } from "@/components/Analytics";
-import { I18nProvider } from "@/lib/i18n/client";
+import { LOCALES, DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { localePath } from "@/lib/i18n/navigation";
+import { stripLocalePrefix } from "@/lib/i18n/navigation";
 import "./globals.css";
 
 // Editorial fonts: drive tailwind `font-serif`/`font-sans` via
@@ -35,14 +38,25 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const headersList = await headers();
+  const locale = headersList.get("x-locale") || "zh-CN";
+
+  const origin =
+    process.env.NEXT_PUBLIC_BASE_URL
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "https://infiplot.com");
+  const pathname = headersList.get("x-pathname") || "/";
+  const barePath = stripLocalePrefix(pathname);
+
   return (
     <html
-      lang="zh-CN"
+      lang={locale}
       className={`${cormorant.variable} ${inter.variable}`}
       suppressHydrationWarning
     >
@@ -52,9 +66,18 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         />
+        {LOCALES.map((l) => (
+          <link
+            key={l}
+            rel="alternate"
+            hrefLang={l}
+            href={`${origin}${localePath(barePath, l)}`}
+          />
+        ))}
+        <link rel="alternate" hrefLang="x-default" href={`${origin}${barePath}`} />
       </head>
       <body className="bg-cream-50 text-clay-900 font-sans antialiased min-h-screen overflow-x-hidden">
-        <I18nProvider>{children}</I18nProvider>
+        {children}
         <Analytics />
       </body>
     </html>

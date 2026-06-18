@@ -24,27 +24,8 @@ import { formatStepfunCatalogForPrompt } from "@infiplot/tts-client";
 // ══════════════════════════════════════════════════════════════════════
 const LANG_LABELS: Record<string, string> = {
   "zh-CN": "简体中文",
-  "zh-TW": "繁體中文",
-  "zh-HK": "繁體中文（香港）",
   en: "English",
   ja: "日本語",
-  ko: "한국어",
-  es: "Español",
-  fr: "Français",
-  de: "Deutsch",
-  "pt-BR": "Português (Brasil)",
-  pt: "Português",
-  ru: "Русский",
-  it: "Italiano",
-  vi: "Tiếng Việt",
-  th: "ภาษาไทย",
-  id: "Bahasa Indonesia",
-  tr: "Türkçe",
-  pl: "Polski",
-  nl: "Nederlands",
-  uk: "Українська",
-  hi: "हिन्दी",
-  cs: "Čeština",
 };
 
 /**
