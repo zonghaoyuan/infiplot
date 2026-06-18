@@ -35,12 +35,6 @@ TTS_SPEECH_MODEL=mimo-v2.5-tts
 # MOCK_IMAGE (for testing)
 MOCK_IMAGE=false
 
-# ---- Gallery encryption secret --------------------------------------
-# Server-side secret for AES-256-GCM encryption of .infiplot share files
-# Generate with: openssl rand -hex 32
-# WARNING: Rotating this invalidates all existing share files
-GALLERY_SECRET=<generate_with_openssl_rand_hex_32>
-
 # ---- Next.js public variables (build-time inlined) ------------------
 # These are inlined at BUILD time, not runtime
 # For Cloudflare deployment, set via Dashboard Variables (not Secrets)
