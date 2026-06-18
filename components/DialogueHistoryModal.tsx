@@ -107,6 +107,16 @@ export function DialogueHistoryModal({
                       </span>
                     )}
                   </div>
+                  {item.narration && (
+                    <p
+                      className={`font-serif leading-[1.7] ${
+                        item.body ? "mb-1" : ""
+                      } ${portrait ? "text-[14px]" : "text-[12px]"}`}
+                      style={{ color: "rgba(228,218,196,0.85)" }}
+                    >
+                      {item.narration}
+                    </p>
+                  )}
                   {item.body && (
                     <p
                       className={`font-serif leading-[1.75] ${
@@ -115,16 +125,6 @@ export function DialogueHistoryModal({
                       style={{ color: "rgba(245,235,210,0.94)" }}
                     >
                       {item.body}
-                    </p>
-                  )}
-                  {item.narration && (
-                    <p
-                      className={`mt-1 font-serif italic leading-[1.65] ${
-                        portrait ? "text-[13px]" : "text-[12px]"
-                      }`}
-                      style={{ color: "rgba(200,185,155,0.72)" }}
-                    >
-                      {item.narration}
                     </p>
                   )}
                   {item.selectedChoice && (

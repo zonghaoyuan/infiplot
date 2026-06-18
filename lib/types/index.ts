@@ -157,6 +157,45 @@ export type WriterPlan = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
+//  Paradigm D — Writer single-pass streaming plan extensions.
+//
+//  In paradigm D the Writer streams one tagged response: <plan> → <story>
+//  → <choices>. WriterScenePlan is the parsed <plan> segment: the existing
+//  WriterPlan skeleton PLUS per-character scene intents (and story bible on
+//  first scene), handed to the downstream media translators the instant
+//  </plan> closes.
+// ──────────────────────────────────────────────────────────────────────
+
+/** Per-scene performance intent for one character, authored by the Writer in
+ *  the <plan> segment. Ephemeral (this scene only) — distinct from the
+ *  persistent CharacterPersona card. Feeds downstream media translators. */
+export type CharacterIntent = {
+  name: string;
+  /** 本幕情绪基调。 */
+  mood?: string;
+  /** 本幕动机 / 目的。 */
+  motivation?: string;
+  /** 本幕说话基调（指导对白质感 + TTS lineDelivery）。 */
+  speakingTone?: string;
+};
+
+/** Parsed <plan> tag: the existing WriterPlan shape plus per-character scene
+ *  intents and optional story bible (first scene only). The optional extension
+ *  keeps any degraded / minimal plan valid — downstream consumers see a
+ *  WriterPlan superset. */
+export type WriterScenePlan = WriterPlan & {
+  /** 各角色本幕表现意图，供 </plan> 闭合时分发下游媒体翻译官。 */
+  characterIntents?: CharacterIntent[];
+  /** 故事圣经（仅开局产出）——稳定区字段。后续场景 plan 不含此字段。 */
+  storyBible?: {
+    logline: string;
+    genreTags: string;
+    protagonist: string;
+    castNotes?: string;
+  };
+};
+
+// ──────────────────────────────────────────────────────────────────────
 //  Characters & voices (TTS)
 // ──────────────────────────────────────────────────────────────────────
 
@@ -178,6 +217,30 @@ export type CharacterVoice =
       model: string;
       mimeType: string;
     };
+
+// ──────────────────────────────────────────────────────────────────────
+//  CharacterPersona — narrative / story dimension of a Character.
+//  Merged into Character via intersection (all optional). Filled primarily
+//  by the Writer's <plan> 思维链 (paradigm D); the CharacterDesigner then
+//  realizes it into visual + voice cards. Absent on legacy sessions →
+//  callers degrade to "name only". SENTINEL append-only: adding persona
+//  only appends bytes to the stable prompt prefix — never reorders.
+// ──────────────────────────────────────────────────────────────────────
+
+export type CharacterPersona = {
+  /** 背景 / 身份 / 核心设定。 */
+  persona?: string;
+  /** 性格标签，如 ["傲娇", "腹黑", "重情义"]。 */
+  personalityTraits?: string[];
+  /** 说话风格 / 口头禅 — 对白质感的关键。 */
+  speakingStyle?: string;
+  /** 2-3 条代表性对白，作为 few-shot 锚定语气。 */
+  sampleDialogue?: string[];
+  /** 与玩家("你")的关系 / 态度。 */
+  relationshipToPlayer?: string;
+  /** 隐藏信息 / 伏笔，可驱动后续反转（默认不外显）。 */
+  secrets?: string[];
+};
 
 export type Character = {
   name: string;
@@ -215,7 +278,7 @@ export type Character = {
    *  server runs StepFun, and lets the server normalize an off-provider voice
    *  without a fresh provision. Validated against the catalog at synth time. */
   stepfunVoiceId?: string;
-};
+} & CharacterPersona;
 
 /** A single beat's synthesized audio, attached to the response. */
 export type BeatAudio = {
@@ -271,6 +334,33 @@ export type StoryStatePatch = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
+//  WorldBook — lightweight lore injection system.
+//
+//  Entries with position "constant" are always injected into the stable
+//  prompt prefix. Entries with position "triggered" are scanned against
+//  recent beat text and injected into the dynamic suffix when keywords
+//  match. Priority controls ordering when multiple entries fire.
+// ──────────────────────────────────────────────────────────────────────
+
+export type WorldBookEntry = {
+  id: string;
+  /** Keywords that trigger this entry's injection (for triggered entries). */
+  keys: string[];
+  /** The lore content to inject into the prompt. */
+  content: string;
+  /** "constant" = always injected (stable prefix); "triggered" = keyword-matched (dynamic suffix). */
+  position: "constant" | "triggered";
+  /** Higher priority entries are injected first. Defaults to 0. */
+  priority?: number;
+};
+
+export type WorldBook = {
+  id: string;
+  name: string;
+  entries: WorldBookEntry[];
+};
+
+// ──────────────────────────────────────────────────────────────────────
 //  Session
 // ──────────────────────────────────────────────────────────────────────
 
@@ -317,6 +407,11 @@ export type Session = {
    * back-compat with sessions created before this field existed.
    */
   language?: string;
+  /**
+   * Optional world books for lore injection. "constant" entries are always in
+   * the prompt; "triggered" entries inject when keywords match recent text.
+   */
+  worldBooks?: WorldBook[];
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -417,6 +512,18 @@ export type EngineConfig = {
 //  API contracts
 // ──────────────────────────────────────────────────────────────────────
 
+/**
+ * BYOK (Bring Your Own Key) LLM credentials carried in request bodies.
+ * Per-role: text/image/vision can be independently configured. Keys never
+ * persist or log server-side — they only pass through request→config build
+ * (see lib/config.ts buildByoEngineConfig). vision typically mirrors text.
+ */
+export type ByoLlmKeys = {
+  text?: { provider: string; apiKey: string; baseUrl?: string; model?: string };
+  image?: { provider: string; apiKey: string; baseUrl?: string; model?: string };
+  vision?: { provider: string; apiKey: string; baseUrl?: string; model?: string };
+};
+
 export type StartRequest = {
   worldSetting: string;
   styleGuide: string;
@@ -439,6 +546,13 @@ export type StartRequest = {
   /** Active UI locale — see Session.language. Drives the engine's language
    *  directive so AI output is generated in the player's chosen language. */
   language?: string;
+  /**
+   * BYOK: user-provided LLM keys. When present, server uses these to construct
+   * EngineConfig instead of reading from env. Per-role: text/image/vision can
+   * be independently configured. Keys never persist or log — they only pass
+   * through request→config construction.
+   */
+  byo?: ByoLlmKeys;
 };
 
 // /api/parse-style-image — vision LLM extracts a textual painting-style
@@ -473,6 +587,8 @@ export type SceneRequest = {
   session: Session;
   /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
   clientTts?: boolean;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 export type SceneResponse = {
@@ -534,6 +650,8 @@ export type VisionRequest = {
    * server-side image re-fetch per click.
    */
   annotatedImageBase64: string;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 export type VisionResponse = {
@@ -547,6 +665,8 @@ export type VisionResponse = {
 export type FreeformClassifyRequest = {
   session: Session;
   freeformText: string;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 export type FreeformClassify = "insert-beat" | "change-scene";
@@ -563,6 +683,8 @@ export type InsertBeatRequest = {
   freeformAction: string;
   /** See StartRequest.clientTts — drops server-side TTS for BYO-key clients. */
   clientTts?: boolean;
+  /** See StartRequest.byo — BYOK LLM keys. */
+  byo?: ByoLlmKeys;
 };
 
 /** Partial beat fields produced by the insert-beat director. */
@@ -577,3 +699,69 @@ export type InsertBeatResponse = {
   partial: InsertBeatPartial;
   characters: Character[];
 };
+
+// ──────────────────────────────────────────────────────────────────────
+//  Paradigm D — streaming primitives (chatStream / StreamRouter / SSE)
+//
+//  Output-side counterpart to prompt caching's input-side stable prefix
+//  (the two are orthogonal). chatStream yields incremental text + an
+//  end-of-stream usage promise. The StreamRouter slices the Writer's
+//  tagged stream into plan/story/choices and dispatches downstream. API
+//  routes serialize assembled fragments as SSE events for progressive
+//  client playback.
+// ──────────────────────────────────────────────────────────────────────
+
+/** Token usage stats returned at stream end. Kept SDK-agnostic so the type
+ *  file doesn't depend on any specific provider package. */
+export type ChatStreamUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+};
+
+/** Return shape of the streaming chat primitive (ai-client `chatStream`).
+ *  `textStream` yields incremental chunks; `usage` resolves at stream end
+ *  so `summarizeSdkUsage` cache accounting works unchanged. */
+export type ChatStreamResult = {
+  textStream: AsyncIterable<string>;
+  usage: Promise<ChatStreamUsage | undefined>;
+};
+
+/** Callbacks the StreamRouter fires as it slices the Writer's tagged stream.
+ *  All optional so a caller can subscribe to a subset. */
+export type StreamRouterHandlers = {
+  /** `</plan>` closed — dispatch downstream media translators in parallel. */
+  onPlan?: (plan: WriterScenePlan) => void;
+  /** `<story>` incremental text — push to client for progressive playback. */
+  onBeat?: (beatChunk: string) => void;
+  /** `</story>` closed — prose finalized, ready for splitting. */
+  onStoryComplete?: (rawStory: string) => void;
+  /** `</choices>` closed. */
+  onChoices?: (choices: BeatChoice[]) => void;
+};
+
+/** Aggregate result of routing one Writer stream to completion. `degraded` is
+ *  true when tag parsing fell back (missing / misordered / unclosed / timeout),
+ *  per the degrade-before-main-path reliability rule. */
+export type StreamRouterResult = {
+  plan?: WriterScenePlan;
+  beats: Beat[];
+  choices?: BeatChoice[];
+  /** Raw prose content of the <story> segment (not JSON-parsed). The director
+   *  feeds this to proseSplitter to produce Beat[]. */
+  rawStorySegment?: string;
+  degraded: boolean;
+};
+
+/** Server → client SSE events for progressive scene playback (paradigm D).
+ *  `TDone` is the terminal full-assembly payload — `SceneResponse` for
+ *  `/api/scene`, `StartResponse` for `/api/start`. The prefetch path
+ *  consumes events to `done` and reassembles a complete response. */
+export type SceneStreamEvent<TDone = SceneResponse> =
+  | { type: "plan"; plan: WriterScenePlan }
+  | { type: "beat"; beat: Beat }
+  | { type: "background"; imageUrl: string; sceneKey?: string }
+  | { type: "voice"; name: string; voice: CharacterVoice }
+  | { type: "choices"; choices: BeatChoice[] }
+  | { type: "done"; response: TDone }
+  | { type: "error"; message: string; degraded?: boolean };

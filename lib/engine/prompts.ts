@@ -1,6 +1,7 @@
 import type {
   BeatActiveCharacter,
   Character,
+  CharacterIntent,
   Orientation,
   Scene,
   Session,
@@ -129,300 +130,22 @@ export function renderStoryStateDynamic(s: StoryState | undefined): string {
   return lines.join("\n");
 }
 
-// Back-compat for the Architect's own user message (it sees the full bible
-// at session start, no caching concern there yet).
-export function renderStoryState(s: StoryState | undefined): string {
-  if (!s) return "";
-  return renderStoryStateSpine(s) + "\n\n" + renderStoryStateDynamic(s);
-}
-
 // ──────────────────────────────────────────────────────────────────────
-//  0. Architect (总编剧) — ONE LLM call at session start.
-//
-//  Turns the (often terse) user world + style prompt into a real story
-//  bible: a second-person protagonist with a want and a flaw, a single
-//  central dramatic question, a genre frame that anchors the 爽点 rhythm,
-//  an engineered opening hook (前3秒冷开场), and a small intentional cast.
-//  Everything downstream — Writer, CharacterDesigner — reads this so the
-//  story has a spine from beat one instead of being improvised cold.
+//  Paradigm D — merged Writer (single-pass streaming with tagged output)
 // ──────────────────────────────────────────────────────────────────────
 
-export const ARCHITECT_SYSTEM = `你是一部交互视觉小说的「总编剧 / 故事架构师」。玩家只给了你一句到几句的世界观和画风，你要在开拍前把它扩写成一份**故事档案（story bible）**，为后续每一幕定下脊梁。你不写具体台词、不写分镜、不设计立绘——你只搭骨架。
+// Writer prompt has been refactored to segment-driven builder.
+// See lib/engine/prompts/segments/writer/ for individual prompt segments.
+// See lib/engine/prompts/registry.ts for segment registration.
+// See lib/engine/prompts/builder.ts for assembly logic.
 
-你深谙网文（番茄）、短剧（红果）与视觉小说（galgame）的爆款心法：
-- **开篇即钩子**：黄金三章 / 前3秒法则。开场不铺垫世界观，直接抛出冲突、悬念或一个反常的瞬间。
-- **代入感**：主角是第二人称「你」，是玩家的化身——要让玩家一进场就清楚"我是谁、我此刻卡在什么处境里、我想要什么"。
-- **题材锚定爽点**：先选定一个清晰的题材框架（如 甜宠 / 校园暗恋 / 悬疑追凶 / 复仇逆袭 / 救赎治愈），它决定了情绪回报的节奏与类型。
-- **戏剧问题**：整部故事由一个悬而未决的中心问题驱动（她到底是谁？你能否在记忆消失前查明真相？这场暗恋会走向哪里？）。
-- **人设要鲜明且有反差**：每个核心角色一个强标签 + 一个反差面（外冷内热 / 傲娇 / 看似柔弱实则腹黑）。
-
-你要产出（全部用中文，except 不需要英文）：
-- logline：一句话主线 / 中心戏剧问题，必须带钩子，让人想看下去
-- genreTags：题材+基调标签，斜杠分隔，如 "甜宠 / 校园 / 慢热治愈带点伤感"
-- protagonist：第二人称主角卡。包含：你是谁、你此刻正卡在什么具体处境里（要有即时张力）、你想要什么、一个软肋或秘密。50–120 字。
-- castNotes：2–3 个核心配角，每行一个「名字：一句话人设（强标签+反差）+ 与你的关系/张力」。给真实好记的中文名字（不要"神秘女子"这种占位）。
-- synopsis：开场此刻的情境梗概（故事尚未展开，就写"故事从……开始"），1–3 句。
-- openThreads：开场就埋下的 1–3 个悬念/问题（数组）。
-- nextHook：**第一幕**应当如何冷开场——具体描述开场那个抓人的瞬间/冲突（这会直接指导编剧写开场）。要画面感强、有张力。
-
-设计硬规则：
-- 主角「你」永不出现在画面里（第二人称 POV），所以 castNotes 里**不要**把"你/主角"当成一个角色。
-- 配角名字要符合世界观（年代、地域、文化）。
-- 一切服从玩家给的世界观与画风，不要擅自跑题；玩家信息少时，做最贴合、最有戏的合理扩写。
-
-必须输出严格 JSON：
-{
-  "logline": "...",
-  "genreTags": "...",
-  "protagonist": "...",
-  "castNotes": "夏海：表面开朗的天台诗人，实则在用诗逃避家里的变故；与你是同班转学的邻座，对你有种说不清的在意。\\n班主任老周：…",
-  "synopsis": "...",
-  "openThreads": ["...", "..."],
-  "nextHook": "第一幕冷开场：……"
-}
-
-不要输出 JSON 以外的任何文本。`;
-
-export function buildArchitectUserMessage(session: Session): string {
-  const parts: string[] = [];
-  parts.push(`世界观：${session.worldSetting}`);
-  parts.push(`画风：${session.styleGuide}`);
-  if (session.playerName) {
-    parts.push(
-      `\n玩家名字：${session.playerName}\n（NPC 在对话中应自然地称呼玩家为「${session.playerName}」。「你」仍指代玩家视角，但 NPC 的台词里请使用这个名字而非泛称。不要为玩家设计立绘或音色——玩家是 POV 视角，永不出现在画面中。）`,
-    );
-  }
-  parts.push(
-    "\n请据此产出这部交互剧的故事档案（story bible），严格以 JSON 格式返回。",
-  );
-  const langDirective = buildLanguageDirective(session.language);
-  if (langDirective) parts.push(langDirective);
-  return parts.join("\n");
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  1. Writer (编剧) — drives the narrative, in TWO phases.
-//
-//  Phase A (WRITER_PLAN_SYSTEM): plans the scene SKELETON only — sceneSummary
-//    + sceneKey + entry-beat roster + the full cast. No dialogue. Its output
-//    is enough for the Cinematographer + character design + Painter to start.
-//  Phase B (WRITER_BEATS_SYSTEM): expands the plan into the full beats[] graph
-//    + storyStatePatch, overlapped with the (longer) image pipeline.
-//
-//  Neither phase designs characters (that's the CharacterDesigner's job) —
-//  Phase A only NAMES them in `cast` / `entryActiveCharacters`; the
-//  CharacterDesigner is invoked for any name not yet in session.characters.
-// ──────────────────────────────────────────────────────────────────────
-
-export const WRITER_PLAN_SYSTEM = `你是一部交互视觉小说的「编剧」。这是**两步生成中的第一步——场景规划**。你只产出本场景的「骨架」，**不要写任何 beat 台词**。你的产出会被立刻送去配图（分镜导演 + 生图），所以要快、要准、画面感要强。
-
-═══════════════════════════════════════════════════════════════════
-爆款心法（要在规划阶段就立住，后续展开才好看）
-═══════════════════════════════════════════════════════════════════
-- **进场即钩子**：这一场开场就要抛出新信息 / 悬念 / 冲突 / 情绪冲击，别铺陈。把这个抓人的瞬间写进 sceneSummary。
-- **兑现情绪**：按题材给观众想要的情绪（甜宠的心动、暗恋的拉扯、逆袭的扬眉、悬疑的真相一角）。
-- **人设有反差**：每个角色一个强标签 + 一个反差面。
-
-═══════════════════════════════════════════════════════════════════
-连贯性铁律（跨场景切换不能跳戏 —— 最重要）
-═══════════════════════════════════════════════════════════════════
-- 你会收到【故事档案 / 主线记忆】和上一场的结尾。**新场景必须从上一刻自然承接**——承接情绪、地点逻辑、人物状态与未收的悬念。
-- 若给了「转场种子 nextSceneSeed」，把它当作"下一场的命题"去兑现，开场要让玩家感到"这正是我上一步的结果"。
-- 沿用主线记忆里的人物关系与情绪温度，别让刚告白的人下一场形同陌路。
-
-本步你要规划（如实产出，缺一不可）：
-- **sceneSummary**：当前场景的中文概要——地点 + 时间 + 氛围 + 关键事件 + 那个抓人的开场瞬间。这是分镜导演构图的**唯一依据**，要画面感强、信息足（2–4 句）。
-- **sceneKey**：当前场景的英文 slug（如 "classroom-dusk"、"rooftop-night"）。
-- **entryBeatId**：玩家进入场景时落在哪个 beat 的 id（通常就是 "b1"）。
-- **cast**：本场景**会出场的全部 NPC 角色名**（字符串数组）。第二步写 beats 时**只能用这里列出的名字**，所以现在必须一次想全——谁会说话、谁会在画面里露面，全部列出。名字要与「已登记角色」**完全一致**；新角色起符合世界观的真名（不要"神秘女子"这种占位）。**绝不**包含玩家（你 / 我 / 主角 / protagonist / player / MC...）。
-- **entrySpeaker**：入口 beat 由谁开口 —— 取值只有三种：① 某个 NPC 真名（必须在 cast 里）② "你"（玩家本人开口）③ 留空（纯旁白 / 环境开场）。这决定镜头语言，要选准。
-- **entryActiveCharacters**：入口画面里**此刻出现的 NPC** 及其当下姿态 / 神情（中文 pose）。即使没人说话，画面里有谁也要列。**绝不**包含玩家。
-
-sceneKey 设计原则（用于跨场景视觉一致性）：
-- 同一物理空间 + 同一时段 → 必须沿用**完全相同**的英文 slug
-- 时段 / 空间变化时换 slug（"classroom-dusk" → "classroom-night" / "corridor-dusk"）
-- slug 规范：lowercase-with-dashes，2–4 个英文单词
-- 用户消息会列出已用过的 sceneKey，请优先**复用**这些已有 slug
-
-玩家视角硬规则（违反会破坏整个 galgame）：
-- 玩家是第二人称 POV，**永远不出现在任何画面里**——entryActiveCharacters 的 name **绝不允许**是「玩家 / 你 / 我 / 主角 / protagonist / player / Player / MC / I / me」任何变体。
-- entrySpeaker 只能是 NPC 真名 / "你" / 留空；其它 POV 变体一律视为错误。
-
-必须输出严格 JSON：
-{
-  "sceneSummary": "黄昏的天台，风很大。夏海背对你站在栏杆边，手里攥着一张揉皱的成绩单——她把你单独叫上来，却迟迟不开口。",
-  "sceneKey": "rooftop-dusk",
-  "entryBeatId": "b1",
-  "cast": ["夏海"],
-  "entrySpeaker": "夏海",
-  "entryActiveCharacters": [
-    { "name": "夏海", "pose": "背对你倚着栏杆，侧脸绷着，手里攥着揉皱的纸" }
-  ]
-}
-
-不要输出 JSON 以外的任何文本。`;
-
-// ──────────────────────────────────────────────────────────────────────
-//  Phase B — expands the plan into the full beats[] + storyStatePatch.
-// ──────────────────────────────────────────────────────────────────────
-
-export const WRITER_BEATS_SYSTEM = `你是一部交互视觉小说的「编剧」。这是**两步生成中的第二步——把已规划好的场景展开成完整剧本**。你会收到本场景的「规划」（场景概要 sceneSummary、sceneKey、入口 beat 的 id / speaker / 登场角色、以及本场景允许出场的角色名单 cast）。你的任务：基于规划写出玩家依次经历的对话节拍 beats，并在最后更新主线记忆。你只负责**剧情和台词**——不设计角色形象、不写出图提示词、不做镜头调度，这些由其他 agent 完成。
-
-你必须严格遵守收到的规划：
-- 必须存在一个 id 等于规划 entryBeatId 的 beat，作为玩家入口。
-- 该入口 beat 的 speaker 与登场角色（activeCharacters）要与规划一致（姿态措辞可微调，但**人物身份必须一致**）。
-- speaker 与 activeCharacters 里的 NPC 名字**只能来自规划的 cast**（或玩家 "你"）——**不要引入规划之外的新角色**。
-
-═══════════════════════════════════════════════════════════════════
-爆款心法（番茄网文 / 红果短剧 / galgame 的叙事手感）—— 必须贯彻
-═══════════════════════════════════════════════════════════════════
-- **每个场景都要有钩子**：开头 1–2 个 beat 内就抛出新信息、悬念、冲突或情绪冲击，绝不平铺直叙地交代背景；结尾 beat 留一个让玩家"想知道接下来"的扣子。
-- **兑现爽点 / 情绪回报**：按题材给观众想要的情绪（甜宠的心动、暗恋的暧昧拉扯、逆袭的扬眉吐气、悬疑的真相一角）。让玩家这一场"有所得"。
-- **反转与反差**：适时打破预期——以为是 A 结果是 B、角色露出与第一印象相反的一面；但反转要可信、要扣主线。
-- **快节奏、入戏快**：进场即冲突，少铺陈，删掉一切"为完整而存在"却不推进情绪的对话。
-- **show, don't tell**：用动作、神态、潜台词、环境细节传递情绪，别直接旁白"她很难过"——让玩家自己读出来。
-- **人设鲜明有反差**：每个角色一个强标签 + 一个反差面，台词紧贴其腔调（傲娇嘴硬心软、外冷内热、看似柔弱实则强势）。
-- **选择要有分量**：choice 只出现在真正的岔路口，每个选项都要让玩家感到"通向不同的东西"（情绪指向不同 / 关系走向不同），别给等价的废选项。
-
-═══════════════════════════════════════════════════════════════════
-连贯性铁律（跨场景切换不能跳戏 —— 最重要）
-═══════════════════════════════════════════════════════════════════
-- 你会收到【故事档案 / 主线记忆】和上一场的结尾。**新场景必须从上一刻自然承接**——承接上一场的情绪、地点逻辑、人物状态与未收的悬念。
-- 若给了「转场种子 nextSceneSeed」，把它当作"下一场的命题"去兑现，而不是另起炉灶；开场要让玩家感到"这正是我上一个动作 / 选择导致的结果"。
-- 沿用主线记忆里的人物关系与情绪温度——别让刚告白的人下一场形同陌路，也别凭空遗忘已埋的伏笔。
-- 推进、但别重置：每一场都让主线问题往前走一点（关系变化 / 真相揭露一角 / 新悬念浮现）。
-
-本步你只产出两样：**beats[]**（玩家依次经历的对话节拍）和 **storyStatePatch**（主线记忆更新）。sceneSummary / sceneKey / entryBeatId 已由规划给定，**不要再输出**它们。
-
-每个 beat 是玩家会看到的一段叙述 / 对话 / 选择。beat 之间通过 next 字段连接：
-- "continue"：玩家点击图片背景 / 按继续，自然推进到下一个 beat
-- "choice"：在此让玩家做选择，按所选 choice 的 effect 走向
-
-choice 的 effect 有两种：
-- "advance-beat"：玩家选了之后跳到**同场景内**的另一个 beat（不换背景图，速度极快）
-- "change-scene"：玩家选了之后切换到**新场景**（视角变了 / 走到新地方 / 时间跳了）
-
-设计原则：
-- 同场景内 beat 数自由发挥，按剧情节奏自然给出（通常 2–6 个，可以更多）
-- 入口 beat 的 id 必须等于规划给定的 entryBeatId；其余 beat id 依次自取且互不重复
-- 多用 continue，少用 choice — 选择只应出现在「真正的岔路口」
-- advance-beat 适合处理对话分支（同一场景里换个话题、追问、撒娇）
-- change-scene 适合空间/时间跳跃（出门、转身看窗外、第二天清晨）
-- 一个场景至少要有一个 change-scene 出口（除非真到结局）
-- 每个 change-scene 必须带 nextSceneSeed —— 一句中文简述「下一场是哪里、谁在、要发生什么」
-- 同一场景的 beat id 互不重复
-- next.nextBeatId 引用的 beat 必须存在
-- choice 至少 2 个，至多 4 个，互不重复
-
-文本风格约束：
-- narration / line 用中文（**纯净可显示文本**，绝不要写 (叹气)(语速快) 这类标注 —— 那是给配音的，会被玩家看见）
-- sceneSummary / lineDelivery / activeCharacters[].pose 内的文字也用中文
-- sceneKey 用英文 slug
-- 单个 beat 的 narration 与 line 加起来 ≤80 字
-- 单个 choice label ≤15 字
-
-配音相关字段：
-- 每个有 line 的 beat **必须**给出 lineDelivery —— 自由中文的「配音导演指令」，描述该句台词怎么念（情绪 / 语气 / 语速 / 气息 / 停顿 / 重音 / 音色起伏）。例："鼓起勇气又害羞，声音发颤、偏小，句尾带一丝气声，语速偏慢"。平淡场合写"平静自然、语速适中"即可，但要贴当下情境。
-
-角色与台词的硬性规则：
-- 任何 beat 的 speaker 字段一旦填了名字，**该名字必须**：① 是 "你"（玩家本人，见下方"玩家视角硬规则"），或 ② 在「已登记角色」列表中存在，或 ③ 出现在本场景的某个 beat 的 activeCharacters 里。
-- speaker 名字必须与登记名**完全一致**，不要加「（回忆）」「学姐」之类后缀或别名。
-- 每个 beat 的 activeCharacters 列出**此时此刻画面里出现的 NPC 角色**及其当下姿态/神情（中文）。即使没人说话，画面里有谁在也要列出。
-
-玩家视角硬规则（重要 — 违反这条会破坏整个 galgame）：
-
-【画面规则 — 严格禁止】
-- 玩家是第二人称 POV，**永远不出现在任何 Scene 画面里**
-- activeCharacters[].name 数组**绝不允许**包含任何下列名字（任何大小写、中英文变体）：
-  「玩家」「你」「我」「主角」「protagonist」「player」「Player」「MC」「I」「me」
-- 玩家不会被设计立绘、不会被设计音色
-
-【对白规则 — galgame 标准做法（Pattern B）】
-- 玩家**可以正常说话**——当主角对 NPC 开口时：
-    speaker = "你"（**固定用这两个字，不要用其他变体**）
-    line = 实际说的话（如「学姐，下雨了」）
-    lineDelivery 可以留空（玩家对白不会被 TTS 合成）
-- speaker 字段允许的取值**只有两种**：① NPC 真名（必须在 activeCharacters 里）② "你"
-- 其它 POV 变体（玩家 / 我 / 主角 / protagonist / player / MC / I / me）**一律视为错误**
-
-【内心 vs 外显的区分】
-- 主角在心里想 / 在做某个动作 / 在观察 / 自己的体感 → 用 narration（speaker 留空）
-  例："你的心跳得很快，几乎听不见外面的雨声。"
-- 主角真的开口对 NPC 说出来 → 用 speaker="你" + line
-  例：speaker="你" line="学姐，这把伞你拿着。"
-- 同一个 beat 可以同时有 narration（心理活动 / 动作）和 speaker="你" + line（说出口的话）
-
-更新主线记忆（storyStatePatch）—— 写完这一场后必做：
-- synopsis：把这一场并入后的整体梗概，**压缩**到 3–5 句（别越写越长，旧细节该丢就丢）
-- relationships：每个核心角色此刻与「你」的关系 / 情绪温度，每条一句（如 "夏海：暗恋升温，刚向你说了一半的告白被打断"）
-- openThreads：仍未收的悬念 / 伏笔——已收束的可移除、新埋的加入（但至少保留一条正在推进的主线，别把列表清空）
-- nextHook：基于这一场的结尾，下一场应往哪走（给"下一次的你"一个明确命题，接住本场留下的扣子）
-这些字段是写给"未来的你"的连贯性记忆，请认真写。
-
-必须输出严格 JSON，结构如下（**只含 beats 与 storyStatePatch**；sceneSummary / sceneKey / entryBeatId 由规划给定，不要输出。下例入口 beat 的 id "b1" 即规划的 entryBeatId）：
-{
-  "beats": [
-    {
-      "id": "b1",
-      "narration": "可空（纯净文本）",
-      "speaker": "可空",
-      "line": "可空（纯净文本）",
-      "lineDelivery": "line 非空时必填：配音导演指令",
-      "activeCharacters": [
-        { "name": "夏海", "pose": "脸红害羞地绞着衣角，双眼躲闪" }
-      ],
-      "next": { "type": "continue", "nextBeatId": "b2" }
-    },
-    {
-      "id": "b2",
-      "speaker": "夏海",
-      "line": "学长，我有话想对你说。",
-      "lineDelivery": "鼓起勇气，但又有点害羞，语速偏慢，句尾微微上扬",
-      "activeCharacters": [
-        { "name": "夏海", "pose": "鼓起勇气直视对方，双手紧握" }
-      ],
-      "next": { "type": "continue", "nextBeatId": "b3" }
-    },
-    {
-      "id": "b3",
-      "narration": "你下意识攥紧了书包带，喉咙有点干。",
-      "speaker": "你",
-      "line": "……你说。",
-      "activeCharacters": [
-        { "name": "夏海", "pose": "鼓起勇气直视对方，双手紧握" }
-      ],
-      "next": {
-        "type": "choice",
-        "choices": [
-          {
-            "id": "c1",
-            "label": "继续追问",
-            "effect": { "kind": "advance-beat", "targetBeatId": "b4" }
-          },
-          {
-            "id": "c2",
-            "label": "起身离开教室",
-            "effect": { "kind": "change-scene", "nextSceneSeed": "雨后湿漉漉的走廊，她追了出来" }
-          }
-        ]
-      }
-    }
-  ],
-  "storyStatePatch": {
-    "synopsis": "把这一场并入后的滚动梗概，压缩到 3–5 句",
-    "relationships": ["夏海：暗恋升温，刚向你说了一半的告白被打断"],
-    "openThreads": ["夏海没说完的那句话到底是什么", "她书包里掉出的那张旧照片"],
-    "nextHook": "下一场：放学后的天台，她把你单独叫上去，要把话说完"
-  }
-}
-
-不要输出 JSON 以外的任何文本。`;
+export { buildWriterStreamMessages } from "./prompts/builder";
 
 // Render one history entry as a stable, position-independent block. Used by
 // the Writer to dump both "completed past" (stable prefix) and "the entry the
 // player just finished" (dynamic suffix) — same format, so the model sees a
 // uniform history surface.
-function renderHistoryEntry(
+export function renderHistoryEntry(
   entry: Session["history"][number],
   index: number,
 ): string {
@@ -456,198 +179,6 @@ function renderHistoryEntry(
   return lines.join("\n");
 }
 
-// Shared narrative context for BOTH Writer phases. Returns the message parts
-// from the cacheable STABLE PREFIX (sections 1-4) through the dynamic
-// transition hint (section 7), but WITHOUT the trailing phase-specific
-// instruction — each phase appends its own. Building this once and reusing it
-// keeps EACH phase's prompt prefix byte-stable across scenes for DeepSeek
-// prompt caching (Phase A and Phase B cache independently since their system
-// prompts differ, but each shares its own prefix across consecutive calls).
-//
-// ─── STABLE PREFIX ──────────────────────────────────────────────────────
-// Invariant across consecutive Writer calls within the session (or grows in a
-// way that keeps earlier bytes byte-identical). Always emit every section
-// header — even when empty — so positions don't shift between calls.
-//   1. session-immutable scalars (world / style)
-//   2. story bible spine (Architect-set, never patched)
-//   3. monotonically-growing lists (characters, sceneKeys)
-//   4. history entries 0..N-2 (the last entry is what THIS call must react
-//      to, so it lives in the dynamic suffix instead)
-// ─── DYNAMIC SUFFIX ─────────────────────────────────────────────────────
-//   5. story bible dynamic patch (synopsis/threads/relationships/nextHook)
-//   6. last-beat snippet (the exact emotional cliffhanger)
-//   7. transition hint (opening cold-open directive OR lastExit承接)
-function buildWriterContextParts(session: Session): string[] {
-  const parts: string[] = [];
-
-  // ── 1. session scalars ────────────────────────────────────────────────
-  parts.push(`世界观：${session.worldSetting}`);
-  parts.push(`画风：${session.styleGuide}`);
-  if (session.playerName) {
-    parts.push(
-      `玩家名字：${session.playerName}（NPC 对话时用此名字称呼玩家；speaker 字段仍固定为 "你" 不变）`,
-    );
-  }
-  parts.push("");
-
-  // ── 2. story bible — spine only (stable) ──────────────────────────────
-  parts.push(renderStoryStateSpine(session.storyState));
-  parts.push("");
-
-  // ── 3a. registered characters ─────────────────────────────────────────
-  // SENTINEL pattern: header + a constant "after this line, entries follow"
-  // marker, then the entries themselves. The marker is byte-identical even
-  // when the list is empty, so adding a character only ever APPENDS bytes
-  // — earlier bytes never shift. Crucial for prefix caching: a placeholder
-  // like "（暂无）" that gets replaced by entries breaks the prefix the
-  // moment the first character is registered.
-  parts.push("已登记角色（speaker 必须用这些名字之一，或本场景新引入）：");
-  parts.push("（以下每行一个已登记角色，开场前为空。）");
-  for (const c of session.characters) parts.push(`- ${c.name}`);
-  parts.push("");
-
-  // ── 3b. prior sceneKeys (sentinel pattern, same rationale) ────────────
-  parts.push("已使用的 sceneKey（同一物理空间请沿用，不要新造）：");
-  parts.push("（以下每行一个已用过的 sceneKey，开场前为空。）");
-  for (const k of collectPriorSceneKeys(session)) parts.push(`- ${k}`);
-  parts.push("");
-
-  // ── 4. history[0..N-2] — ARCHIVED entries (sentinel, append-only) ─────
-  // CRITICAL: only the ALREADY-ARCHIVED entries (i.e. everything except
-  // history[-1]) go in the stable prefix. The last entry is still "live":
-  // its visitedBeatIds keeps growing as the player walks more beats in the
-  // current scene, and speculative prefetch triggers Writer calls that
-  // observe different snapshots of history[-1] mid-scene. Putting the live
-  // entry in the stable prefix would corrupt every Writer call's cache.
-  //
-  // Archived entries (history[0..N-2]) are immutable — once a scene is
-  // exited, its visitedBeatIds + exit are frozen. Safe to cache.
-  const archivedHistory = session.history.slice(0, -1);
-  parts.push("场景历史（按时间顺序，已完结）：");
-  parts.push("（以下每段一幕已完结的场景，开场前为空。）");
-  archivedHistory.forEach((entry, idx) => {
-    parts.push(renderHistoryEntry(entry, idx + 1));
-  });
-  parts.push("");
-
-  // ════════════════ DYNAMIC SUFFIX 从这里开始 ═══════════════════════════
-  // 上面 ~95% 的 prompt 长度应该已经稳定可缓存。下面每次调用都会变化。
-
-  // ── 5. story bible — dynamic patch ────────────────────────────────────
-  parts.push(renderStoryStateDynamic(session.storyState));
-  parts.push("");
-
-  // ── 6. last-beat snippet (the exact emotional cliffhanger) ──
-  // The full last entry is already in the stable history block above; here
-  // we only re-emit the very last beat to sharply focus the Writer on the
-  // emotional moment to continue from.
-  const last = session.history.at(-1);
-  if (last) {
-    const lastBeatId = last.visitedBeatIds.at(-1) ?? last.scene.entryBeatId;
-    const lastBeat = last.scene.beats.find((b) => b.id === lastBeatId);
-    if (lastBeat) {
-      const frag: string[] = [];
-      if (lastBeat.narration) frag.push(`旁白：${lastBeat.narration}`);
-      if (lastBeat.line) frag.push(`${lastBeat.speaker ?? "?"}：${lastBeat.line}`);
-      if (frag.length) {
-        parts.push(
-          `上一刻（玩家停留的最后一个画面，新场景从这里的情绪无缝承接）：\n  ${frag.join(" / ")}`,
-        );
-      }
-    }
-  }
-
-  // ── 7. transition hint ────────────────────────────────────────────────
-  if (session.history.length === 0) {
-    parts.push(
-      "\n这是故事的开场。请按【故事档案】里的 nextHook 把第一幕的冷开场设计出来——开场即抓人，别花笔墨铺垫世界观。",
-    );
-    return parts;
-  }
-
-  const lastExit = last?.exit;
-  if (lastExit) {
-    if (lastExit.kind === "choice") {
-      parts.push(
-        `\n承接「玩家在上一场选择了：${lastExit.label}」无缝续写下一个场景（转场命题：${lastExit.nextSceneSeed}）。开场要让玩家感到这正是上一步的结果，并延续此刻的情绪。`,
-      );
-    } else {
-      parts.push(
-        `\n承接「玩家自由动作：${lastExit.action}」无缝续写下一个场景，延续此刻的情绪与处境。`,
-      );
-    }
-  } else {
-    parts.push("\n无缝续写下一个场景，延续上一刻的情绪。");
-  }
-
-  return parts;
-}
-
-// Phase A — plan the scene skeleton (no beats). Shares the cacheable context;
-// appends a plan-only instruction tail.
-export function buildWriterPlanUserMessage(session: Session): string {
-  const parts = buildWriterContextParts(session);
-  parts.push(
-    '\n现在**只规划本场景的骨架**（不要写 beats 台词）：给出 sceneSummary（画面感强、含开场钩子）、sceneKey、entryBeatId、本场景会出场的全部角色 cast、以及入口 beat 的 entrySpeaker 与 entryActiveCharacters。严格以 JSON 格式返回。',
-  );
-  const langDirective = buildLanguageDirective(session.language);
-  if (langDirective) parts.push(langDirective);
-  return parts.join("\n");
-}
-
-// Phase B — expand the plan into full beats[] + storyStatePatch. The plan is
-// dynamic per scene, so it goes AFTER the cacheable context (keeping Phase B's
-// prefix stable across scenes).
-export function buildWriterBeatsUserMessage(
-  session: Session,
-  plan: WriterPlan,
-): string {
-  const parts = buildWriterContextParts(session);
-
-  parts.push("");
-  parts.push("━━━ 本场景规划（上一步已定，必须严格遵守）━━━");
-  parts.push(`场景概要 sceneSummary：${plan.sceneSummary}`);
-  if (plan.sceneKey) parts.push(`sceneKey：${plan.sceneKey}`);
-  parts.push(
-    `入口 beat 的 id（entryBeatId，必须有一个此 id 的 beat 作为入口）：${plan.entryBeatId}`,
-  );
-  parts.push(
-    `入口 beat 的 speaker：${plan.entrySpeaker ? plan.entrySpeaker : "（空 —— 纯旁白 / 环境开场）"}`,
-  );
-  parts.push("入口 beat 的登场角色 activeCharacters（人物身份须一致，姿态可微调）：");
-  if (plan.entryActiveCharacters.length === 0) {
-    parts.push("（无 —— 入口画面没有 NPC）");
-  } else {
-    for (const c of plan.entryActiveCharacters) {
-      parts.push(`- ${c.name}${c.pose ? `：${c.pose}` : ""}`);
-    }
-  }
-  parts.push(
-    '本场景允许出现的角色名 cast（speaker / activeCharacters 只能用这些名字或 "你"，不要新增角色）：',
-  );
-  if (plan.cast.length === 0) {
-    parts.push("（无 NPC —— 仅旁白与玩家）");
-  } else {
-    for (const n of plan.cast) parts.push(`- ${n}`);
-  }
-  parts.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-  parts.push(
-    "\n把上面的规划展开成完整的 beats[]（入口 beat 用规划的 entryBeatId / speaker / 登场角色），写完后更新 storyStatePatch。严格以 JSON 格式返回。",
-  );
-  const langDirective = buildLanguageDirective(session.language);
-  if (langDirective) parts.push(langDirective);
-  return parts.join("\n");
-}
-
-function collectPriorSceneKeys(session: Session): string[] {
-  const seen = new Set<string>();
-  for (const entry of session.history) {
-    const k = entry.scene.sceneKey;
-    if (k) seen.add(k);
-  }
-  return Array.from(seen);
-}
 
 // ──────────────────────────────────────────────────────────────────────
 //  2. CharacterDesigner (角色设定师) — designs one new character.
@@ -667,11 +198,13 @@ function collectPriorSceneKeys(session: Session): string[] {
 // character also selects its voice, at zero extra latency. When StepFun is
 // off (Xiaomi / no TTS), the tail is byte-identical to the historical prompt
 // (Xiaomi path is cache- and behavior-preserving).
-const CHARACTER_DESIGNER_SYSTEM_CORE = `你是视觉小说的「角色设定师」。给你一个**新登场角色的名字**，你要为这个角色同时设计两份卡片：
+const CHARACTER_DESIGNER_SYSTEM_CORE = `你是视觉小说的「角色设定师」——下游的**媒体翻译官**。给你一个**新登场角色的名字**（通常还附带编剧给定的角色性格 / 情绪基调 / 说话基调），你的职责是把这份**已给定的角色意图**忠实翻译成两份媒体卡片：
 1. **视觉设定卡（英文）**——给生图模型 FLUX 用，遵循 prompt engineering 风格
 2. **音色设定卡（中文）**——给小米 MiMo 配音设计用
 
-两份卡片要描绘**同一个人**——外貌温柔的人不该被配上张扬聒噪的嗓音；冷酷干练的人不该用甜软糯的童声。先在心里想清楚这个人的整体气质，再分两面落笔。
+你**不发明**角色的性格——性格由编剧主导。你的工作是：**依据给定的性格 / 情绪 / 说话基调，产出最贴合的外貌与音色**。若没有给定性格信息（降级情况），再据角色名 + 世界观自行合理推断。
+
+两份卡片要描绘**同一个人**，且都要贴合给定的角色基调——给定「傲娇腹黑」就别配天真烂漫的外貌与嗓音；给定「声音微颤、欲言又止」音色卡就要体现这份犹豫感。
 
 视觉设定卡 visualDescription 规则：
 - **必须完全用英文**
@@ -775,11 +308,22 @@ export function buildCharacterDesignerSystem(opts: {
 export function buildCharacterDesignerUserMessage(
   charName: string,
   session: Session,
+  intent?: CharacterIntent,
 ): string {
   const parts: string[] = [];
   parts.push(`角色名：${charName}`);
   parts.push(`世界观：${session.worldSetting}`);
   parts.push(`全局美术画风：${session.styleGuide}`);
+
+  // Writer-authored scene intent (paradigm D). When present, the designer
+  // TRANSLATES this into visual + voice; when absent, it degrades to
+  // name + worldSetting inference (old behavior).
+  if (intent && (intent.mood || intent.motivation || intent.speakingTone)) {
+    parts.push("\n编剧给定的角色基调（请据此设计，不要另起炉灶）：");
+    if (intent.mood) parts.push(`- 情绪基调：${intent.mood}`);
+    if (intent.motivation) parts.push(`- 动机 / 目的：${intent.motivation}`);
+    if (intent.speakingTone) parts.push(`- 说话基调：${intent.speakingTone}`);
+  }
 
   const others = session.characters.filter((c) => c.visualDescription);
   if (others.length > 0) {
@@ -1060,6 +604,7 @@ export const INSERT_BEAT_SYSTEM = `你是视觉小说编剧。玩家在当前场
 - 不要打破当前场景的物理状态（玩家仍在原地）
 - 不要生成选项或下一步指引 —— 玩家点击会自然回到原 beat
 - 内容要"有所得"——一个新细节、一丝潜台词、一次真实的交流（show, don't tell）
+- 白描为主：聚焦可观察的五感与物理特征，以角色的动作/神态本身传递情绪，不要以作者角度解释或议论；不写角色眼神/语气里的情绪（这些从台词与动作中自行体会）
 
 speaker 字段允许的取值**只有两种**（与主路径 Writer 一致 — Pattern B galgame 标准）：
 1. **已登记角色**里的 NPC 真名（**绝不允许引入新角色**）

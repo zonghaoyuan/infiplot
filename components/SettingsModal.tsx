@@ -413,7 +413,7 @@ export function SettingsModal({
             <>
               <div className="px-6 md:px-8 py-4">
                 <p className="text-[11px] leading-relaxed text-clay-400">
-                  <i className="fa-solid fa-circle-info mr-1.5" />
+                  <i className="fa-solid fa-shield-halved mr-1.5" />
                   {t("settings.models.corsNotice")}
                 </p>
               </div>

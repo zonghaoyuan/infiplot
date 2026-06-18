@@ -284,7 +284,7 @@ Dreamy watercolor style with soft tones and nostalgic atmosphere
     },
 
     models: {
-      corsNotice: "Please ensure your API endpoint supports browser CORS requests. Most mainstream providers (OpenAI, Anthropic, Gemini, Runware, etc.) support this by default.",
+      corsNotice: "All API keys are stored locally in your browser and never uploaded to our server. Requests are sent directly from your browser to the API endpoint; if the endpoint does not support CORS, requests are automatically routed through our server — your key is used only for that single relay and is never logged or stored.",
       textModel: "Text Model",
       imageModel: "Image Model",
       visionModel: "Vision Model",

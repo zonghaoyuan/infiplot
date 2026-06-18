@@ -220,6 +220,9 @@ export function PlayCanvas({
   const { t } = useI18n();
   const imgRef = useRef<HTMLImageElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  // C3: TTS late-arrival guard — true when audioSrc arrived after typingDone,
+  // meaning the player already finished reading. Prevents "replay" autoplay.
+  const audioLateRef = useRef(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [freeformOpen, setFreeformOpen] = useState(false);
   const [freeformText, setFreeformText] = useState("");
@@ -255,12 +258,30 @@ export function PlayCanvas({
     return () => clearTimeout(timer);
   }, [audioSrc]);
 
+  // ── C3: TTS late-arrival guard ────────────────────────────────────────
+  // Reset the "late" flag whenever the beat changes — a fresh beat starts
+  // eligible for autoplay (cache-hit or in-typing arrival both play normally).
+  useEffect(() => {
+    audioLateRef.current = false;
+  }, [beat?.id]);
+
+  // When audioSrc becomes available, decide if it's "late": if the typewriter
+  // already finished (typingDone) for this beat, the player has read the line,
+  // so the audio arrived too late — mark it so the autoplay effects skip it.
+  // If it arrives while still typing (or pre-loaded before typing finished),
+  // it's not late and plays in sync.
+  useEffect(() => {
+    if (audioSrc && typingDone) {
+      audioLateRef.current = true;
+    }
+  }, [audioSrc, typingDone]);
+
   // ── Mute toggle ───────────────────────────────────────────────────────
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
     el.muted = muted;
-    if (!muted && audioSrc && el.paused) {
+    if (!muted && audioSrc && el.paused && !audioLateRef.current) {
       el.play().catch(() => {
         // autoplay blocked — silent until next interaction
       });
@@ -272,7 +293,7 @@ export function PlayCanvas({
     if (!el) return;
     const ms = Number.isFinite(el.duration) ? el.duration * 1000 : 0;
     setAudioDurationMs(ms > 0 ? ms : 0);
-    if (!muted) {
+    if (!muted && !audioLateRef.current) {
       el.play().catch(() => {
         // autoplay blocked
       });
@@ -631,6 +652,21 @@ export function PlayCanvas({
                     </p>
                   )}
 
+                  {/* Narration as primary scene/environment description, shown
+                      before the dialogue line (not an italic footnote). Only
+                      rendered when the beat ALSO has a speaker — a pure-narration
+                      beat puts its narration in the typewriter body below. */}
+                  {beat.speaker && beat.narration && (
+                    <p
+                      className={`font-serif leading-[1.85] mb-[0.6em] ${
+                        portrait ? "text-[15px]" : "text-[12px] md:text-[14px]"
+                      }`}
+                      style={{ color: "rgba(228,218,196,0.88)" }}
+                    >
+                      {beat.narration}
+                    </p>
+                  )}
+
                   <p
                     className={`font-serif leading-[1.85] ${
                       portrait ? "text-[16px]" : "text-[13px] md:text-[15px]"
@@ -638,17 +674,6 @@ export function PlayCanvas({
                     style={{ color: "rgba(245,235,210,0.95)" }}
                   >
                     {typedBody}
-                    {beat.speaker && beat.narration && (
-                      <span
-                        className={`block mt-[0.5em] italic transition-opacity duration-300 ${
-                          portrait ? "text-[14px]" : "text-[12px] md:text-[13px]"
-                        } ${typingDone ? "opacity-100" : "opacity-0"}`}
-                        style={{ color: "rgba(200,185,155,0.78)" }}
-                        aria-hidden={!typingDone}
-                      >
-                        {beat.narration}
-                      </span>
-                    )}
                   </p>
 
                   {typingDone && beat.next.type === "continue" && (

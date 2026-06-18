@@ -21,6 +21,7 @@ import { SettingsModal, readStoredPlayerName, readStoredVisionClick } from "@/co
 import { annotateClick } from "@/lib/annotateClient";
 import { loadClientTtsConfig } from "@/lib/clientTtsConfig";
 import { collectBeatAudioForExport } from "@/lib/exportAudio";
+import { loadFromLocalStorage } from "@/lib/clientStoryPersistence";
 import { PRESETS } from "@/lib/presets";
 import {
   STORY_SHARE_STORAGE_KEY,
@@ -807,10 +808,6 @@ function PlayInner() {
   const replayActiveRef = useRef(false);
   const exportingStoryRef = useRef(false);
   const exportingGalleryRef = useRef(false);
-  // Audio carried in from a `.infiplot` share file, keyed by `${sceneId}:${beatId}`.
-  // Survives scene swaps so a player who re-exports a replayed game keeps the
-  // baked voices that the original creator already paid to synth — they're
-  // free to embed back into the new gallery / share file.
   const prebakedAudioRef = useRef<Record<string, string>>({});
   // Original (CDN) URL of the currently-rendered scene image. Used as the key
   // to revoke its blob: URL when the scene swaps. We track the ORIGINAL URL,
@@ -1192,8 +1189,6 @@ function PlayInner() {
       setVisionClickEnabled(settings.visionClickEnabled);
       const nextPlayerName = settings.playerName || undefined;
       setSession((prev) => prev ? { ...prev, playerName: nextPlayerName } : prev);
-      // Refresh the BYO TTS config so a key entered mid-session takes effect
-      // immediately — byoTtsRef is otherwise only read once at mount.
       const cfg = settings.ttsConfigured ? loadClientTtsConfig() : null;
       byoTtsRef.current = cfg;
       setByoTtsConfig(cfg);
@@ -1587,10 +1582,12 @@ function PlayInner() {
     //   ?custom=1            → 用户自定义 prompt，sessionStorage 取 ws/sg
     //                          后走 /api/start 现场生成
     //   ?share=1             → 首页上传的剧情分享 JSON，从第一幕开始本地回放
+    //   ?storyId=<uuid>      → 加载已保存的剧情（从 localStorage）
     const cardName = params.get("card");
     const presetId = params.get("preset");
     const isCustom = params.get("custom") === "1";
     const isShare = params.get("share") === "1";
+    const storyId = params.get("storyId");
 
     if (isShare) {
       (async () => {
@@ -1629,11 +1626,6 @@ function PlayInner() {
           replayIndexRef.current = 0;
           replayActiveRef.current = imported.history.length > 1;
           visitedBeatsRef.current = [first.scene.entryBeatId];
-          // Stash pre-baked audio (from doc.audioByBeatId) so it survives scene
-          // swaps and re-exports. Keyed by `${sceneId}:${beatId}`. Also seed the
-          // current beatAudioMap for the first scene so audio plays right away
-          // — the scene-change effect normally clears the map on transition,
-          // and bare beat ids "b1/b2/..." would otherwise miss prebaked entries.
           if (doc.audioByBeatId) {
             prebakedAudioRef.current = { ...doc.audioByBeatId };
             const seed: Record<string, string> = {};
@@ -1710,8 +1702,40 @@ function PlayInner() {
     // be tagged onto the local Session build for /api/scene calls).
     const sessionLanguage: string = locale;
 
-    if (!cardName && !livePayload) {
+    if (!cardName && !livePayload && !storyId) {
       router.replace("/");
+      return;
+    }
+
+    // ── Load saved story path ──
+    if (storyId) {
+      // TEMPORARY: localStorage-only mode (D1 disabled until auth integration)
+      const loadedSession = loadFromLocalStorage(storyId);
+      if (!loadedSession) {
+        setError("找不到保存的剧情");
+        return;
+      }
+      const firstScene = loadedSession.history[0]?.scene;
+      if (!firstScene) {
+        setError("剧情数据损坏");
+        return;
+      }
+      (async () => {
+        try {
+          const blobUrl = await getOrCreateBlobUrl(firstScene.imageUrl ?? "");
+          lastImageOriginalUrlRef.current = firstScene.imageUrl ?? "";
+          setSession(loadedSession);
+          setCurrentScene(firstScene);
+          setCurrentBeatId(firstScene.entryBeatId);
+          setImageUrl(blobUrl);
+          visitedBeatsRef.current = [firstScene.entryBeatId];
+          setOrientation(loadedSession.orientation ?? "landscape");
+          setPhase("ready");
+          track("scene_reached", { scene_index: loadedSession.history.length });
+        } catch (e) {
+          setError(String(e));
+        }
+      })();
       return;
     }
 
@@ -1766,9 +1790,6 @@ function PlayInner() {
 
     fetchStart
       .then(async (data) => {
-        // Resolve to a paintable src before committing to state. Proxy path:
-        // a fully-local blob: URL the browser paints atomically (no row-by-row
-        // "层层加载"). Direct path (default): the preloaded original URL.
         const blobUrl = await getOrCreateBlobUrl(data.imageUrl);
         lastImageOriginalUrlRef.current = data.imageUrl;
 

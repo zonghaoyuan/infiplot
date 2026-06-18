@@ -19,6 +19,7 @@ import type {
   InsertBeatResponse,
   SceneRequest,
   SceneResponse,
+  SceneStreamEvent,
   Session,
   StartRequest,
   StartResponse,
@@ -105,6 +106,77 @@ function mergeCharactersPreserveVoice(
   });
 }
 
+// ── SSE consumption (server-fallback path) ───────────────────────────
+// When an `emit` callback is provided, the server-fallback path requests
+// SSE instead of JSON so the caller can render progressive events
+// (plan → beat → background → voice → done). The final "done" event
+// carries the complete response payload.
+
+async function fetchSSE<T>(
+  path: string,
+  body: unknown,
+  emit?: (event: SceneStreamEvent) => void,
+): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(emit ? { Accept: "text/event-stream" } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) throw new AuthRequiredError();
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch { /* keep HTTP status */ }
+    throw new Error(message);
+  }
+
+  if (!emit || !res.headers.get("content-type")?.includes("text/event-stream")) {
+    return res.json() as Promise<T>;
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: T | undefined;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop()!;
+
+    for (const part of parts) {
+      if (!part.trim()) continue;
+      const dataLine = part.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) continue;
+      let event;
+      try {
+        event = JSON.parse(dataLine.slice(6));
+      } catch {
+        continue;
+      }
+      if (event.type === "done") {
+        result = event.response as T;
+      } else if (event.type === "error") {
+        throw new Error(event.message || "Scene generation failed");
+      } else {
+        emit(event as SceneStreamEvent);
+      }
+    }
+  }
+
+  if (!result) throw new Error("SSE stream ended without a done event");
+  return result;
+}
+
 // ── Unified entry points ───────────────────────────────────────────────
 // When the browser has a BYO model config in localStorage, these call the
 // client-side engine directly (talking to providers from the browser).
@@ -134,23 +206,29 @@ export async function getTtsProvider(): Promise<TtsProvider> {
   }
 }
 
-export async function startSession(req: StartRequest): Promise<StartResponse> {
+export async function startSession(
+  req: StartRequest,
+  emit?: (event: SceneStreamEvent) => void,
+): Promise<StartResponse> {
   const config = getClientConfig();
   if (config) {
-    return startSessionClient(config, req);
+    return startSessionClient(config, req, emit);
   }
-  return postJson<StartResponse>("/api/start", req);
+  return fetchSSE<StartResponse>("/api/start", req, emit);
 }
 
-export async function requestScene(req: SceneRequest): Promise<SceneResponse> {
+export async function requestScene(
+  req: SceneRequest,
+  emit?: (event: SceneStreamEvent) => void,
+): Promise<SceneResponse> {
   const config = getClientConfig();
   if (config) {
-    return requestSceneClient(config, req);
+    return requestSceneClient(config, req, emit);
   }
-  const data = await postJson<SceneResponse>("/api/scene", {
+  const data = await fetchSSE<SceneResponse>("/api/scene", {
     ...req,
     session: stripVoicesForTransport(req.session),
-  });
+  }, emit);
   // Server stripped known-character voices for bandwidth — re-attach the
   // voices we already hold so fetchBeatAudio can synth them.
   data.characters = mergeCharactersPreserveVoice(req.session.characters, data.characters);

@@ -1,0 +1,54 @@
+# =============================================================
+# Cloudflare Workers Development Variables (.dev.vars)
+# Copy this file to .dev.vars and fill in real values for local development.
+# NEVER commit .dev.vars (already in .gitignore)
+#
+# For production deployment, set these via Cloudflare Dashboard:
+# Workers & Pages → Your Worker → Settings → Variables and Secrets
+# Or use: wrangler secret put <KEY_NAME>
+# =============================================================
+
+# ---- Official LLM API Keys (server-side) ----------------------------
+# These are the fallback keys when users don't configure BYOK (Bring Your Own Key)
+# Same keys from .env.example, migrated to Cloudflare Secrets
+
+TEXT_BASE_URL=https://api.deepseek.com/v1
+TEXT_API_KEY=sk-xxx
+TEXT_MODEL=deepseek-v4-flash
+# TEXT_PROVIDER=openai_compatible
+
+IMAGE_BASE_URL=https://api.runware.ai/v1
+IMAGE_API_KEY=runware-xxx
+IMAGE_MODEL=runware:400@6
+# IMAGE_PROVIDER=runware
+
+VISION_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
+VISION_API_KEY=tp-xxx
+VISION_MODEL=mimo-v2.5
+# VISION_PROVIDER=openai_compatible
+
+# TTS (optional - leave blank to disable)
+TTS_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1
+TTS_API_KEY=tp-xxx
+TTS_SPEECH_MODEL=mimo-v2.5-tts
+
+# MOCK_IMAGE (for testing)
+MOCK_IMAGE=false
+
+# ---- Gallery encryption secret --------------------------------------
+# Server-side secret for AES-256-GCM encryption of .infiplot share files
+# Generate with: openssl rand -hex 32
+# WARNING: Rotating this invalidates all existing share files
+GALLERY_SECRET=<generate_with_openssl_rand_hex_32>
+
+# ---- Next.js public variables (build-time inlined) ------------------
+# These are inlined at BUILD time, not runtime
+# For Cloudflare deployment, set via Dashboard Variables (not Secrets)
+NEXT_PUBLIC_IMAGE_PROXY_URL=
+NEXT_PUBLIC_IMAGE_PROXY_ALLOWED_HOSTS=im.runware.ai
+NEXT_PUBLIC_UMAMI_SRC=
+NEXT_PUBLIC_UMAMI_WEBSITE_ID=
+NEXT_PUBLIC_UMAMI_DOMAINS=
+
+# ---- Node environment -----------------------------------------------
+NODE_ENV=development

@@ -313,7 +313,7 @@ export const zhCN = {
 
     // Models tab
     models: {
-      corsNotice: "请确保你的 API 端点支持浏览器跨域请求（CORS）。大多数主流提供商（OpenAI、Anthropic、Gemini、Runware 等）已默认支持。",
+      corsNotice: "所有 Key 仅保存在本地浏览器，不会上传到服务器。请求优先从浏览器直连 API 端点；若端点不支持跨域（CORS），将自动通过我们的服务器中转——Key 仅用于当次转发，不会被记录或存储。",
       textModel: "文本模型",
       imageModel: "绘图模型",
       visionModel: "识图模型",
