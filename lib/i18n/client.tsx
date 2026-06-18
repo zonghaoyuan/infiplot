@@ -5,6 +5,7 @@ import {
   useContext,
   useState,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import type { Locale } from "./config";
@@ -39,73 +40,43 @@ const I18nContext = createContext<I18nContextType | undefined>(undefined);
 interface I18nProviderProps {
   children: ReactNode;
   initialLocale?: Locale;
+  initialTranslations?: Record<string, unknown>;
 }
 
 // Dynamic import of locale files
-  async function importLocale(locale: Locale) {
-    switch (locale) {
-      case "zh-CN":
-        return (await import("./locales/zh-CN")).zhCN;
-      case "en":
-        return (await import("./locales/en")).en;
-      case "zh-TW":
-        return (await import("./locales/zh-TW")).zhTW;
-      case "zh-HK":
-        return (await import("./locales/zh-HK")).zhHK;
-      case "ja":
-        return (await import("./locales/ja")).ja;
-      case "ko":
-        return (await import("./locales/ko")).ko;
-      case "es":
-        return (await import("./locales/es")).es;
-      case "fr":
-        return (await import("./locales/fr")).fr;
-      case "de":
-        return (await import("./locales/de")).de;
-      case "pt-BR":
-        return (await import("./locales/pt-BR")).ptBR;
-      case "pt":
-        return (await import("./locales/pt")).pt;
-      case "ru":
-        return (await import("./locales/ru")).ru;
-      case "it":
-        return (await import("./locales/it")).it;
-      case "vi":
-        return (await import("./locales/vi")).vi;
-      case "th":
-        return (await import("./locales/th")).th;
-      case "id":
-        return (await import("./locales/id")).id;
-      case "tr":
-        return (await import("./locales/tr")).tr;
-      case "pl":
-        return (await import("./locales/pl")).pl;
-      case "nl":
-        return (await import("./locales/nl")).nl;
-      case "uk":
-        return (await import("./locales/uk")).uk;
-      case "hi":
-        return (await import("./locales/hi")).hi;
-      case "cs":
-        return (await import("./locales/cs")).cs;
-      default:
-        console.warn(`Locale ${locale} not loaded, falling back to English`);
-        return (await import("./locales/en")).en;
-    }
+async function importLocale(locale: Locale) {
+  switch (locale) {
+    case "zh-CN":
+      return (await import("./locales/zh-CN")).zhCN;
+    case "en":
+      return (await import("./locales/en")).en;
+    case "ja":
+      return (await import("./locales/ja")).ja;
+    default:
+      return (await import("./locales/zh-CN")).zhCN;
   }
+}
 
 // Provider component
-export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
-  const [locale, setLocaleState] = useState<Locale>(initialLocale ?? DEFAULT_LOCALE);
-  const [translations, setTranslations] = useState<Record<string, unknown>>({});
-  const [isLoading, setIsLoading] = useState(true);
+export function I18nProvider({ children, initialLocale, initialTranslations }: I18nProviderProps) {
+  const [locale, setLocaleState] = useState<Locale>(() => initialLocale ?? getInitialLocale());
+  const [translations, setTranslations] = useState<Record<string, unknown>>(initialTranslations ?? {});
+  const [isLoading, setIsLoading] = useState(!initialTranslations);
 
-  // Load translations when locale changes
+  // Load full translations (including functions that can't be serialized from
+  // the server). On first mount with SSR initialTranslations we load silently
+  // (no isLoading flash) to backfill function-valued entries. On locale change
+  // we set isLoading so the UI can show a loading state.
+  const mountedRef = useRef(false);
   useEffect(() => {
+    const isFirstMount = !mountedRef.current;
+    mountedRef.current = true;
+    const silent = isFirstMount && !!initialTranslations;
+
     let cancelled = false;
 
-    async function loadTranslations() {
-      setIsLoading(true);
+    async function load() {
+      if (!silent) setIsLoading(true);
       try {
         const localeData = await importLocale(locale);
         if (!cancelled) {
@@ -115,7 +86,6 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
       } catch (error) {
         console.error(`Failed to load translations for ${locale}:`, error);
         if (!cancelled) {
-          // Fallback to default locale on error
           if (locale !== DEFAULT_LOCALE) {
             const fallback = await importLocale(DEFAULT_LOCALE);
             setTranslations(fallback as Record<string, unknown>);
@@ -125,7 +95,7 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
       }
     }
 
-    loadTranslations();
+    load();
 
     return () => {
       cancelled = true;

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { Preset } from "@/lib/presets";
+import { useLocalePath } from "@/lib/i18n/hooks";
 
 export function PresetCard({
   preset,
@@ -11,9 +12,10 @@ export function PresetCard({
   ordinal: string;
 }) {
   const router = useRouter();
+  const lp = useLocalePath();
   return (
     <button
-      onClick={() => router.push(`/play?preset=${preset.id}`)}
+      onClick={() => router.push(lp(`/play?preset=${preset.id}`))}
       className="group block w-full py-10 md:py-12 border-t border-clay-900/10 hover:border-clay-900/35 transition-[border-color,padding] duration-500 text-left"
     >
       <div className="flex items-baseline gap-6 md:gap-10">

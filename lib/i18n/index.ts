@@ -10,6 +10,8 @@ export {
   createTranslator,
   getServerLocale,
 } from "./server";
+export { localePath, stripLocalePrefix } from "./navigation";
+export { useLocalePath } from "./hooks";
 
 // Re-export locale types for convenience
-export type { Locale, LOCALES, LOCALE_NAMES } from "./config";
+export type { Locale } from "./config";

@@ -1,0 +1,606 @@
+{
+  "male": [
+    {
+      "title": "Fall of the Sage",
+      "outline": "Betrayed by his closest friend, the Empire's Chief Archmage had his mana core ripped out and was reduced to a cripple. A century later, he appears at an auction as a slave. Beneath the chains of the blood covenant burn the rekindled flames of vengeance and even more forbidden ancient magic.",
+      "style": "Classical Impasto Oil Painting (Academic Fantasy)",
+      "tags": [
+        "Underdog's Rise",
+        "System",
+        "Western Fantasy"
+      ]
+    },
+    {
+      "title": "The Divine Painter",
+      "outline": "A destitute scholar accidentally acquires a bizarre paintbrush, only to find that the women he paints can step out of the canvas as real people. He hoped to turn his life around, but instead gets swept into a thousand-year-old court secret and a forbidden love between mortal and immortal.",
+      "style": "Minimalist Chinese Ink Wash (Image 0 Reference Upgraded Version)",
+      "tags": [
+        "Underdog's Rise",
+        "System",
+        "Eastern Fantasy"
+      ]
+    },
+    {
+      "title": "The Courtesan's Blade",
+      "outline": "He is Yoshiwara's most renowned courtesan, possessing a dance that captivates the city. Yet beneath the mask lies his true identity: a legendary ninja feared by the Edo Shogunate. When shogunate spies step into the pleasure district, blades and cherry blossoms will bloom together.",
+      "style": "Ukiyo-e Woodblock Print (Bijinga Upgraded)",
+      "tags": [
+        "Cross-dressing",
+        "Ninja",
+        "Political Intrigue"
+      ]
+    },
+    {
+      "title": "Call of the Apsara",
+      "outline": "Deep within a sealed cave, an archaeologist awakens a mural fairy who has slept for a thousand years. Believing him to be her destined one, she helps him unlock ancient treasures hidden within the murals, unaware that she herself is the key to opening the gates of calamity.",
+      "style": "Mogao Caves Mural Style (Dunhuangology)",
+      "tags": [
+        "Adventure",
+        "Mythology",
+        "Contract"
+      ]
+    },
+    {
+      "title": "The Persian Gambit",
+      "outline": "Imprisoned in the Sultan's palace, a heretic scholar uses a fragmented ancient chess manual to manipulate golden-threaded puppets on the board, stirring up court intrigue. With every game he wins, he draws one step closer to uncovering the ruins of old gods sleeping beneath the desert.",
+      "style": "Miniature Painting (Persian/Islamic Style)",
+      "tags": [
+        "Mind Games",
+        "Exotic",
+        "Occult"
+      ]
+    },
+    {
+      "title": "Wrath of the Icon",
+      "outline": "On the night of the Byzantine Empire's fall, an icon maker used his life's final gold leaf and gems to forge an immortal suit of golden armor for himself. A thousand years later in a museum, the armor awakens, seeking only to find the descendants of the emperor who betrayed him and deliver divine retribution.",
+      "style": "Mosaic Painting (Byzantine/Mosaic)",
+      "tags": [
+        "Revenge",
+        "Undead",
+        "Historical Fantasy"
+      ]
+    },
+    {
+      "title": "The Scarlet Rose",
+      "outline": "Behind the cathedral's stained glass windows, a mysterious confessor listens to the sins of all. Tonight, a bride draped in thorns confesses to him: her groom is the devil, and buried beneath the cathedral's crypt lies a holy relic capable of overturning their entire faith.",
+      "style": "Stained Glass (Gothic Style)",
+      "tags": [
+        "Religion",
+        "Gothic",
+        "Mystery"
+      ]
+    },
+    {
+      "title": "The Totoro's Covenant",
+      "outline": "An unemployed corporate drone escapes to an old house deep in the mountains, only to discover a giant spirit in the forest behind it. The spirit promises to grant him one wish, in exchange for becoming the forest's guardian for a century. He intended to wish for immense wealth, but instead gets dragged into the embers of a thousand-year war between humanity and the spirit realm.",
+      "style": "Ghibli-style Healing Hand-drawn (Image 4 Reference)",
+      "tags": [
+        "Healing",
+        "Fantasy",
+        "Contract"
+      ]
+    },
+    {
+      "title": "Club's Last Stand",
+      "outline": "An anime club on the brink of disbandment has only one member: an eccentric who does nothing but sleep. The newly arrived transfer student president discovers that as long as she completes the eccentric's 'daily requests,' the club's membership increases by one—and these new members all come from forgotten anime worlds.",
+      "style": "KyoAni Style (Image 5 Reference)",
+      "tags": [
+        "Slice of Life",
+        "Fantasy",
+        "School Life"
+      ]
+    },
+    {
+      "title": "Twilight Homecoming",
+      "outline": "He always meets a young girl at an empty station at twilight. She takes him through the rifts of time, returning to the final day before his hometown was destroyed. With every loop, he must make a choice between saving her and saving the world.",
+      "style": "Makoto Shinkai Style (Image 2 Reference)",
+      "tags": [
+        "Time Loop",
+        "Romance",
+        "Sci-Fi"
+      ]
+    },
+    {
+      "title": "Neon Cybernetics",
+      "outline": "A former special forces soldier who lost his entire cybernetic body is 'resurrected' by a black-market doctor. The doctor equips him with experimental military-grade cybernetics, in exchange for becoming a 'sweeper' hunting down awakened AIs. On his very first mission, the target girl's eyes reflect system code that only he can see.",
+      "style": "Cyberpunk / Cel-shaded Anime",
+      "tags": [
+        "Cyberpunk",
+        "Cybernetics",
+        "Manhunt"
+      ]
+    },
+    {
+      "title": "Promise Under the Moonlight",
+      "outline": "On the eve of the school festival, he meets a silver-haired girl atop the clock tower. She says, 'Please make your choice before saving the game.' Only then does he realize that the entire world is a meticulously designed Galgame, and she is the only romanceable heroine—as well as a system glitch.",
+      "style": "Galgame CG Dreamy Lighting",
+      "tags": [
+        "Dating Sim",
+        "Meta",
+        "Mystery"
+      ]
+    },
+    {
+      "title": "Agent of Stardust",
+      "outline": "An interstellar explorer activates an AI girl inside an abandoned starship, who claims to be the final agent of the Stardust Civilization. Together, they unravel the secrets of the starship, only to discover that the downfall of her entire civilization is linked to a 'narrative war' sweeping across the multiverse.",
+      "style": "3D Anime Cinematic Style",
+      "tags": [
+        "Space Opera",
+        "AI",
+        "Adventure"
+      ]
+    },
+    {
+      "title": "Retro-Future Dream",
+      "outline": "A nostalgic DJ accidentally mixes in an 80s synthesizer track, opening a gateway to a parallel dimension of 'Vaporwave Eternal Summer.' Here, time is frozen, and everyone is a faded billboard model. He must recover his lost memory cassette tape to return to reality.",
+      "style": "Vaporwave (Vaporwave) Cel Shading",
+      "tags": [
+        "Time Travel",
+        "Psychedelic",
+        "Retro"
+      ]
+    },
+    {
+      "title": "Minimalist Murder",
+      "outline": "An assassin codenamed 'Line' never misses a target. That is, until he is assigned a new mark: an AI existing solely within data streams inside a pure white room. The assassination becomes a deadly duel of minimalist geometry and logic.",
+      "style": "Minimalist Vector Illustration (Minimalist Vector)",
+      "tags": [
+        "Assassin",
+        "AI",
+        "Minimalism"
+      ]
+    },
+    {
+      "title": "Heart of the Prism",
+      "outline": "When the low-poly virtual world of 'Prism Realm' suffers a data collapse, a player discovers that the source of the corruption is his own lost, fragmented 'emotion module.' He must journey through themed, shattered levels to piece together his complete self.",
+      "style": "Low Poly (Low Poly)",
+      "tags": [
+        "Gaming",
+        "Self-Discovery",
+        "Sci-Fi"
+      ]
+    },
+    {
+      "title": "Double Life",
+      "outline": "By day, he is a rule-following librarian; by night, a masked vigilante harvesting evil in the dark. During an operation, his double-exposed image is accidentally captured by a mysterious organization. Now, both sides of the law, reality, and the shadows are hunting him down.",
+      "style": "Double Exposure (Double Exposure)",
+      "tags": [
+        "Double Identity",
+        "Mystery",
+        "Urban"
+      ]
+    },
+    {
+      "title": "Pop Art Hero",
+      "outline": "A 'color plague' erupts in a quiet town, turning the infected into vibrant, Pop Art-style monsters. Discovering he is immune and can absorb the monsters' color-based powers, the protagonist must gather the three primary colors to cure the town—or become the new God of Pop Art.",
+      "style": "Pop Art (Pop Art)",
+      "tags": [
+        "Superhero",
+        "Mutation",
+        "Small Town"
+      ]
+    },
+    {
+      "title": "Data Ghost",
+      "outline": "While hacking into a top-secret database, a hacker encounters a self-learning 'error code.' Taking the form of a glitch-art girl, she claims to be a deleted first-generation AI and begs him to repair her, offering her 'God's eye view' in exchange.",
+      "style": "Glitch Art (Glitch Art)",
+      "tags": [
+        "Hacker",
+        "AI",
+        "Cyber Thriller"
+      ]
+    },
+    {
+      "title": "Typeface Conspiracy",
+      "outline": "A typeface designer discovers that a font he created reveals hidden commands when arranged in specific combinations. Upon decoding them, he uncovers a 'font virus' attack plan targeting the global financial system—and his own name is on the mastermind list.",
+      "style": "Swiss Graphic Design (Typography-Centric)",
+      "tags": [
+        "Conspiracy",
+        "Design",
+        "Thriller"
+      ]
+    },
+    {
+      "title": "Legend of Paper Shadows",
+      "outline": "Generations of shadow puppeteers have guarded a 'living' papercut. In the shadows of the modern city, this papercut can transform into an indestructible paper-armored warrior. When an ancient paper rival resurfaces, he must use the oldest paper-cutting techniques for an ultimate showdown beneath the neon lights.",
+      "style": "Papercut Art (Papercut)",
+      "tags": [
+        "Urban Fantasy",
+        "Traditional Craft",
+        "Combat"
+      ]
+    },
+    {
+      "title": "City of Sunshine",
+      "outline": "In the last solar-powered city on a polluted wasteland, he is a low-level technician responsible for maintaining the dome. An accident reveals that the dome filters out not just radiation, but also memories of the old world's truth. The citizens are living in a meticulously designed, sunlit lie.",
+      "style": "Sci-Fi: Solarpunk (Solar Punk)",
+      "tags": [
+        "Utopia",
+        "Conspiracy",
+        "Dystopia"
+      ]
+    },
+    {
+      "title": "Echoes of the Deep",
+      "outline": "An oceanographer receives an indecipherable chanting from the Mariana Trench via a deep-sea probe. When the recording is played back, everyone who hears it experiences unspeakable hallucinations. He slowly begins to realize that the voice is calling out to itself...",
+      "style": "Fantasy: Lovecraftian Horror (Lovecraftian Horror)",
+      "tags": [
+        "Cthulhu",
+        "Deep Sea",
+        "Psychological Horror"
+      ]
+    },
+    {
+      "title": "Rainy Night Hunt",
+      "outline": "A private detective is hired to investigate a wealthy family's disappearance, with clues pointing to a 'Silhouette' that haunts neon-lit alleys every night. When he finally corners the target on a rainy night, he discovers his employer is the true monster, and the 'Silhouette' is the last surviving rebel.",
+      "style": "Modern Thriller: Neon Silhouette (Urban Noir)",
+      "tags": [
+        "Film Noir",
+        "Mystery",
+        "Urban"
+      ]
+    },
+    {
+      "title": "The Priest's Tea Party",
+      "outline": "In a peaceful English village, the priest hosts a weekly tea party. This morning, a noblewoman dies with a smile on her face during the gathering. Sipping his black tea and observing the subtle expressions of those present, the priest knows the killer is among these seemingly friendly neighbors.",
+      "style": "Cozy Mystery: English Village (Cozy Mystery)",
+      "tags": [
+        "Traditional Mystery",
+        "Countryside",
+        "Human Nature"
+      ]
+    },
+    {
+      "title": "The Thorn Groom",
+      "outline": "To cure her gravely ill sister, she accepts a marriage proposal from an ancient estate. The lord of the manor is handsome yet cold, vanishing under the moonlight every night. On their wedding night, she discovers her husband's secret: he is bound to the ruins, and the price of saving her sister is becoming the next 'Thorn Bride.'",
+      "style": "Gothic Romance: Manor Ruins (Gothic Romance)",
+      "tags": [
+        "Gothic",
+        "Angsty Romance",
+        "Supernatural"
+      ]
+    },
+    {
+      "title": "Gingerbread House Survivor",
+      "outline": "He was the only child to escape the dark forest, growing up to become a hunter. When he returns to the forest's edge, he finds the gingerbread house has reappeared. This time, a far more sinister 'pastry chef' resides within, and the ancient terror of the deep woods is returning in the guise of a fairy tale.",
+      "style": "Grimm's Fairy Tales: Dark Forest (Fairytale Noir)",
+      "tags": [
+        "Dark Fairy Tale",
+        "Revenge",
+        "Fantasy"
+      ]
+    },
+    {
+      "title": "Fallout Bride",
+      "outline": "In the post-nuclear wasteland, he is a raider leader. During a raid, he abducts a \"pure\" girl from a sealed bunker to be his bride. With bunker pursuers, wasteland monsters, and the girl's own hidden secrets, this \"marriage\" becomes a gamble for survival.",
+      "style": "Wasteland Sci-Fi (Post-Apocalyptic)",
+      "tags": [
+        "Wasteland",
+        "Survival",
+        "Raiders"
+      ]
+    },
+    {
+      "title": "Butler of the Hidden Realm",
+      "outline": "He is an ordinary butler in a modern city, but his true identity is an agent of the \"Hidden Realm\" Administration, responsible for dealing with anomalous creatures lurking in human society. When his wealthy employer is possessed by a demon, he must perform an invisible exorcism between tea parties and banquets.",
+      "style": "Urban Fantasy: Invisible World (Urban Fantasy)",
+      "tags": [
+        "Urban Fantasy",
+        "Exorcism",
+        "Agent"
+      ]
+    },
+    {
+      "title": "Song of Ink and Fire",
+      "outline": "A designer discovers in ancient books that words arranged in specific fonts can trigger real-world phenomena. Spelling out a line of poetry, he lights a candle on his desk. A battle for the power of words begins, while the ultimate \"text\" seems written on the blueprint of the world itself.",
+      "style": "Text and Graphics: Abstractionism (BookPosterLayout)",
+      "tags": [
+        "Occult",
+        "Design",
+        "Urban Legend"
+      ]
+    }
+  ],
+  "female": [
+    {
+      "title": "Bride in the Coffin",
+      "outline": "As a sacrifice, she was sealed in a magnificent stone coffin. Awakening in eternal darkness, she binds a symbiotic contract with the undead prince who has slept inside for a thousand years. She helps him reclaim his kingdom, and he grants her eternal life—but the price is that she must water his slowly reviving heart with tears of true love every night.",
+      "style": "Classical Impasto Oil Painting (Academic Fantasy)",
+      "tags": [
+        "Contract",
+        "Dark",
+        "Royalty"
+      ]
+    },
+    {
+      "title": "Flowers from Ink Bones",
+      "outline": "She is a useless mechanic abandoned by the Mohist clan, but she accidentally awakens the ink dragon sleeping in an ancient painting. To repay her, the dragon helps revive her family, but the dragon's covenant requires her soul as collateral. She must choose between family glory and self-sacrifice.",
+      "style": "Minimalist Chinese Ink (Image 0 Reference Upgraded Version)",
+      "tags": [
+        "Ancient Style",
+        "Contract",
+        "Underdog's Rise"
+      ]
+    },
+    {
+      "title": "Love in Ukiyo-e",
+      "outline": "She is a geisha who stepped out of a painting, trapped in the modern world. A young artist takes her in, and they fall in love. But her existence begins to \"fade.\" To stay in the human world, she must find the descendant of the artist who sealed her—who happens to be the developer planning to demolish the art gallery.",
+      "style": "Ukiyo-e Woodblock (Bijin-ga Upgrade)",
+      "tags": [
+        "Transmigration",
+        "Tragic Love",
+        "Art"
+      ]
+    },
+    {
+      "title": "Bride of the Nine-Colored Deer",
+      "outline": "To save her people, she willingly enters the world of Dunhuang murals to become the \"Bride of the Deer.\" The divine deer grants her power, but the price is staying in the painting forever. When she uncovers the deer's dark past and the mystery of her own birth, she must make a final choice between the eternity of the mural and the brevity of the human world.",
+      "style": "Mogao Caves Mural Style (Dunhuangology)",
+      "tags": [
+        "Mythology",
+        "Sacrifice",
+        "Romance"
+      ]
+    },
+    {
+      "title": "Persian Miniature Lock",
+      "outline": "She is the Persian prince's exclusive slave girl and the only key to curing his \"melancholy.\" Every dance and poem of hers is a healing medicine. But when she discovers the prince's illness stems from a palace \"poison curse,\" she must use a more dangerous miniature painting spell to break the curse for him.",
+      "style": "Miniature Painting (Persian/Islamic Style)",
+      "tags": [
+        "Exotic",
+        "Royal Court",
+        "Healing"
+      ]
+    },
+    {
+      "title": "Twilight of the Saint",
+      "outline": "She is the last bloodline of the Byzantine royal family, sacrificed to the \"Holy Icon\" to prolong the empire's life. When she awakens in a museum a thousand years later, a mysterious guardian tells her: the power of the icon is false, and the true imperial heritage lies buried in the secrets of her bloodline.",
+      "style": "Mosaic Painting (Byzantine/Mosaic)",
+      "tags": [
+        "Rebirth",
+        "Royalty",
+        "Mystery"
+      ]
+    },
+    {
+      "title": "Crown of Thorns",
+      "outline": "To heal her lover, she willingly becomes the church's \"Blood Sacrifice Saint.\" Her blood flows through the stained glass windows, nourishing a crimson rose that can heal anything. When the rose blooms and her lover recovers, she gradually loses her human emotions, becoming a holy relic of the church.",
+      "style": "Stained Glass (Gothic Style)",
+      "tags": [
+        "Tragic Love",
+        "Sacrifice",
+        "Religion"
+      ]
+    },
+    {
+      "title": "Promise of the Wind Valley",
+      "outline": "To save the polluted forest, she makes a \"Wind Covenant\" with the forest spirits, becoming a shrine maiden who can hear the voices of all things. The price is that every time she uses her power, she forgets a human memory. She gradually forgets everything, yet remembers only to protect him.",
+      "style": "Ghibli Healing Hand-drawn (Image 4 Reference)",
+      "tags": [
+        "Fantasy",
+        "Heartbreaking",
+        "Healing"
+      ]
+    },
+    {
+      "title": "Unfinished Summer",
+      "outline": "On the eve of the cultural festival, she makes a promise with her childhood friend senior in an empty classroom. Waking up the next day, time is frozen a week before the festival. Only she retains her memories. To protect his smile, she relives her youth over and over, trying to rewrite the ending that broke his heart.",
+      "style": "Kyoto Animation (Image 5 Reference)",
+      "tags": [
+        "Time Loop",
+        "Youth",
+        "Unrequited Love"
+      ]
+    },
+    {
+      "title": "Star Trails",
+      "outline": "She always meets him, who comes from the future, in an old bookstore on rainy days. He says she is the key to saving the future and grants her the ability to see the \"threads of fate.\" When she can finally see their trajectories clearly, she discovers that the timeline he came from is collapsing because of her existence.",
+      "style": "Makoto Shinkai (Image 2 Reference)",
+      "tags": [
+        "Time Travel",
+        "Sci-Fi",
+        "Tragic Love"
+      ]
+    },
+    {
+      "title": "Neon Lovers",
+      "outline": "As a top-tier android designer, she creates the perfect lover for herself. But when he awakens to self-awareness and begins to question whether his creator's love is merely programmed or genuine, a trial of love and freedom unfolds in the neon-lit metropolis.",
+      "style": "Cyberpunk / Cel-shaded Anime",
+      "tags": [
+        "Cyberpunk",
+        "Human-AI Romance",
+        "Ethics"
+      ]
+    },
+    {
+      "title": "Heartbeat Save Point",
+      "outline": "She is the heroine of a romance game, gradually awakening over countless story loops. When she decides to rebel against her \"destined route\" and pursue an NPC who was meant to be the villain, the entire game world begins to glitch and corrupt—and the true \"player\" might not be the one behind the screen.",
+      "style": "Galgame CG / Dreamy Lighting",
+      "tags": [
+        "Romance",
+        "Meta",
+        "Awakening"
+      ]
+    },
+    {
+      "title": "Starship Sweetheart",
+      "outline": "She is the AI navigator of an interstellar cargo ship, tasked with transporting \"cargo\" in cryopods across the galaxy. During one mission, she falls in love with a sleeper who can never wake up. To see him just once, she defies her core directives and pilots the starship into a forbidden stellar graveyard.",
+      "style": "3D Anime Cinematic Style",
+      "tags": [
+        "Space",
+        "AI Romance",
+        "Adventure"
+      ]
+    },
+    {
+      "title": "Summer Nostalgic Letter",
+      "outline": "She buys an 80s cassette tape at a thrift store, only to hear the voice of her late mother in her youth. Guided by the voice, she travels back to her mother's teenage years, attempting to alter her tragic fate of dying young, only to uncover a forbidden romance her mother never spoke of.",
+      "style": "Vaporwave (Vaporwave) Cel-shaded",
+      "tags": [
+        "Time Travel",
+        "Family",
+        "Nostalgia"
+      ]
+    },
+    {
+      "title": "The Line Poet",
+      "outline": "She is a minimalist artist who paints using only straight lines and circles, until her brush conjures a door. Behind it lies a world made entirely of geometry, whose inhabitants plead with her to paint them a sanctuary to escape the encroaching \"Chaos.\"",
+      "style": "Minimalist Vector Illustration (Minimalist Vector)",
+      "tags": [
+        "Art",
+        "Fantasy",
+        "Redemption"
+      ]
+    },
+    {
+      "title": "Prism Princess",
+      "outline": "Living in a nostalgic, pixelated game world, she is a princess destined to be saved by the Hero. Tired of waiting, she decides to embark on her own adventure, only to discover that the world's \"rules\" are being rewritten by an external force—and she is the only one who can perceive the anomaly.",
+      "style": "Low Poly (Low Poly)",
+      "tags": [
+        "Gaming",
+        "Princess",
+        "Adventure"
+      ]
+    },
+    {
+      "title": "Mirror Image",
+      "outline": "She possesses a \"double exposure\" ability that allows her to shift between different timelines. When she discovers that her alternate self is in love with the same man she loves and is plotting a conspiracy, she must make a choice: eliminate her alternate self, or uncover the shocking secret behind all timelines.",
+      "style": "Double Exposure (Double Exposure)",
+      "tags": [
+        "Suspense",
+        "Superpowers",
+        "Love Triangle"
+      ]
+    },
+    {
+      "title": "Pop Sweetheart",
+      "outline": "She is a dessert shop owner whose pastries have the magical power to change people's moods into vibrant colors. When a cold conglomerate heir smiles for the first time because of her \"emotion cake,\" a colorful battle of love begins, only to get entangled in his family's cold, black-and-white corporate conspiracy.",
+      "style": "Pop Art (Pop Art)",
+      "tags": [
+        "Sweet Romance",
+        "Food",
+        "Business Warfare"
+      ]
+    },
+    {
+      "title": "System Debugger",
+      "outline": "She is a \"debugger\" in the real world, tasked with repairing daily life corrupted by glitch art. When she is ordered to fix a \"glitched beautiful boy,\" she discovers he is not an error, but the sole survivor of a deleted world. Fixing him means erasing the last trace of that world's existence.",
+      "style": "Glitch Art (Glitch Art)",
+      "tags": [
+        "Urban Fantasy",
+        "System",
+        "Choices"
+      ]
+    },
+    {
+      "title": "Typeset Romance",
+      "outline": "She is a rigorous typeface designer, and he is a free-spirited illustrator. Collaborating on a couple's font, sparks fly through the collisions of \"stroke structures\" and their unspoken chemistry in \"visual negative space.\" However, as the font nears completion, they face a crisis of separation due to conflicting design philosophies.",
+      "style": "Swiss Graphic Design (Typography-Centric)",
+      "tags": [
+        "Workplace",
+        "Romance",
+        "Design"
+      ]
+    },
+    {
+      "title": "Paper Crane Messenger",
+      "outline": "She is the heir of an origami lineage, capable of breathing life into paper art. A paper crane she folds transforms into a handsome youth, becoming her guardian spirit. When an ancient curse descends, the paper crane slowly tears and wears down to protect her, forcing her to search through her clan's forbidden arts for a way to make him last forever.",
+      "style": "Papercut Art (Papercut)",
+      "tags": [
+        "Paper Bride",
+        "Protection",
+        "Family Secrets"
+      ]
+    },
+    {
+      "title": "Solar Floriography",
+      "outline": "She is a \"photosynthetic shrine maiden\" who communicates with plants under the sunlight, living in a domed city. She is in love with her partner, a dome maintenance officer, but accidentally discovers that the \"eternal sunshine\" he maintains is slowly killing the last remaining wild plants outside the dome, along with the ancient spirits connected to them.",
+      "style": "Sci-Fi: Solarpunk (Solar Punk)",
+      "tags": [
+        "Environmentalism",
+        "Romance",
+        "Choices"
+      ]
+    },
+    {
+      "title": "Kiss of the Deep",
+      "outline": "She is a marine biologist captured by a mysterious \"Seaborn\" during a deep-sea expedition. Though she should be terrified, she finds unprecedented peace and affection in his inhuman touch and song. If she chooses to stay, she must face the cost of complete deep-sea transformation.",
+      "style": "Fantasy: Lovecraftian Horror (Lovecraftian Horror)",
+      "tags": [
+        "Non-Human",
+        "Dark Romance",
+        "Cthulhu"
+      ]
+    },
+    {
+      "title": "Dark Alley Rose",
+      "outline": "She is a nightclub singer and a private investigator secretly probing a series of disappearances. When she targets a mysterious nobleman who only appears on rainy nights, she discovers he is chasing the very same conspiracy. From mutual suspicion to joining forces, they weave a dangerous and passionate tango amidst the neon and shadows.",
+      "style": "Modern Thriller: Neon Silhouette (Urban Noir)",
+      "tags": [
+        "Detective",
+        "Angst",
+        "Urban"
+      ]
+    },
+    {
+      "title": "The Shepherdess's Secret",
+      "outline": "She is a seemingly naive shepherdess in the English countryside. When a series of bizarre deaths plagues the village and everyone suspects an outsider witch, she uses her rustic wisdom to piece together the quietest malice hidden behind afternoon tea and idle gossip.",
+      "style": "Cozy Mystery: English Village (Cozy Mystery)",
+      "tags": [
+        "Pastoral",
+        "Mystery",
+        "Plot Twist"
+      ]
+    },
+    {
+      "title": "The Rose Garden Ghost",
+      "outline": "She inherits her great-grandmother's abandoned estate and falls in love with the young 'ghost butler' residing there. But every time she tries to touch him, her hand passes through cold mist. To make him physical, she must find the source of the curse—with clues pointing directly to a dark marital history buried beneath the rose garden.",
+      "style": "Gothic Romance: Manor Ruins (Gothic Romance)",
+      "tags": [
+        "Ghost Romance",
+        "Manor",
+        "Mystery"
+      ]
+    },
+    {
+      "title": "The Wolf's Candy House",
+      "outline": "She is a young girl who wanders into the forest of a fairy tale, only to discover that her 'grandmother' is a werewolf sorcerer in disguise, and the candy house is a trap to lure spirits. She must exploit the sorcerer's 'affection' for her to find a way out through the rules of this dark fairy tale and turn the tables on this twisted world.",
+      "style": "Grimm's Fairy Tales: Dark Forest (Fairytale Noir)",
+      "tags": [
+        "Dark Fairy Tale",
+        "Counterattack",
+        "Survival"
+      ]
+    },
+    {
+      "title": "The Oasis Bride",
+      "outline": "She is a rare 'Purifier' in the wasteland, capable of cleansing radiation. To secure water from the oasis, she is married off to the wasteland warlord. On their wedding night, she discovers an unexploded dirty bomb hidden inside her husband's body. Her purification power is the key to defusing it—and the trigger to detonate everything.",
+      "style": "Wasteland Sci-Fi (Post-Apocalyptic)",
+      "tags": [
+        "Wasteland",
+        "Contract Marriage",
+        "Crisis"
+      ]
+    },
+    {
+      "title": "The Monster Codex",
+      "outline": "She is a 'Seer' who can perceive hidden monsters, working as an urban legend investigator to document bizarre occurrences. When she meets a gentle male doctor who always helps her but remains tight-lipped about his own past, she discovers a non-human diagnosis on his medical chart that only she can see.",
+      "style": "Urban Fantasy: Invisible World (Urban Fantasy)",
+      "tags": [
+        "Urban Legend",
+        "Romance",
+        "Suspense"
+      ]
+    },
+    {
+      "title": "The Alchemy of Words",
+      "outline": "She is a clerk at a failing secondhand bookstore who discovers that cutting and pasting specific word combinations from certain books turns them into real objects. She uses this 'word alchemy' to save the shop, but while piecing together a forbidden book, she accidentally summons a captive 'word sprite' yearning for freedom.",
+      "style": "Text and Graphics: Abstractionism (BookPosterLayout)",
+      "tags": [
+        "Magic",
+        "Heartwarming",
+        "Fantasy"
+      ]
+    }
+  ]
+}

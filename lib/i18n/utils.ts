@@ -1,3 +1,4 @@
+import { LOCALES } from "./config";
 import type { Locale } from "./config";
 
 /**
@@ -23,8 +24,8 @@ export function formatTranslation(
 ): string {
   if (Object.keys(params).length === 0) return template;
 
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
-    return params[key]?.toString() ?? `{{${key}}}`;
+  return template.replace(/\{{1,2}(\w+)\}{1,2}/g, (_match, key) => {
+    return params[key]?.toString() ?? `{${key}}`;
   });
 }
 
@@ -59,29 +60,5 @@ export function deepMerge<T extends Record<string, unknown>>(
  * Validate locale string
  */
 export function isValidLocale(locale: string): locale is Locale {
-  const validLocales: Locale[] = [
-    "en",
-    "zh-CN",
-    "zh-TW",
-    "zh-HK",
-    "ja",
-    "ko",
-    "es",
-    "fr",
-    "de",
-    "pt-BR",
-    "pt",
-    "ru",
-    "it",
-    "vi",
-    "th",
-    "id",
-    "tr",
-    "pl",
-    "nl",
-    "uk",
-    "hi",
-    "cs",
-  ];
-  return validLocales.includes(locale as Locale);
+  return (LOCALES as readonly string[]).includes(locale);
 }

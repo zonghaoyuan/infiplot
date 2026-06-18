@@ -24,6 +24,7 @@ import { selectStyle } from "./agents/styleSelector";
 import { directInsertBeat, directScene } from "./director";
 import { STYLE_MAP } from "@/lib/options";
 import { parseJsonLoose } from "./jsonParser";
+import { isValidLocale } from "@/lib/i18n/utils";
 import {
   FREEFORM_CLASSIFY_SYSTEM,
   buildFreeformClassifyUserMessage,
@@ -65,7 +66,7 @@ export async function startSession(
     styleReferenceImage: req.styleReferenceImage?.trim() || undefined,
     orientation: coerceOrientation(req.orientation),
     playerName: req.playerName?.trim() || undefined,
-    language: req.language?.trim() || undefined,
+    language: (req.language?.trim() && isValidLocale(req.language.trim())) ? req.language.trim() : undefined,
   };
 
   // Stage 0 — optional auto style selection. The story bible is no longer

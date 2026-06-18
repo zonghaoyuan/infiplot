@@ -258,6 +258,9 @@ Dreamy watercolor style with soft tones and nostalgic atmosphere
       packFailed: "Failed to pack story share",
     },
 
+    savedStoryNotFound: "Saved story not found",
+    savedStoryCorrupted: "Story data is corrupted",
+
     exportProgress: {
       preparingVoice: "Preparing voice",
     },
