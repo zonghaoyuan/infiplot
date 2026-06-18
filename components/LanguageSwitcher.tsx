@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n/client";
-import { LOCALES, LOCALE_NAMES, type Locale } from "@/lib/i18n/config";
+import { LOCALES, LOCALE_NAMES, type Locale, setLocale as saveLocalePreference } from "@/lib/i18n/config";
 import { localePath, stripLocalePrefix } from "@/lib/i18n/navigation";
 
 interface LanguageSwitcherProps {
@@ -20,7 +20,7 @@ const SHORT_LOCALE_NAMES: Record<Locale, string> = {
 };
 
 export function LanguageSwitcher({ className = "", variant = "full" }: LanguageSwitcherProps) {
-  const { locale, setLocale, t } = useI18n();
+  const { locale, t } = useI18n();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -30,12 +30,10 @@ export function LanguageSwitcher({ className = "", variant = "full" }: LanguageS
   function switchTo(newLocale: Locale) {
     const basePath = stripLocalePrefix(pathname);
     const newPath = localePath(basePath, newLocale);
-    setLocale(newLocale);
-    setIsOpen(false);
-    // Hard navigate so the target page SSR-renders with the new locale's
-    // translations. Soft navigation (router.push) reuses the existing
-    // I18nProvider state, which flashes translation keys while the client
-    // dynamic-imports the new locale bundle.
+    // Only persist to localStorage — do NOT update React state (setLocale)
+    // because that triggers a re-render with isLoading=true before the
+    // browser navigates away, flashing translation keys for one frame.
+    saveLocalePreference(newLocale);
     window.location.href = newPath;
   }
 
