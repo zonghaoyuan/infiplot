@@ -28,7 +28,7 @@ export async function packDoc(docStr: string): Promise<Uint8Array> {
 }
 
 export async function unpackDoc(blob: Uint8Array): Promise<string> {
-  if (blob.length < HEADER_LEN) {
+  if (blob.length < HEADER_LEN + 1) {
     throw new Error("文件太小,不是合法的分享文件");
   }
   for (let i = 0; i < MAGIC.length; i++) {
