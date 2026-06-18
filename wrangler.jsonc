@@ -40,7 +40,7 @@
 
   // ── Secrets (set via Dashboard or `wrangler secret put`) ─────────────
   // Required (3):  TEXT_API_KEY, IMAGE_API_KEY, VISION_API_KEY
-  // Optional (2):  TTS_API_KEY (voice synthesis), GALLERY_SECRET (story share encryption)
+  // Optional (1):  TTS_API_KEY (voice synthesis)
   //
   // ── Runtime variables (set via Dashboard) ────────────────────────────
   // Required (6):  TEXT_BASE_URL, TEXT_MODEL, IMAGE_BASE_URL, IMAGE_MODEL,
