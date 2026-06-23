@@ -13,6 +13,7 @@ import type {
   Session,
   StoryState,
   StoryStatePatch,
+  StreamRouterResult,
   WriterScenePlan,
 } from "@infiplot/types";
 import type { CharacterCard } from "./agents/characterDesigner";
@@ -259,6 +260,25 @@ export async function directScene(
       resolvePlan(extracted);
     }
     return result;
+  }).catch((err): StreamRouterResult => {
+    // routeTaggedStream rejected (stream read / network failure) BEFORE onPlan
+    // fired. Without this, planPromise would never settle and `await
+    // planPromise` below would hang the whole request FOREVER. Settle the plan
+    // with a minimal fallback and resolve routing to a degraded result so the
+    // pipeline produces a playable fallback scene (graceful degradation) rather
+    // than hanging or hard-crashing.
+    console.warn("[directScene] routeTaggedStream rejected, degrading:", err);
+    if (!planSettled) {
+      planSettled = true;
+      resolvePlan(minimalFallbackPlan());
+    }
+    return {
+      plan: undefined,
+      beats: [],
+      choices: undefined,
+      rawStorySegment: undefined,
+      degraded: true,
+    };
   });
 
   // ── Step 2 — await plan (settles at </plan> close — EARLY) ────────

@@ -27,7 +27,11 @@ export const WRITER_SEGMENTS: PromptSegment[] = [
   WRITER_FORMAT,
 ];
 
-if (process.env.NODE_ENV === "development") {
+// Validate unique segment IDs in ALL environments (not just development).
+// A duplicate ID — e.g. introduced by a bad merge — would otherwise silently
+// shadow a segment in production. This runs once at module load; the cost is
+// negligible. Throwing fast surfaces the misconfiguration at startup.
+{
   const ids = WRITER_SEGMENTS.map((s) => s.id);
   const seen = new Set<string>();
   for (const id of ids) {
