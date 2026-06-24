@@ -1503,6 +1503,8 @@ function PlayInner() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === "f" || e.key === "F") {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         e.preventDefault();
