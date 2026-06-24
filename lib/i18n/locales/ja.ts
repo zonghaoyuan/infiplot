@@ -131,6 +131,7 @@ export const ja = {
       cancel: "キャンセル",
       saveAndSelect: "保存して適用",
       feedback: "フィードバック",
+      submitFeedback: "フィードバックを送信",
     },
 
     // Style modal
@@ -180,6 +181,7 @@ export const ja = {
       contact: "連絡先",
       email: "メールアドレス",
       openSource: "ソースコード",
+      feedbackDescription: "ご意見をお聞かせください。体験やご提案をお待ちしています。",
       betaUsers: "クローズドβユーザーグループ",
       qqGroupLabel: "QQグループ番号：",
       qqGroupAlt: "InfiPlot オープンβ交流QQグループ QRコード（グループ番号 575404333）",

@@ -120,6 +120,7 @@ export const en = {
       cancel: "Cancel",
       saveAndSelect: "Save and Select",
       feedback: "Feedback",
+      submitFeedback: "Submit Feedback",
     },
 
     styleModal: {
@@ -165,6 +166,7 @@ Dreamy watercolor style with soft tones and nostalgic atmosphere
       contact: "CONTACT",
       email: "Email",
       openSource: "OPEN SOURCE",
+      feedbackDescription: "Your thoughts matter — tell us about your experience and suggestions.",
       betaUsers: "BETA USERS",
       qqGroupLabel: "QQ Group: ",
       qqGroupAlt: "InfiPlot Public Beta Group QR Code (Group ID: 575404333)",
