@@ -6,6 +6,7 @@ import type {
   Character,
   CharacterIntent,
   EngineConfig,
+  InsertBeatMulti,
   InsertBeatPartial,
   ProviderConfig,
   Scene,
@@ -562,17 +563,32 @@ export async function directScene(
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  directInsertBeat — single-agent path for vision-driven in-scene
-//  exploration. Generates ONE transient beat with NO new image, NO new
-//  characters. Multi-agent pipeline doesn't apply here (no rendering, no
-//  character introduction allowed by the prompt).
+//  directInsertBeat — single-agent path for in-scene exploration.
+//  Generates 1-3 beats with NO new image, NO new characters, plus
+//  follow-up choices so the player isn't dumped back to the old options.
 // ──────────────────────────────────────────────────────────────────────
+
+function coerceBeatPartial(raw: Record<string, unknown>): InsertBeatPartial | null {
+  const narration = (typeof raw.narration === "string" ? raw.narration.trim() : undefined) || undefined;
+  const rawSpeaker = (typeof raw.speaker === "string" ? raw.speaker.trim() : undefined) || undefined;
+  const speaker = rawSpeaker ? normalizeSpeakerName(rawSpeaker) : undefined;
+  const line = (typeof raw.line === "string" ? raw.line.trim() : undefined) || undefined;
+  const lineDelivery =
+    line && speaker !== POV_DISPLAY_NAME
+      ? ((typeof raw.lineDelivery === "string" ? raw.lineDelivery.trim() : undefined) || undefined)
+      : undefined;
+  if (!narration && !speaker && !line) return null;
+  if (line && !speaker) {
+    return { narration: [narration, line].filter(Boolean).join("\n") || undefined };
+  }
+  return { narration, speaker, line, lineDelivery };
+}
 
 export async function directInsertBeat(
   config: ProviderConfig,
   session: Session,
   freeformAction: string,
-): Promise<InsertBeatPartial> {
+): Promise<InsertBeatPartial[]> {
   const raw = await chat(
     config,
     [
@@ -585,22 +601,25 @@ export async function directInsertBeat(
     { temperature: 0.9, tag: "insert-beat" },
   );
 
-  const parsed = parseJsonLoose<InsertBeatPartial>(raw);
+  const parsed = parseJsonLoose<InsertBeatMulti & InsertBeatPartial>(raw);
 
-  const narration = parsed.narration?.trim() || undefined;
-  const rawSpeaker = parsed.speaker?.trim() || undefined;
-  // Pattern B (mirrors Writer): normalize POV variants → "你"; NPCs pass through.
-  const speaker = rawSpeaker ? normalizeSpeakerName(rawSpeaker) : undefined;
-  const line = parsed.line?.trim() || undefined;
-  // lineDelivery is only meaningful for NPC speakers (TTS). For POV ("你")
-  // TTS is intentionally skipped on the client, so lineDelivery is dropped.
-  const lineDelivery =
-    line && speaker !== POV_DISPLAY_NAME
-      ? parsed.lineDelivery?.trim() || undefined
-      : undefined;
-
-  if (!narration && !speaker && !line) {
-    return { narration: "（你停下脚步，环视片刻。）" };
+  // Multi-beat format: { beats: [...] }
+  if (Array.isArray(parsed.beats) && parsed.beats.length > 0) {
+    const beats = parsed.beats
+      .slice(0, 3)
+      .map((b) =>
+        b && typeof b === "object"
+          ? coerceBeatPartial(b as Record<string, unknown>)
+          : null,
+      )
+      .filter((b): b is InsertBeatPartial => b !== null);
+    if (beats.length === 0) {
+      beats.push({ narration: "（你停下脚步，环视片刻。）" });
+    }
+    return beats;
   }
-  return { narration, speaker, line, lineDelivery };
+
+  // Legacy single-beat fallback
+  const single = coerceBeatPartial(parsed as Record<string, unknown>);
+  return [single ?? { narration: "（你停下脚步，环视片刻。）" }];
 }

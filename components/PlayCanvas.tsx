@@ -148,13 +148,13 @@ function ChoiceButton({
       />
       <span className="relative flex items-baseline gap-2">
         <span
-          className={`shrink-0 font-serif num ${vertical ? "text-[13px]" : "text-[11px]"}`}
+          className={`shrink-0 font-serif num ${vertical ? "text-[16px]" : "text-[14px]"}`}
           style={{ color: "rgba(195,155,75,0.9)" }}
         >
           {index + 1}.
         </span>
         <span
-          className={`font-serif leading-snug ${vertical ? "text-[15px]" : "text-[13px] md:text-[14px]"}`}
+          className={`font-serif leading-snug ${vertical ? "text-[18px]" : "text-[16px] md:text-[17px]"}`}
           style={{ color: "rgba(245,235,210,0.95)" }}
         >
           {label}
@@ -518,7 +518,7 @@ export function PlayCanvas({
                         placeholder={t("play.freeform.placeholder")}
                         maxLength={50}
                         autoFocus
-                        className="flex-1 min-w-0 bg-transparent border-none outline-none font-serif text-[14px] placeholder:text-[rgba(200,185,155,0.50)]"
+                        className="flex-1 min-w-0 bg-transparent border-none outline-none font-serif text-[17px] placeholder:text-[rgba(200,185,155,0.50)]"
                         style={{ color: "rgba(245,235,210,0.95)" }}
                       />
                       <button
@@ -593,7 +593,7 @@ export function PlayCanvas({
                                 style={{ color: "rgba(195,155,75,0.60)" }}
                               />
                               <span
-                                className="font-serif text-[13px]"
+                                className="font-serif text-[16px]"
                                 style={{ color: "rgba(200,185,155,0.70)" }}
                               >
                                 {t("play.freeform.title")}
@@ -644,7 +644,7 @@ export function PlayCanvas({
                   {beat.speaker && (
                     <p
                       className={`font-serif smallcaps mb-[0.6em] ${
-                        portrait ? "text-[13px]" : "text-[11px] md:text-[12px]"
+                        portrait ? "text-[16px]" : "text-[14px] md:text-[15px]"
                       }`}
                       style={{ color: "rgba(205,165,90,0.92)" }}
                     >
@@ -659,7 +659,7 @@ export function PlayCanvas({
                   {beat.speaker && beat.narration && (
                     <p
                       className={`font-serif leading-[1.85] mb-[0.6em] ${
-                        portrait ? "text-[15px]" : "text-[12px] md:text-[14px]"
+                        portrait ? "text-[18px]" : "text-[15px] md:text-[17px]"
                       }`}
                       style={{ color: "rgba(228,218,196,0.88)" }}
                     >
@@ -669,7 +669,7 @@ export function PlayCanvas({
 
                   <p
                     className={`font-serif leading-[1.85] ${
-                      portrait ? "text-[16px]" : "text-[13px] md:text-[15px]"
+                      portrait ? "text-[19px]" : "text-[16px] md:text-[18px]"
                     }`}
                     style={{ color: "rgba(245,235,210,0.95)" }}
                   >

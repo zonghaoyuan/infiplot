@@ -74,7 +74,7 @@ jobs:
           # Link to the authoritative English CLA. Chinese reference:
           # https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.zh.md
           path-to-cla-document: "https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.md"
-          allowlist: "github-actions[bot],dependabot[bot],zonghaoyuan,web-flow"
+          allowlist: "github-actions[bot],dependabot[bot],zonghaoyuan,web-flow,noreply@anthropic.com"
           block-sharing-crucial-repositories: true
 
           create-file-commit-message: "docs(cla): create CLA signature store"

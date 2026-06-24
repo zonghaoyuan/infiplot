@@ -695,8 +695,15 @@ export type InsertBeatPartial = {
   lineDelivery?: string;
 };
 
+/** Multi-beat response: 1-3 beats. */
+export type InsertBeatMulti = {
+  beats: InsertBeatPartial[];
+};
+
 export type InsertBeatResponse = {
   partial: InsertBeatPartial;
+  /** Additional beats beyond the first (for richer insert-beat interactions). */
+  extraBeats?: InsertBeatPartial[];
   characters: Character[];
 };
 

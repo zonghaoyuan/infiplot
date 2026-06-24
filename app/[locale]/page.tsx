@@ -2077,7 +2077,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-y-10 text-center md:grid-cols-3 md:gap-x-10">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-y-10 text-center md:grid-cols-2 lg:grid-cols-4 md:gap-x-10">
           <div>
             <p className="text-[10px] smallcaps text-clay-500 mb-3">{t("home.about.team")}</p>
             <p className="font-serif italic text-clay-700 text-base leading-relaxed">
@@ -2134,6 +2134,22 @@ export default function HomePage() {
               <span className="font-sans text-sm text-clay-900">575404333</span>
             </p>
           </div>
+
+          <div>
+            <p className="text-[10px] smallcaps text-clay-500 mb-3">{t("home.ui.feedback")}</p>
+            <p className="font-serif text-clay-700 text-base leading-relaxed mb-4">
+              {t("home.about.feedbackDescription")}
+            </p>
+            <a
+              href="https://tally.so/r/VLqO1M"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-clay-700 hover:text-ember-500 transition-colors"
+            >
+              <i className="fa-solid fa-comment-dots text-[15px]" />
+              <span className="font-sans text-sm">{t("home.ui.submitFeedback")}</span>
+            </a>
+          </div>
         </div>
 
         <div className="hairline-full w-full mt-14 md:mt-20 mb-12 md:mb-16" />
@@ -2154,6 +2170,7 @@ export default function HomePage() {
           </span>
         </div>
       </footer>
+
 
       {styleOpen && styleRow >= 0 && (
         <StyleModal

@@ -196,45 +196,42 @@ export async function requestInsertBeat(
 ): Promise<InsertBeatResponse> {
   const tTotal = Date.now();
 
-  const partial = await directInsertBeat(
+  const result = await directInsertBeat(
     config.text,
     req.session,
     req.freeformAction,
   );
 
-  // INSERT_BEAT prompt forbids new NPCs — promote disallowed-speaker lines
-  // to narration so the player still sees the text (the client only renders
-  // `line` when there is a `speaker`).
-  //
-  // Exception (Pattern B): speaker = "你" is the player speaking. No
-  // Character record exists for "你" (intentional — TTS is skipped), so we
-  // must NOT demote it; the client renders the dialog box correctly.
-  // directInsertBeat already normalized POV variants to "你" before this
-  // guard, so a literal "你" here is always Pattern B player dialog.
-  if (
-    partial.speaker &&
-    partial.speaker !== "你" &&
-    !req.session.characters.some((c) => c.name === partial.speaker)
-  ) {
-    console.warn(
-      `[insert-beat] unregistered speaker "${partial.speaker}" ignored`,
-    );
-    const promotedNarration =
-      [partial.narration, partial.line].filter(Boolean).join("\n") || undefined;
-    tlog("[insert-beat] TOTAL", tTotal);
-    return {
-      partial: {
-        narration: promotedNarration,
+  // Guard every beat: promote unregistered speakers to narration.
+  const guardedBeats = result.map((partial) => {
+    if (
+      partial.speaker &&
+      partial.speaker !== "你" &&
+      !req.session.characters.some((c) => c.name === partial.speaker)
+    ) {
+      console.warn(
+        `[insert-beat] unregistered speaker "${partial.speaker}" ignored`,
+      );
+      return {
+        narration:
+          [partial.narration, partial.line].filter(Boolean).join("\n") || undefined,
         speaker: undefined,
         line: undefined,
         lineDelivery: undefined,
-      },
-      characters: req.session.characters,
-    };
-  }
+      };
+    }
+    return partial;
+  });
+
+  const first = guardedBeats[0] ?? { narration: "（你停下脚步，环视片刻。）" };
+  const extra = guardedBeats.slice(1);
 
   tlog("[insert-beat] TOTAL", tTotal);
-  return { partial, characters: req.session.characters };
+  return {
+    partial: first,
+    extraBeats: extra.length > 0 ? extra : undefined,
+    characters: req.session.characters,
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────

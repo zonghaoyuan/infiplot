@@ -130,6 +130,8 @@ export const zhCN = {
       save: "保存",
       cancel: "取消",
       saveAndSelect: "保存并选用",
+      feedback: "反馈",
+      submitFeedback: "提交反馈",
     },
 
     // Style modal
@@ -179,6 +181,7 @@ export const zhCN = {
       contact: "联 系 方 式",
       email: "邮箱",
       openSource: "开 源 地 址",
+      feedbackDescription: "你的想法对我们很重要，欢迎告诉我们你的体验和建议。",
       betaUsers: "内 测 用 户 群",
       qqGroupLabel: "QQ群号：",
       qqGroupAlt: "InfiPlot 公测交流群 QQ 群二维码（群号 575404333）",

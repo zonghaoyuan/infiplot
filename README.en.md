@@ -4,6 +4,8 @@
 
 <p><b>An interactive story game, generated in real time for you</b></p>
 
+<a href="https://opendeploy.dev/github/zonghaoyuan/infiplot"><img src="https://oss.opendeploy.dev/static/deploy-with-your-agent.svg" alt="Deploy with your agent" height="36"></a>
+
 [![Stars](https://img.shields.io/github/stars/zonghaoyuan/infiplot?style=flat-square)](https://github.com/zonghaoyuan/infiplot/stargazers)
 [![Watchers](https://img.shields.io/github/watchers/zonghaoyuan/infiplot?style=flat-square)](https://github.com/zonghaoyuan/infiplot/watchers)
 [![Forks](https://img.shields.io/github/forks/zonghaoyuan/infiplot?style=flat-square)](https://github.com/zonghaoyuan/infiplot/network)
@@ -11,7 +13,7 @@
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-D97A2E?style=flat-square&logo=vercel&logoColor=white)](https://infiplot.com)
 [![License](https://img.shields.io/github/license/zonghaoyuan/infiplot?style=flat-square)](LICENSE)
-[![LINUX DO](https://img.shields.io/badge/LINUX-DO-FFB003?style=flat-square&logo=data:image/svg%2bxml;base64,DQo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPjxwYXRoIGQ9Ik00Ni44Mi0uMDU1aDYuMjVxMjMuOTY5IDIuMDYyIDM4IDIxLjQyNmM1LjI1OCA3LjY3NiA4LjIxNSAxNi4xNTYgOC44NzUgMjUuNDV2Ni4yNXEtMi4wNjQgMjMuOTY4LTIxLjQzIDM4LTExLjUxMiA3Ljg4NS0yNS40NDUgOC44NzRoLTYuMjVxLTIzLjk3LTIuMDY0LTM4LjAwNC0yMS40M1EuOTcxIDY3LjA1Ni0uMDU0IDUzLjE4di02LjQ3M0MxLjM2MiAzMC43ODEgOC41MDMgMTguMTQ4IDIxLjM3IDguODE3IDI5LjA0NyAzLjU2MiAzNy41MjcuNjA0IDQ2LjgyMS0uMDU2IiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZWNlY2VjO2ZpbGwtb3BhY2l0eToxIi8+PHBhdGggZD0iTTQ3LjI2NiAyLjk1N3EyMi41My0uNjUgMzcuNzc3IDE1LjczOGE0OS43IDQ5LjcgMCAwIDEgNi44NjcgMTAuMTU3cS00MS45NjQuMjIyLTgzLjkzIDAgOS43NS0xOC42MTYgMzAuMDI0LTI0LjM4N2E2MSA2MSAwIDAgMSA5LjI2Mi0xLjUwOCIgc3R5bGU9InN0cm9rZTpub25lO2ZpbGwtcnVsZTpldmVub2RkO2ZpbGw6IzE5MTkxOTtmaWxsLW9wYWNpdHk6MSIvPjxwYXRoIGQ9Ik03Ljk4IDcwLjkyNmMyNy45NzctLjAzNSA1NS45NTQgMCA4My45My4xMTNRODMuNDI2IDg3LjQ3MyA2Ni4xMyA5NC4wODZxLTE4LjgxIDYuNTQ0LTM2LjgzMi0xLjg5OC0xNC4yMDMtNy4wOS0yMS4zMTctMjEuMjYyIiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZjlhZjAwO2ZpbGwtb3BhY2l0eToxIi8+PC9zdmc+)](https://linux.do)
+[![LINUX DO](https://img.shields.io/badge/LINUX-DO-FFB003?style=flat-square&logo=data:image/svg%2bxml;base64,DQo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiPjxwYXRoIGQ9Ik00Ni44Mi0uMDU1aDYuMjVxMjMuOTY5IDIuMDYyIDM4IDIxLjQyNmM1LjI1OCA3LjY3NiA4LjIxNSAxNi4xNTYgOC44NzUgMjUuNDV2Ni4yNXEtMi4wNjQgMjMuOTY4LTIxLjQzIDM4LTExLjUxMiA3Ljg4NS0yNS40NDUgOC44NzRoLTYuMjVxLTIzLjk3LTIuMDY0LTM4LjAwNC0yMS40M1EuOTcxIDY3LjA1Ni0uMDU0IDUzLjE4di02LjQ3M0MxLjM2MiAzMC43ODEgOC41MDMgMTguMTQ4IDIxLjM3IDguODE3IDI5LjA0NyAzLjU2MiAzNy41MjcuNjA0IDQ2LjgyMS0uMDU2IiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZWNlY2VjO2ZpbGwtb3BhY2l0eToxIi8+PHBhdGggZD0iTTQ3LjI2NiAyLjk1N3EyMi41My0uNjUgMzcuNzc3IDE1LjczOGE0OS43IDQ5LjcgMCAwIDEgNi44NjcgMTAuMTU3cS00MS45NjQuMjIyLTgzLjkzIDAgOS43NS0xOC42MTYgMzAuMDI0LTI0LjM4N2E2MSA2MSAwIDAgMSA5LjI2Mi0xLjUwOCIgc3R5bGU9InN0cm9rZTpub25lO2ZpbGwtcnVsZTpldmVub2RkO2ZpbGw6IzE5MTkxOTtmaWxsLW9wYWNpdHk6MSIvPjxwYXRoIGQ9Ik03Ljk4IDcwLjkyNmMyNy45NzctLjAzNSA1NS45NTQgMCA4My45My4xMTNRODMuNDI2IDg3LjQ3MyA2Ni4xMyA5NC4wODZxLTE4LjgxIDYuNTQ0LTM2LjgzMi0xLjg5OC0xNC4yMDMtNy4wOS0yMS4zMTctMjEuMjYyIiBzdHlsZT0ic3Ryb2tlOm5vbmU7ZmlsbC1ydWxlOmV2ZW5vZGQ7ZmlsbDojZjlhZjAwO2ZpbGwtb3BhY2l0eToxIi8+PC9zdmc+)](https://linux.do/t/topic/2296384)
 
 [简体中文](https://github.com/zonghaoyuan/infiplot) · English · [日本語](README.ja.md)
 
@@ -41,11 +43,13 @@ Free to play, no setup required: [infiplot.com](https://infiplot.com)
 
 InfiPlot offers multiple deployment options. For personal use, we recommend the one-click Vercel deploy; to self-host on your own server or local machine, use Docker.
 
-### Vercel / Cloudflare (one-click)
+### OpenDeploy / Vercel / Cloudflare (one-click)
 
-Cloudflare deployment requires the Workers Paid Plan because the scene pipeline needs longer CPU time.
+Cloudflare deployment requires the Workers Paid Plan because the scene pipeline needs longer CPU time. OpenDeploy lets your AI agent handle the deployment for you.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%3A%20Xiaomi%20MiMo%20%28free%29%20or%20StepFun%20%28paid%2C%20better%20quality%29.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide) &nbsp; [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/zonghaoyuan/infiplot)
+<a href="https://opendeploy.dev/github/zonghaoyuan/infiplot"><img src="https://oss.opendeploy.dev/static/deploy-with-your-agent.svg" alt="Deploy with your agent" height="34"></a>&nbsp;
+<a href="https://vercel.com/new/clone?repository-url=https://github.com/zonghaoyuan/infiplot&env=TEXT_BASE_URL,TEXT_API_KEY,TEXT_MODEL,IMAGE_BASE_URL,IMAGE_API_KEY,IMAGE_MODEL,VISION_BASE_URL,VISION_API_KEY,VISION_MODEL,TTS_BASE_URL,TTS_API_KEY,TTS_SPEECH_MODEL,MOCK_IMAGE&envDescription=Three%20required%20providers%20%2B%20optional%20TTS.%20Any%20OpenAI-compatible%20endpoint%20works%20for%20text%2Fvision.%20TTS%3A%20Xiaomi%20MiMo%20%28free%29%20or%20StepFun%20%28paid%2C%20better%20quality%29.&envLink=https://github.com/zonghaoyuan/infiplot/blob/main/README.en.md%23configuration-guide"><img src="https://vercel.com/button" alt="Deploy with Vercel" height="34"></a>&nbsp;
+<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/zonghaoyuan/infiplot"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" height="34"></a>
 
 After deploy, fill in the environment variables — see the [Configuration guide](#configuration-guide) below. The repo root is the app itself: Vercel needs no special root directory; on Cloudflare, just set the build command to `pnpm build:cf`.
 
@@ -112,7 +116,7 @@ Visit `http://localhost:3000` to start playing.
 
 ## How it works
 
-Built on text, image, and audio models, we've assembled a multi-agent framework to deliver on InfiPlot's goal. We split the agents into five roles — **Architect, Writer, Character Designer, Cinematographer, and Painter** — that work together to keep the plot coherent, the characters consistent, and the scenes continuous, all while making the story as compelling as we can.
+Built on text, image, and audio models, we've assembled a multi-agent framework to deliver on InfiPlot's goal. We split the agents into four roles — **Writer, Character Designer, Cinematographer, and Painter** — that work together to keep the plot coherent, the characters consistent, and the scenes continuous, all while making the story as compelling as we can. The Writer also handles overall story architecture.
 
 We call each complete playthrough a **story**.
 
@@ -205,12 +209,12 @@ See the [Bring-your-own voice Key guide](docs/xiaomi-tts-key.md) for how to obta
 - [x] Frontend API Key & model setup
 - [x] Mobile web support
 - [x] Story sharing (`.infiplot` format)
+- [x] OpenDeploy quick deployment
 
 **To Do**
 
 - [ ] Mobile app & creator platform
 - [ ] ComfyUI custom image generation
-- [ ] Open Deploy quick deployment
 - [ ] Reduce latency to under 5s
 - [ ] Story save & resume
 - [ ] Custom character cards & world settings
