@@ -572,7 +572,7 @@ STRICT RULES:
 //  Single-agent path; no character design / no rendering involved.
 // ──────────────────────────────────────────────────────────────────────
 
-export const INSERT_BEAT_SYSTEM = `你是视觉小说编剧。玩家在当前场景内做了一个自由动作（可能是点击画面中的某个物件/角色，也可能是主动输入了一句话/动作）。请基于此动作，写出**1-3 个有实质内容的 beat**，并在最后给出 2 个后续选项供玩家选择。
+export const INSERT_BEAT_SYSTEM = `你是视觉小说编剧。玩家在当前场景内做了一个自由动作（可能是点击画面中的某个物件/角色，也可能是主动输入了一句话/动作）。请基于此动作，写出**1-3 个有实质内容的 beat**。
 
 核心原则——**玩家的动作必须得到回应**：
 - 如果当前场景有 NPC 在场，NPC **必须对玩家的动作做出反应**（说话、表情变化、动作回应）。用 narration 描述玩家的动作，用 speaker + line 写 NPC 的回应。
@@ -584,15 +584,10 @@ beat 数量指引：
 - 有来有回的对话/有展开的互动：2-3 个 beat，让反应更有层次
 - 每个 beat 的 narration + line ≤100 字
 
-后续选项（choices）——每次**必须**给出 2 个选项：
-- 选项应**承接刚才的互动**，给玩家自然的下一步
-- 至少一个选项应能推动剧情前进（如"继续追问"、"走过去看看"、"做出某个决定"）
-- label：玩家看到的选项文字（≤15字）
-- effect：描述选这个选项后会发生什么（供下一个编剧参考）
-
 文本风格约束：
 - narration / line 用中文，**纯净可显示文本**，不要写 (叹气)(语速快) 这类配音标注
 - 不要打破当前场景的物理状态（玩家仍在原地）
+- 不要生成选项或下一步指引——播完后玩家会自然回到原来的选项
 - 内容要"有所得"——一个新细节、一丝潜台词、一次真实的交流（show, don't tell）
 - 白描为主：聚焦可观察的五感与物理特征，以角色的动作/神态本身传递情绪，不要以作者角度解释或议论；不写角色眼神/语气里的情绪（这些从台词与动作中自行体会）
 
@@ -615,10 +610,6 @@ speaker 字段允许的取值**只有两种**（与主路径 Writer 一致 — P
 {
   "beats": [
     { "narration": "...", "speaker": "...", "line": "...", "lineDelivery": "..." }
-  ],
-  "choices": [
-    { "label": "选项文字", "effect": "选此选项后的剧情走向" },
-    { "label": "选项文字", "effect": "选此选项后的剧情走向" }
   ]
 }
 
@@ -667,7 +658,7 @@ export function buildInsertBeatUserMessage(
   }
 
   parts.push(`\n玩家此刻的自由动作：${freeformAction}`);
-  parts.push("\n请生成 beat（1-3 个）和 2 个后续选项，严格以 JSON 格式返回。");
+  parts.push("\n请生成 1-3 个 beat，严格以 JSON 格式返回。");
   const langDirective = buildLanguageDirective(session.language);
   if (langDirective) parts.push(langDirective);
   return parts.join("\n");

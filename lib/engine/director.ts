@@ -578,6 +578,9 @@ function coerceBeatPartial(raw: Record<string, unknown>): InsertBeatPartial | nu
       ? ((typeof raw.lineDelivery === "string" ? raw.lineDelivery.trim() : undefined) || undefined)
       : undefined;
   if (!narration && !speaker && !line) return null;
+  if (line && !speaker) {
+    return { narration: [narration, line].filter(Boolean).join("\n") || undefined };
+  }
   return { narration, speaker, line, lineDelivery };
 }
 
@@ -585,7 +588,7 @@ export async function directInsertBeat(
   config: ProviderConfig,
   session: Session,
   freeformAction: string,
-): Promise<{ beats: InsertBeatPartial[]; choices?: { label: string; effect: string }[] }> {
+): Promise<InsertBeatPartial[]> {
   const raw = await chat(
     config,
     [
@@ -600,25 +603,23 @@ export async function directInsertBeat(
 
   const parsed = parseJsonLoose<InsertBeatMulti & InsertBeatPartial>(raw);
 
-  // New multi-beat format: { beats: [...], choices: [...] }
+  // Multi-beat format: { beats: [...] }
   if (Array.isArray(parsed.beats) && parsed.beats.length > 0) {
     const beats = parsed.beats
       .slice(0, 3)
-      .map((b) => coerceBeatPartial(b as Record<string, unknown>))
+      .map((b) =>
+        b && typeof b === "object"
+          ? coerceBeatPartial(b as Record<string, unknown>)
+          : null,
+      )
       .filter((b): b is InsertBeatPartial => b !== null);
     if (beats.length === 0) {
       beats.push({ narration: "（你停下脚步，环视片刻。）" });
     }
-    const choices = Array.isArray(parsed.choices)
-      ? parsed.choices
-          .filter((c) => c && typeof c.label === "string" && c.label.trim() && typeof c.effect === "string" && c.effect.trim())
-          .slice(0, 2)
-          .map((c) => ({ label: c.label.trim(), effect: c.effect.trim() }))
-      : undefined;
-    return { beats, choices: choices?.length ? choices : undefined };
+    return beats;
   }
 
   // Legacy single-beat fallback
   const single = coerceBeatPartial(parsed as Record<string, unknown>);
-  return { beats: [single ?? { narration: "（你停下脚步，环视片刻。）" }] };
+  return [single ?? { narration: "（你停下脚步，环视片刻。）" }];
 }

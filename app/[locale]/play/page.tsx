@@ -2308,7 +2308,7 @@ function PlayInner() {
 
       if (decision.classify === "insert-beat") {
         setPhase("inserting-beat");
-        const { partial, extraBeats, followUpChoices, characters: insertChars } = await requestInsertBeat({
+        const { partial, extraBeats, characters: insertChars } = await requestInsertBeat({
           session,
           freeformAction: decision.intent.freeformAction,
           clientTts: !!byoTtsRef.current,
@@ -2333,24 +2333,11 @@ function PlayInner() {
           });
         }
 
-        // Chain beats: each points to the next; last one gets choices or falls back to original beat
+        // Chain beats: each points to the next; last one loops back to original beat
         for (let i = 0; i < newBeats.length - 1; i++) {
           newBeats[i]!.next = { type: "continue", nextBeatId: newBeatIds[i + 1]! };
         }
-
-        const lastInsertedBeat = newBeats[newBeats.length - 1]!;
-        if (followUpChoices && followUpChoices.length > 0) {
-          lastInsertedBeat.next = {
-            type: "choice",
-            choices: followUpChoices.map((c, ci) => ({
-              id: `c_ins_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${ci}`,
-              label: c.label,
-              effect: { kind: "change-scene" as const, nextSceneSeed: c.effect },
-            })),
-          };
-        } else {
-          lastInsertedBeat.next = { type: "continue", nextBeatId: fromBeatId };
-        }
+        newBeats[newBeats.length - 1]!.next = { type: "continue", nextBeatId: fromBeatId };
 
         const patched: Scene = {
           ...currentScene,

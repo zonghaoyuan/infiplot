@@ -203,7 +203,7 @@ export async function requestInsertBeat(
   );
 
   // Guard every beat: promote unregistered speakers to narration.
-  const guardedBeats = result.beats.map((partial) => {
+  const guardedBeats = result.map((partial) => {
     if (
       partial.speaker &&
       partial.speaker !== "你" &&
@@ -230,7 +230,6 @@ export async function requestInsertBeat(
   return {
     partial: first,
     extraBeats: extra.length > 0 ? extra : undefined,
-    followUpChoices: result.choices,
     characters: req.session.characters,
   };
 }
