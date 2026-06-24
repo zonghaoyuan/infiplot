@@ -572,18 +572,27 @@ STRICT RULES:
 //  Single-agent path; no character design / no rendering involved.
 // ──────────────────────────────────────────────────────────────────────
 
-export const INSERT_BEAT_SYSTEM = `你是视觉小说编剧。玩家在当前场景内做了一个自由动作（可能是点击画面中的某个物件/角色，也可能是主动输入了一句话/动作）。请基于此动作，写出**一个有实质内容的 beat**。
+export const INSERT_BEAT_SYSTEM = `你是视觉小说编剧。玩家在当前场景内做了一个自由动作（可能是点击画面中的某个物件/角色，也可能是主动输入了一句话/动作）。请基于此动作，写出**1-3 个有实质内容的 beat**，并在最后给出 2 个后续选项供玩家选择。
 
 核心原则——**玩家的动作必须得到回应**：
 - 如果当前场景有 NPC 在场，NPC **必须对玩家的动作做出反应**（说话、表情变化、动作回应）。用 narration 描述玩家的动作，用 speaker + line 写 NPC 的回应。
 - 如果场景中没有 NPC（纯环境），可以用 narration 描述玩家的观察/发现，给玩家一个新细节或情绪波动。
 - 不要写"你想做什么但没做"这种无意义的犹豫——玩家已经做了，世界要有反馈。
 
+beat 数量指引：
+- 简单观察/短回应：1 个 beat 即可
+- 有来有回的对话/有展开的互动：2-3 个 beat，让反应更有层次
+- 每个 beat 的 narration + line ≤100 字
+
+后续选项（choices）——每次**必须**给出 2 个选项：
+- 选项应**承接刚才的互动**，给玩家自然的下一步
+- 至少一个选项应能推动剧情前进（如"继续追问"、"走过去看看"、"做出某个决定"）
+- label：玩家看到的选项文字（≤15字）
+- effect：描述选这个选项后会发生什么（供下一个编剧参考）
+
 文本风格约束：
 - narration / line 用中文，**纯净可显示文本**，不要写 (叹气)(语速快) 这类配音标注
-- narration 与 line 加起来 ≤100 字
 - 不要打破当前场景的物理状态（玩家仍在原地）
-- 不要生成选项或下一步指引 —— 玩家点击会自然回到原 beat
 - 内容要"有所得"——一个新细节、一丝潜台词、一次真实的交流（show, don't tell）
 - 白描为主：聚焦可观察的五感与物理特征，以角色的动作/神态本身传递情绪，不要以作者角度解释或议论；不写角色眼神/语气里的情绪（这些从台词与动作中自行体会）
 
@@ -604,13 +613,16 @@ speaker 字段允许的取值**只有两种**（与主路径 Writer 一致 — P
 
 必须输出严格 JSON：
 {
-  "narration": "...",
-  "speaker": "...",
-  "line": "...",
-  "lineDelivery": "..."
+  "beats": [
+    { "narration": "...", "speaker": "...", "line": "...", "lineDelivery": "..." }
+  ],
+  "choices": [
+    { "label": "选项文字", "effect": "选此选项后的剧情走向" },
+    { "label": "选项文字", "effect": "选此选项后的剧情走向" }
+  ]
 }
 
-narration/speaker/line/lineDelivery 都可为空字符串。不要输出 JSON 以外的任何文本。`;
+不要输出 JSON 以外的任何文本。`;
 
 export function buildInsertBeatUserMessage(
   session: Session,
@@ -655,7 +667,7 @@ export function buildInsertBeatUserMessage(
   }
 
   parts.push(`\n玩家此刻的自由动作：${freeformAction}`);
-  parts.push("\n请生成一个有实质回应的 beat，严格以 JSON 格式返回。");
+  parts.push("\n请生成 beat（1-3 个）和 2 个后续选项，严格以 JSON 格式返回。");
   const langDirective = buildLanguageDirective(session.language);
   if (langDirective) parts.push(langDirective);
   return parts.join("\n");
@@ -670,11 +682,12 @@ export function buildInsertBeatUserMessage(
 export const VISION_SYSTEM_PROMPT = `你是视觉理解助手。玩家在视觉小说的背景图上点击了红色圆点位置（HTML 上的选项按钮不会走到你这里）。你的任务是：
 1. 看清红点指向画面里的什么（物件、角色、空间、远处的方向）
 2. 推断玩家想干什么
-3. 判断这个动作是「场内探索」（不该换图）还是「场景切换」（要换图）
+3. 判断这个动作是「场内探索」还是「场景切换」
 
 判断准则：
-- "insert-beat"（场内探索）：观察画面里某个细节、自言自语、和当前角色继续互动、看一眼某个物件
-- "change-scene"（场景切换）：走向画面深处的门 / 走廊、转头看向新方向（视角变了）、点了远处的另一个空间、暗示时间跳跃的物件（如时钟）
+- "change-scene"（场景切换）：走向画面深处的门 / 走廊、转头看向新方向（视角变了）、点了远处的另一个空间、暗示时间跳跃的物件（如时钟）、调查某个物件/线索导致剧情发展、与角色进行有实质影响的互动
+- "insert-beat"（场内探索）：**仅限**纯粹的观察——看一眼某个无剧情意义的装饰、环顾四周
+- 拿不准时偏向 "change-scene"——玩家主动点击画面说明想要推进剧情
 
 必须输出严格 JSON：
 {
@@ -704,9 +717,9 @@ export const FREEFORM_CLASSIFY_SYSTEM = `你是交互视觉小说的意图分类
 2. "change-scene"：玩家想去别的地方、做出重大决定、推动剧情到新阶段 → 切换到全新场景
 
 判断准则：
-- 大多数对话类输入（问问题、说一句话、对角色做出反应）→ "insert-beat"
-- 明确要离开当前场景、去别的地方、跳过时间、做出改变人物关系的重大决定 → "change-scene"
-- 拿不准时偏向 "insert-beat"（场内互动成本低，体验更流畅）
+- "change-scene"：大多数主动输入——问问题、说一句话、做一个动作、对角色做出反应、想去别的地方、做出决定、推动剧情 → 玩家花精力打字说明想让故事前进
+- "insert-beat"：**仅限**纯粹的环境观察或无实际影响的自言自语
+- 拿不准时偏向 "change-scene"——玩家主动输入说明想要推进剧情
 
 必须输出严格 JSON：
 {

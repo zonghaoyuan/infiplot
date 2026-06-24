@@ -695,8 +695,19 @@ export type InsertBeatPartial = {
   lineDelivery?: string;
 };
 
+/** Multi-beat response: 1-3 beats + optional follow-up choices. */
+export type InsertBeatMulti = {
+  beats: InsertBeatPartial[];
+  /** Follow-up choices shown after the last beat (max 2). */
+  choices?: { label: string; effect: string }[];
+};
+
 export type InsertBeatResponse = {
   partial: InsertBeatPartial;
+  /** Additional beats beyond the first (for richer insert-beat interactions). */
+  extraBeats?: InsertBeatPartial[];
+  /** Follow-up choices shown after the last inserted beat. */
+  followUpChoices?: { label: string; effect: string }[];
   characters: Character[];
 };
 

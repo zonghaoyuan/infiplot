@@ -27,7 +27,7 @@ export async function interpret(
   }>(raw);
 
   const classify: VisionClassify =
-    parsed.classify === "change-scene" ? "change-scene" : "insert-beat";
+    parsed.classify === "insert-beat" ? "insert-beat" : "change-scene";
 
   return {
     intent: {

@@ -34,7 +34,6 @@ import {
   startSession,
   requestScene,
   visionDecide,
-  classifyFreeform,
   requestInsertBeat,
   getTtsProvider,
   AuthRequiredError,
@@ -2248,68 +2247,12 @@ function PlayInner() {
     setPhase("vision-thinking");
 
     try {
-      const decision = await classifyFreeform({
-        session,
-        freeformText: text,
-      });
-
-      if (decision.classify === "insert-beat") {
-        // Interactive beat: NPC responds to the player's action, scene stays
-        setPhase("inserting-beat");
-        const { partial, characters: insertChars } = await requestInsertBeat({
-          session,
-          freeformAction: decision.freeformAction,
-          clientTts: !!byoTtsRef.current,
-        });
-
-        const fromBeatId =
-          currentBeatRef.current?.id ?? currentScene.entryBeatId;
-        const newBeatId = `b_ins_${Date.now()}_${Math.random()
-          .toString(36)
-          .slice(2, 6)}`;
-        const newBeat: Beat = {
-          id: newBeatId,
-          narration: partial.narration,
-          speaker: partial.speaker,
-          line: partial.line,
-          lineDelivery: partial.lineDelivery,
-          next: { type: "continue", nextBeatId: fromBeatId },
-        };
-
-        const patched: Scene = {
-          ...currentScene,
-          beats: [...currentScene.beats, newBeat],
-        };
-        const nextVisited = [...visitedBeatsRef.current, newBeatId];
-        visitedBeatsRef.current = nextVisited;
-        const nextSession: Session = {
-          ...session,
-          history: session.history.map((h, i, arr) =>
-            i === arr.length - 1 ? { ...h, scene: patched, visitedBeatIds: nextVisited } : h,
-          ),
-          characters: insertChars,
-        };
-        setSession(nextSession);
-        setCurrentScene(patched);
-        setCurrentBeatId(newBeatId);
-        if (newBeat.speaker && newBeat.line) {
-          void fetchBeatAudio(nextSession, {
-            id: newBeatId,
-            speaker: newBeat.speaker,
-            line: newBeat.line,
-            lineDelivery: newBeat.lineDelivery,
-          });
-        }
-        setLastExitLabel(decision.freeformAction);
-        setPhase("ready");
-        return;
-      }
-
-      // change-scene path
+      // Always generate a new scene for freeform text input — the player
+      // typed something, so they expect the story to move forward.
       const visited = [...visitedBeatsRef.current];
       const exit: SceneExit = {
         kind: "freeform",
-        action: decision.freeformAction,
+        action: text,
       };
       clearPool(poolRef.current);
 
@@ -2335,7 +2278,7 @@ function PlayInner() {
         promise,
         exit,
         visited,
-        decision.freeformAction,
+        text,
         () => onFreeformInput(text),
         { kind: "freeform", text },
       );
@@ -2365,7 +2308,7 @@ function PlayInner() {
 
       if (decision.classify === "insert-beat") {
         setPhase("inserting-beat");
-        const { partial, characters: insertChars } = await requestInsertBeat({
+        const { partial, extraBeats, followUpChoices, characters: insertChars } = await requestInsertBeat({
           session,
           freeformAction: decision.intent.freeformAction,
           clientTts: !!byoTtsRef.current,
@@ -2373,42 +2316,69 @@ function PlayInner() {
 
         const fromBeatId =
           currentBeatRef.current?.id ?? currentScene.entryBeatId;
-        const newBeatId = `b_ins_${Date.now()}_${Math.random()
-          .toString(36)
-          .slice(2, 6)}`;
-        const newBeat: Beat = {
-          id: newBeatId,
-          narration: partial.narration,
-          speaker: partial.speaker,
-          line: partial.line,
-          lineDelivery: partial.lineDelivery,
-          next: { type: "continue", nextBeatId: fromBeatId },
-        };
+        const allPartials = [partial, ...(extraBeats ?? [])];
+        const newBeats: Beat[] = [];
+        const newBeatIds: string[] = [];
+
+        for (const [i, p] of allPartials.entries()) {
+          const id = `b_ins_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${i}`;
+          newBeatIds.push(id);
+          newBeats.push({
+            id,
+            narration: p.narration,
+            speaker: p.speaker,
+            line: p.line,
+            lineDelivery: p.lineDelivery,
+            next: { type: "continue", nextBeatId: "" },
+          });
+        }
+
+        // Chain beats: each points to the next; last one gets choices or falls back to original beat
+        for (let i = 0; i < newBeats.length - 1; i++) {
+          newBeats[i]!.next = { type: "continue", nextBeatId: newBeatIds[i + 1]! };
+        }
+
+        const lastInsertedBeat = newBeats[newBeats.length - 1]!;
+        if (followUpChoices && followUpChoices.length > 0) {
+          lastInsertedBeat.next = {
+            type: "choice",
+            choices: followUpChoices.map((c, ci) => ({
+              id: `c_ins_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${ci}`,
+              label: c.label,
+              effect: { kind: "change-scene" as const, nextSceneSeed: c.effect },
+            })),
+          };
+        } else {
+          lastInsertedBeat.next = { type: "continue", nextBeatId: fromBeatId };
+        }
 
         const patched: Scene = {
           ...currentScene,
-          beats: [...currentScene.beats, newBeat],
+          beats: [...currentScene.beats, ...newBeats],
         };
+        const nextVisited = [...visitedBeatsRef.current, ...newBeatIds];
+        visitedBeatsRef.current = nextVisited;
 
         const nextSession: Session = {
           ...session,
           history: session.history.map((h, i, arr) =>
-            i === arr.length - 1 ? { ...h, scene: patched } : h,
+            i === arr.length - 1 ? { ...h, scene: patched, visitedBeatIds: nextVisited } : h,
           ),
           characters: insertChars,
         };
         setSession(nextSession);
         setCurrentScene(patched);
-        setCurrentBeatId(newBeatId);
-        // Insert-beat doesn't change scene.id, so the scene effect won't
-        // re-fire — manually kick off the audio fetch for the new beat.
-        if (newBeat.speaker && newBeat.line) {
-          void fetchBeatAudio(nextSession, {
-            id: newBeatId,
-            speaker: newBeat.speaker,
-            line: newBeat.line,
-            lineDelivery: newBeat.lineDelivery,
-          });
+        setCurrentBeatId(newBeatIds[0]!);
+
+        for (const nb of newBeats) {
+          if (nb.speaker && nb.line) {
+            void fetchBeatAudio(nextSession, {
+              id: nb.id,
+              speaker: nb.speaker,
+              line: nb.line,
+              lineDelivery: nb.lineDelivery,
+            });
+          }
         }
         setLastExitLabel(decision.intent.freeformAction);
         setPhase("ready");
