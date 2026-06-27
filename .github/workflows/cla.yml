@@ -21,7 +21,7 @@ on:
 # branch-protection required check (cla/cla-assistant.yml) reports against.
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   issues: write
   statuses: write
 
