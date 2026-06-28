@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AUTH_ENABLED } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/client";
+import { syncOnLogin } from "@/lib/persistence/cloudSync";
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
 
 export function UserChip() {
@@ -15,8 +16,16 @@ export function UserChip() {
     supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => setUser(data.user));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       setUser(session?.user ?? null);
+      // A signed-in user — a fresh login (SIGNED_IN) OR an already-authed mount
+      // (INITIAL_SESSION fires on subscribe with the current session) — triggers
+      // a full reconcile. syncOnLogin serializes via its in-flight guard, so
+      // overlapping events never run concurrent syncs (Req 4.1, 4.2, 4.3). This
+      // is the single global trigger point; AuthModal instances don't duplicate it.
+      if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        void syncOnLogin();
+      }
     });
     return () => subscription.unsubscribe();
   }, []);

@@ -14,6 +14,7 @@ import {
   loadStorySession as loadSession,
   softDeleteStory,
 } from "@/lib/persistence/localStore";
+import { pushOnSave, pushDeletion } from "@/lib/persistence/cloudSync";
 
 export type SaveResult =
   | { ok: true; storyId: string }
@@ -23,9 +24,11 @@ export type SaveResult =
  *  never throws, never blocks gameplay/navigation. */
 export async function saveStory(session: Session): Promise<SaveResult> {
   const rec = await saveStorySession(session);
-  return rec
-    ? { ok: true, storyId: rec.id }
-    : { ok: false, error: "无法保存到本地存储" };
+  if (!rec) return { ok: false, error: "无法保存到本地存储" };
+  // Fire-and-forget cloud push. pushOnSave short-circuits when auth is off /
+  // the user is signed out, so the open-source build sees no behavior change.
+  void pushOnSave(rec);
+  return { ok: true, storyId: rec.id };
 }
 
 /** List saved stories for the "我的剧情" page (newest first). */
@@ -40,5 +43,9 @@ export async function loadStorySession(id: string): Promise<Session | null> {
 
 /** Delete a saved story (soft-delete). Returns false if not found. */
 export async function deleteStory(storyId: string): Promise<boolean> {
-  return softDeleteStory(storyId);
+  const ok = await softDeleteStory(storyId);
+  // Fire-and-forget tombstone propagation. pushDeletion short-circuits when auth
+  // is off / signed out, so the open-source build sees no behavior change.
+  if (ok) void pushDeletion(storyId);
+  return ok;
 }

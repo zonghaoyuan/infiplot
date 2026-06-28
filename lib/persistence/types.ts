@@ -99,3 +99,34 @@ export type StoryRecord = {
    *  structured-clones objects, so this is stored as-is (no JSON.stringify). */
   session: Session;
 };
+
+// ── Cloud-sync wire types (story-cloud-sync) ────────────────────────────────
+
+/** Manifest projection of one cloud story — the lightweight metadata the
+ *  reconcile engine diffs against the local set. Unlike `StoryMeta` it CARRIES
+ *  the tombstone (`deletedAt`) and `rev`, because reconcile needs both to pick
+ *  a winner (rev → updatedAt last-write-wins) and to propagate soft-deletes.
+ *  Never carries the session blob — the manifest is the cheap diff basis. */
+export type StorySyncMeta = {
+  id: string;
+  rev: number;
+  /** epoch ms */
+  updatedAt: number;
+  /** Soft-delete tombstone (epoch ms) or null. */
+  deletedAt: number | null;
+};
+
+/** Full-payload carrier for pull/push between the local store and the cloud.
+ *  Extends the shared `SlimStoryBlob` with the two sync-ordering fields:
+ *   - `updatedAt` is the CLIENT-recorded modification time (NOT a server
+ *     `now()`), so when two devices collide on the same `rev`, `updatedAt`
+ *     stays a meaningful last-write-wins tiebreaker rather than always-now.
+ *   - `deletedAt` lets a tombstone ride the same envelope (delete propagation).
+ *  `rev` is already on `SlimStoryBlob`, so the envelope = blob + (updatedAt,
+ *  deletedAt). This is the single shape crossing the API at pull/push. */
+export type StorySyncEnvelope = SlimStoryBlob & {
+  /** epoch ms */
+  updatedAt: number;
+  /** Soft-delete tombstone (epoch ms) or null. */
+  deletedAt: number | null;
+};

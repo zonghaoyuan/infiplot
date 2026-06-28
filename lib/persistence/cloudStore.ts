@@ -1,16 +1,22 @@
-// Cloud story repository — server-only Supabase persistence skeleton for the
-// COMMERCIAL build. Mirrors the local repository (lib/persistence/localStore.ts)
-// method-for-method so next-phase local-first bidirectional sync can treat the
-// cloud as a layer over the local store rather than a parallel branch.
+// Cloud story repository — server-only Supabase persistence for the COMMERCIAL
+// build. Mirrors the local repository (lib/persistence/localStore.ts) so the
+// reconcile engine (lib/persistence/cloudSync.ts) can treat the cloud as a layer
+// over the local store.
 //
-// This phase is a SKELETON: no API route exposes these functions and no client
-// calls them. When AUTH_ENABLED is false (the open-source build) every method
-// short-circuits to a safe value on its first line and never touches Supabase.
+// When AUTH_ENABLED is false (the open-source build) every method short-circuits
+// to a safe value on its first line and never touches Supabase.
 //
 // Isolation is by RLS only: the SSR client carries the user's anon key + cookie,
 // and every public.stories policy is keyed on auth.uid() = user_id — so no
 // service_role key is used and no query needs a manual user filter for safety
 // (the explicit .eq("user_id") below is belt-and-suspenders + index alignment).
+//
+// Optimistic concurrency:
+//  - cloudSaveStory upserts via the upsert_story_if_newer RPC (needs INSERT-if-
+//    absent + a conditional overwrite, which PostgREST upsert can't express).
+//  - cloudSoftDeleteStory is UPDATE-only (a story never pushed has no cloud row
+//    to tombstone), so it expresses the same rev→updatedAt guard with a
+//    PostgREST .or() filter — no RPC needed.
 
 import "server-only";
 
@@ -18,7 +24,7 @@ import type { Session } from "@infiplot/types";
 import { coerceOrientation } from "@infiplot/types";
 import { AUTH_ENABLED } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import type { SlimStoryBlob, StoryMeta } from "./types";
+import type { SlimStoryBlob, StoryMeta, StorySyncMeta, StorySyncEnvelope } from "./types";
 import { coerceEpoch } from "./types";
 
 /** One row of public.stories (snake_case columns ↔ SlimStoryBlob + sync meta). */
@@ -78,63 +84,75 @@ function rowToMeta(row: StoryRow): StoryMeta {
   };
 }
 
+/** Full-blob projection for the sync layer: blob + (updatedAt, deletedAt) so
+ *  reconcile has the LWW-ordering fields. Carries tombstones (deletedAt may be
+ *  non-null) — a pulled cloud tombstone mirrors a remote soft-delete locally. */
+function rowToEnvelope(row: StoryRow): StorySyncEnvelope {
+  return {
+    id: row.id,
+    worldSetting: row.world_setting ?? "",
+    styleGuide: row.style_guide ?? "",
+    orientation: coerceOrientation(row.orientation),
+    sceneCount: row.scene_count ?? 0,
+    rev: row.rev ?? 1,
+    session: row.session_jsonb,
+    updatedAt: coerceEpoch(row.updated_at, 0),
+    deletedAt: row.deleted_at ? coerceEpoch(row.deleted_at, 0) : null,
+  };
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 //
-// CONTRACT NOTE (CR-15): these methods are the cloud COUNTERPARTS of
-// lib/persistence/localStore.ts, but their return shapes are intentionally NOT
-// identical — the local store returns rich StoryRecord/Session values (carrying
-// schemaVersion/createdAt/updatedAt/deletedAt/syncState), while the cloud store
-// returns the leaner SlimStoryBlob. When next-phase bidirectional sync lands it
-// must map StoryRecord ↔ SlimStoryBlob ↔ Session in one reconciliation layer
-// rather than assuming a single shared shape; the intended convergence is a
-// common envelope (SlimStoryBlob + sync-meta) at both edges. Documented here so
-// the asymmetry is a known, bounded cost, not a surprise.
+// CONTRACT NOTE: the sync methods (manifest/pull/save/softDelete) speak the
+// StorySyncEnvelope/StorySyncMeta shapes — the convergence envelope the
+// reconcile engine maps StoryRecord ↔ envelope in one place. The legacy
+// cloudLoadStory/cloudListStories (leaner SlimStoryBlob/StoryMeta) are retained
+// for non-sync callers; reconcile does not use them.
 
-/** Upsert one story for the current user. onConflict targets the `id` PK; the
- *  caller-supplied rev/updated_at are written verbatim and created_at is left to
- *  the DB default (insert only). NOTE (CR-10): this is last-write-wins — there is
- *  no `updated_at`-monotonic guard, so a slow concurrent writer can clobber newer
- *  cloud state; the next-phase sync layer must add an optimistic-concurrency
- *  predicate (e.g. only overwrite when excluded.updated_at > stories.updated_at)
- *  before this is wired to real multi-device traffic. Returns the stored blob, or
- *  null when auth is off / unauthenticated / the write failed (incl. an RLS-hidden
- *  cross-user id collision surfacing as a PK violation). */
+/** Upsert one story for the current user via the optimistic-concurrency RPC.
+ *  Returns `{ stored, won }`:
+ *   - won=true  → our version is now the cloud row (fresh insert, winning
+ *     update, or already-equal no-op);
+ *   - won=false → a NEWER cloud row existed and was preserved; `stored` is that
+ *     newer row so the caller can reconcile by pulling it back.
+ *  Auth off / unauthenticated / write failure → `{ stored: null, won: false }`. */
 export async function cloudSaveStory(
-  blob: SlimStoryBlob,
-): Promise<SlimStoryBlob | null> {
-  if (!AUTH_ENABLED) return null;
+  env: StorySyncEnvelope,
+): Promise<{ stored: StorySyncEnvelope | null; won: boolean }> {
+  if (!AUTH_ENABLED) return { stored: null, won: false };
   const userId = await currentUserId();
-  if (!userId) return null;
+  if (!userId) return { stored: null, won: false };
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("stories")
-      .upsert(
-        {
-          id: blob.id,
-          user_id: userId,
-          world_setting: blob.worldSetting ?? "",
-          style_guide: blob.styleGuide ?? "",
-          orientation: coerceOrientation(blob.orientation),
-          scene_count: blob.sceneCount ?? 0,
-          rev: blob.rev ?? 1,
-          updated_at: new Date().toISOString(),
-          deleted_at: null,
-          session_jsonb: blob.session,
-        },
-        { onConflict: "user_id,id" },
-      )
-      .select()
-      .single();
-    if (error || !data) return null;
-    return rowToBlob(data as StoryRow);
+    const { data, error } = await supabase.rpc("upsert_story_if_newer", {
+      p_id: env.id,
+      p_world: env.worldSetting ?? "",
+      p_style: env.styleGuide ?? "",
+      p_orientation: coerceOrientation(env.orientation),
+      p_scene_count: env.sceneCount ?? 0,
+      p_rev: env.rev ?? 1,
+      p_updated_at: new Date(env.updatedAt).toISOString(),
+      p_deleted_at: env.deletedAt ? new Date(env.deletedAt).toISOString() : null,
+      p_session: env.session,
+    });
+    if (error || !data) return { stored: null, won: false };
+    // The RPC `returns public.stories` (a single composite); supabase-js may
+    // hand it back as the object or wrapped in an array — normalize both.
+    const row = (Array.isArray(data) ? data[0] : data) as StoryRow | undefined;
+    if (!row) return { stored: null, won: false };
+    const stored = rowToEnvelope(row);
+    // We won iff the stored row IS our version. A stale write returns the newer
+    // cloud row, whose (rev, updatedAt) differ from what we sent → won=false.
+    const won = stored.rev === env.rev && stored.updatedAt === env.updatedAt;
+    return { stored, won };
   } catch {
-    return null;
+    return { stored: null, won: false };
   }
 }
 
 /** Load one story's slim blob for the current user. Tombstoned / absent / not
- *  owned (RLS) → null. */
+ *  owned (RLS) → null. Retained for non-sync callers (reconcile uses
+ *  cloudPullBlobs, which carries tombstones + sync-ordering fields). */
 export async function cloudLoadStory(id: string): Promise<SlimStoryBlob | null> {
   if (!AUTH_ENABLED) return null;
   const userId = await currentUserId();
@@ -180,21 +198,81 @@ export async function cloudListStories(): Promise<StoryMeta[]> {
   }
 }
 
-/** Soft-delete one story (set the tombstone) for the current user so the
- *  deletion can propagate. Absent / not owned / write failed → false. */
-export async function cloudSoftDeleteStory(id: string): Promise<boolean> {
+/** Reconcile diff basis: ALL the current user's rows (INCLUDING tombstones),
+ *  projected to lightweight {id, rev, updatedAt, deletedAt}. Explicit column
+ *  list so it never pulls session_jsonb. Auth off / unauth → []. */
+export async function cloudStoryManifest(): Promise<StorySyncMeta[]> {
+  if (!AUTH_ENABLED) return [];
+  const userId = await currentUserId();
+  if (!userId) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("stories")
+      .select("id, rev, updated_at, deleted_at")
+      .eq("user_id", userId);
+    if (error || !data) return [];
+    return (data as StoryRow[]).map((row) => ({
+      id: row.id,
+      rev: row.rev ?? 1,
+      updatedAt: coerceEpoch(row.updated_at, 0),
+      deletedAt: row.deleted_at ? coerceEpoch(row.deleted_at, 0) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Pull full envelopes for the given ids (INCLUDING tombstones — a pulled cloud
+ *  tombstone mirrors a remote soft-delete locally). Empty ids / auth off /
+ *  unauth → []. */
+export async function cloudPullBlobs(
+  ids: string[],
+): Promise<StorySyncEnvelope[]> {
+  if (!AUTH_ENABLED) return [];
+  if (!ids.length) return [];
+  const userId = await currentUserId();
+  if (!userId) return [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("stories")
+      .select()
+      .eq("user_id", userId)
+      .in("id", ids);
+    if (error || !data) return [];
+    return (data as StoryRow[]).map(rowToEnvelope);
+  } catch {
+    return [];
+  }
+}
+
+/** Propagate a soft-delete (tombstone) for the current user, with the same
+ *  optimistic-concurrency guard as the save RPC expressed as a PostgREST .or()
+ *  filter: only stamp when the incoming version is newer (rev higher, or rev
+ *  tie with a later updatedAt). UPDATE-only — a story never pushed has no cloud
+ *  row and needs no tombstone (returns false, which the caller treats as
+ *  "nothing to delete remotely"). Auth off / unauth / not-newer / absent →
+ *  false. */
+export async function cloudSoftDeleteStory(
+  id: string,
+  rev: number,
+  deletedAt: number,
+): Promise<boolean> {
   if (!AUTH_ENABLED) return false;
   const userId = await currentUserId();
   if (!userId) return false;
   try {
     const supabase = await createClient();
-    const now = new Date().toISOString();
+    const deletedIso = new Date(deletedAt).toISOString();
     const { data, error } = await supabase
       .from("stories")
-      .update({ deleted_at: now, updated_at: now })
-      .eq("id", id)
+      .update({ deleted_at: deletedIso, updated_at: deletedIso, rev })
       .eq("user_id", userId)
-      .is("deleted_at", null)
+      .eq("id", id)
+      // Quote the timestamptz value so PostgREST parses the colons/dots in the
+      // ISO string as a literal, not filter syntax.
+      .or(`rev.lt.${rev},and(rev.eq.${rev},updated_at.lt."${deletedIso}")`)
       .select("id");
     if (error || !data || data.length === 0) return false;
     return true;
