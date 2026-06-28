@@ -11,7 +11,7 @@ import type { Session } from "@infiplot/types";
 import { coerceOrientation } from "@infiplot/types";
 import { idbGet, idbGetAll, idbPut, idbDelete, idbCount, STORIES_STORE } from "./idb";
 import { slimSession } from "./sessionSlim";
-import { STORY_SCHEMA_VERSION, coerceEpoch, type StoryRecord, type StoryMeta } from "./types";
+import { STORY_SCHEMA_VERSION, coerceEpoch, type StoryRecord, type StoryMeta, type StorySyncEnvelope } from "./types";
 
 /** Max number of non-tombstoned stories retained locally. IndexedDB has ample
  *  quota, so this is generous vs the old localStorage cap of 20; it aligns with
@@ -185,4 +185,81 @@ export async function softDeleteStory(id: string): Promise<boolean> {
     syncState: "pending",
   };
   return idbPut(STORIES_STORE, updated);
+}
+
+// ── Sync support (story-cloud-sync) ─────────────────────────────────────────
+// These are the cloud-sync counterparts to the user-write path above. The
+// distinction matters: saveStorySession is a USER write (bumps rev,
+// synced→pending), while putSyncedRecord is a SYNC write (cloud is
+// authoritative: takes the cloud rev verbatim, marks synced, never bumps).
+
+/** Reconcile diff basis (local side): ALL records INCLUDING tombstones, with
+ *  rev/syncState intact — the local mirror of cloudStoryManifest's
+ *  tombstone-inclusive scan. [] when storage is unavailable. */
+export async function listAllRecordsForSync(): Promise<StoryRecord[]> {
+  return idbGetAll<StoryRecord>(STORIES_STORE);
+}
+
+/** Write a cloud-pulled version as the authoritative synced baseline:
+ *  rev/updatedAt/deletedAt taken from the envelope, syncState="synced", and
+ *  rev is NOT bumped (unlike saveStorySession). createdAt is preserved if a
+ *  local record already exists, else seeded from the envelope's updatedAt (the
+ *  cloud row carries no createdAt; createdAt is display-only). Keeps the
+ *  schemaVersion invariant and the slim session as-is. Returns false on write
+ *  failure (Req 3.3, 3.6). Runs retention housekeeping after a durable write. */
+export async function putSyncedRecord(
+  env: StorySyncEnvelope,
+): Promise<boolean> {
+  if (!env?.id) return false;
+  const existing = await idbGet<StoryRecord>(STORIES_STORE, env.id);
+  // Concurrency guard (symmetric with markRecordSynced's rev guard): if the local
+  // record was updated to a strictly newer version (rev → updatedAt) between
+  // reconcile's decision snapshot and this write, don't clobber it — leave it
+  // (pending) for the next reconcile to re-push. Otherwise a local autosave that
+  // lands mid-reconcile could be overwritten by a now-stale cloud version (a
+  // legitimate LWW winner silently lost).
+  if (existing) {
+    const er = existing.rev ?? 1;
+    const nr = env.rev ?? 1;
+    const eu = coerceEpoch(existing.updatedAt, 0);
+    const nu = coerceEpoch(env.updatedAt, 0);
+    if (er > nr || (er === nr && eu > nu)) return false;
+  }
+  const record: StoryRecord = {
+    id: env.id,
+    schemaVersion: STORY_SCHEMA_VERSION,
+    worldSetting: env.worldSetting ?? "",
+    styleGuide: env.styleGuide ?? "",
+    orientation: coerceOrientation(env.orientation),
+    sceneCount: env.sceneCount ?? 0,
+    createdAt: existing
+      ? coerceEpoch(existing.createdAt, env.updatedAt)
+      : coerceEpoch(env.updatedAt, Date.now()),
+    updatedAt: coerceEpoch(env.updatedAt, Date.now()),
+    rev: env.rev ?? 1,
+    deletedAt: env.deletedAt == null ? null : coerceEpoch(env.deletedAt, Date.now()),
+    syncState: "synced",
+    session: env.session,
+  };
+  const ok = await idbPut(STORIES_STORE, record);
+  if (ok) await enforceRetentionCap();
+  return ok;
+}
+
+/** Mark a local record synced after a successful push, aligning syncState to
+ *  the cloud-acknowledged baseline — but ONLY if the local record still matches
+ *  the rev we pushed. A newer local edit (rev moved past what we pushed) is left
+ *  pending so the next reconcile re-pushes the newer content. No-op if the
+ *  record is gone or already synced (Req 8.1). */
+export async function markRecordSynced(id: string, rev: number, updatedAt: number): Promise<void> {
+  const rec = await idbGet<StoryRecord>(STORIES_STORE, id);
+  if (!rec) return;
+  // Guard on BOTH rev and updatedAt. softDeleteStory bumps updatedAt WITHOUT
+  // bumping rev, so a same-rev-but-newer local tombstone produced while a push
+  // was in flight must NOT be marked synced by that older push's ack (it still
+  // owes a delete push). Symmetric with putSyncedRecord's concurrency guard.
+  if ((rec.rev ?? 1) !== rev) return;
+  if (coerceEpoch(rec.updatedAt, 0) !== coerceEpoch(updatedAt, 0)) return;
+  if (rec.syncState === "synced") return;
+  await idbPut(STORIES_STORE, { ...rec, syncState: "synced" });
 }
