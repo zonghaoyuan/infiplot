@@ -210,13 +210,13 @@ See the [Bring-your-own voice Key guide](docs/xiaomi-tts-key.md) for how to obta
 - [x] Mobile web support
 - [x] Story sharing (`.infiplot` format)
 - [x] OpenDeploy quick deployment
+- [x] Story save & resume (local + cloud sync)
 
 **To Do**
 
 - [ ] Mobile app & creator platform
 - [ ] ComfyUI custom image generation
 - [ ] Reduce latency to under 5s
-- [ ] Story save & resume
 - [ ] Custom character cards & world settings
 - [ ] Prompt cache hit-rate optimization
 
