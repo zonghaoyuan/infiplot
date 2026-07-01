@@ -638,6 +638,7 @@ function PlayInner() {
     y: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorRetry, setErrorRetry] = useState<(() => void) | null>(null);
   const [presentation, setPresentation] = useState(false);
   // Session-locked image orientation (see detectOrientation). "portrait" makes
   // the whole play surface render full-bleed vertical on phones.
@@ -963,6 +964,22 @@ function PlayInner() {
       scene_index: session?.history.length ?? 0,
       elapsed_bucket: elapsedBucket(startMs),
     });
+  }
+
+  function showError(e: unknown, retry?: () => void): void {
+    setError(e instanceof Error ? e.message : String(e));
+    setErrorRetry(() => retry ?? null);
+  }
+
+  function clearError(): void {
+    setError(null);
+    setErrorRetry(null);
+  }
+
+  function retryAfterError(): void {
+    const retry = errorRetry;
+    clearError();
+    retry?.();
   }
 
   // Coarse liveness ping for active-time analytics. /play is a single SPA
@@ -1707,7 +1724,7 @@ function PlayInner() {
         } catch (e) {
           if (!handleAuthError(e)) {
             trackPlayError("start", e, t0);
-            setError(e instanceof Error ? e.message : String(e));
+            showError(e);
           }
         }
       })();
@@ -1816,7 +1833,7 @@ function PlayInner() {
           setPhase("ready");
           track("scene_reached", { scene_index: loadedSession.history.length });
         } catch (e) {
-          setError(String(e));
+          showError(e);
         }
       })();
       return;
@@ -1923,7 +1940,7 @@ function PlayInner() {
       .catch((e) => {
         if (!handleAuthError(e)) {
           trackPlayError("start", e, startT0);
-          setError(String(e));
+          showError(e);
         }
       });
   }, [params, router, retryBootstrap, restorePlayResume]);
@@ -2079,7 +2096,7 @@ function PlayInner() {
       }
       if (!handleAuthError(e, retry, action)) {
         trackPlayError("scene", e, sceneT0);
-        setError(String(e));
+        showError(e, retry);
       }
       setPhase("ready");
     }
@@ -2158,7 +2175,7 @@ function PlayInner() {
       } catch (e) {
         if (!handleAuthError(e)) {
           trackPlayError("scene", e, replayT0);
-          setError(e instanceof Error ? e.message : String(e));
+          showError(e, () => onSelectChoice(choice));
         }
         setPhase("ready");
       }
@@ -2240,6 +2257,7 @@ function PlayInner() {
     }
 
     if (choice.effect.kind === "advance-beat") {
+      clearError();
       if (replayActiveRef.current && currentBeatRef.current) {
         const source = replaySourceRef.current;
         const idx = replayIndexRef.current;
@@ -2262,6 +2280,7 @@ function PlayInner() {
     }
 
     const visited = [...visitedBeatsRef.current];
+    clearError();
     const exit: SceneExit = {
       kind: "choice",
       choiceId: choice.id,
@@ -2370,7 +2389,7 @@ function PlayInner() {
     } catch (e) {
       if (!handleAuthError(e, () => onFreeformInput(text), { kind: "freeform", text })) {
         trackPlayError("freeform", e, freeformT0);
-        setError(String(e));
+        showError(e, () => onFreeformInput(text));
       }
       setPhase("ready");
     }
@@ -2382,6 +2401,7 @@ function PlayInner() {
     // share) — see onFreeformInput for the rationale.
     if (replaySourceRef.current) detachRecordedReplay();
     const visionT0 = Date.now();
+    clearError();
     setPhase("vision-thinking");
     setPendingClick(click);
 
@@ -2497,7 +2517,7 @@ function PlayInner() {
     } catch (e) {
       if (!handleAuthError(e, () => onBackgroundClick(click), { kind: "background-click", x: click.x, y: click.y })) {
         trackPlayError("vision", e, visionT0);
-        setError(String(e));
+        showError(e, () => onBackgroundClick(click));
       }
       setPendingClick(null);
       setPhase("ready");
@@ -2515,7 +2535,57 @@ function PlayInner() {
       : [];
   const replayLocked = isRecordedReplayLockedAt(currentBeat);
 
-  if (error) {
+  const errorOverlay = error && currentScene ? (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-5 backdrop-blur-[2px]"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="play-error-title"
+    >
+      <div
+        className="w-full max-w-sm border px-6 py-5 text-center shadow-2xl animate-fade-in"
+        style={{
+          background: "rgba(14, 10, 6, 0.88)",
+          borderColor: "rgba(200,165,90,0.45)",
+          borderRadius: "8px",
+        }}
+      >
+        <p
+          id="play-error-title"
+          className="text-[10px] smallcaps text-amber-200/85 mb-3"
+        >
+          {t("play.error.title")}
+        </p>
+        <p className="font-serif text-[16px] leading-[1.65] text-white/90 mb-5 break-words">
+          {error}
+        </p>
+        <div className="flex items-center justify-center gap-3">
+          {errorRetry && (
+            <button
+              type="button"
+              onClick={retryAfterError}
+              className="inline-flex items-center gap-2 border border-amber-300/55 bg-amber-300/15 px-4 py-2 text-[10px] smallcaps text-amber-100 transition-colors hover:bg-amber-300/25"
+              style={{ borderRadius: "6px" }}
+            >
+              <i className="fa-solid fa-rotate-right text-[10px]" />
+              {t("play.error.retry")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={clearError}
+            className="inline-flex items-center gap-2 border border-white/20 bg-white/10 px-4 py-2 text-[10px] smallcaps text-white/75 transition-colors hover:bg-white/15 hover:text-white"
+            style={{ borderRadius: "6px" }}
+          >
+            <i className="fa-solid fa-xmark text-[10px]" />
+            {t("play.error.close")}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  if (error && !currentScene) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-8">
         <div className="max-w-md text-center animate-fade-in">
@@ -2617,6 +2687,7 @@ function PlayInner() {
             onBeforeOAuth={persistPlayResume}
           />
         )}
+        {errorOverlay}
       </div>
     );
   }
@@ -2818,6 +2889,7 @@ function PlayInner() {
           onBeforeOAuth={persistPlayResume}
         />
       )}
+      {errorOverlay}
     </div>
   );
 }
