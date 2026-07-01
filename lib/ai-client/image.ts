@@ -264,44 +264,138 @@ async function generateImageOpenAiCompatible(
     `[ai-client] Calling OpenAI-compatible image generations at: ${endpoint} with model: ${config.model}`,
   );
 
-  const res = await fetchWithRetry(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      prompt: prompt,
-      n: 1,
-      // Session-locked aspect (16:9 default, 9:16 portrait for mobile).
-      size: options?.orientation === "portrait" ? "1024x1792" : "1792x1024",
-    }),
-    retries: options?.retries,
-    timeoutMs: options?.timeoutMs,
-    signal: options?.signal,
-  });
+  // Session-locked aspect (16:9 default, 9:16 portrait for mobile). Providers
+  // disagree on how to express it (`size` vs `aspect_ratio`+`resolution`);
+  // resolveAspectFields picks the right dialect for this host.
+  const portrait = options?.orientation === "portrait";
+  const aspectFields = resolveAspectFields(config.baseUrl, portrait);
 
-  const text = await res.text();
-  let json: any;
+  // `includeAspect` lets us retry with the aspect field dropped if a provider
+  // rejects it, rather than crashing the whole scene.
+  const post = (includeAspect: boolean) =>
+    fetchWithRetry(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        prompt: prompt,
+        n: 1,
+        ...(includeAspect ? aspectFields : {}),
+      }),
+      retries: options?.retries,
+      timeoutMs: options?.timeoutMs,
+      signal: options?.signal,
+    });
+
+  const parseResponse = async (res: Response) => {
+    const text = await res.text();
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
+    }
+
+    if (json.error) {
+      throw new Error(`OpenAI Image API error: ${json.error.message || JSON.stringify(json.error)}`);
+    }
+
+    const data = json.data?.[0];
+    const imageUrl = data?.url;
+    if (!imageUrl) {
+      throw new Error(`No image URL in OpenAI response: ${text.slice(0, 300)}`);
+    }
+    // Generate a mock UUID since OpenAI compatible endpoint doesn't have UUIDs
+    return { imageUrl, imageUuid: crypto.randomUUID() };
+  };
+
   try {
-    json = JSON.parse(text);
+    return await parseResponse(await post(true));
+  } catch (err) {
+    // Provider rejected the aspect field (`size`, or `aspect_ratio`/
+    // `resolution`). Retry once with it dropped; the model uses its own
+    // default aspect rather than crashing the whole scene.
+    if (isUnsupportedAspectError(err)) {
+      console.warn(
+        `[ai-client] provider rejected aspect args; retrying without them (${config.model})`,
+      );
+      return await parseResponse(await post(false));
+    }
+    throw err;
+  }
+}
+
+// How each provider expresses the output aspect on the OpenAI-compatible
+// `/images/generations` route. Default is DALL-E's `size` string; providers
+// that reject it (e.g. x.ai grok) declare their own dialect here. To support a
+// new provider, add an entry — the request builder and retry logic are generic.
+type AspectDialect = {
+  /** Matches by parsed hostname (exact or subdomain), not bare substring. */
+  hosts: string[];
+  /** Fields to merge into the request body for the given orientation. */
+  fields: (portrait: boolean) => Record<string, unknown>;
+};
+
+const ASPECT_DIALECTS: AspectDialect[] = [
+  {
+    // x.ai grok image models: `aspect_ratio` + `resolution` instead of `size`.
+    hosts: ["x.ai"],
+    fields: (portrait) => ({
+      aspect_ratio: portrait ? "9:16" : "16:9",
+      resolution: "1k",
+    }),
+  },
+];
+
+// DALL-E / GPTGod / most OpenAI-compatible gateways: the `size` string.
+const defaultAspectFields = (portrait: boolean): Record<string, unknown> => ({
+  size: portrait ? "1024x1792" : "1792x1024",
+});
+
+function hostMatches(baseUrl: string, hosts: string[]): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return hosts.some((h) => host === h || host.endsWith(`.${h}`));
   } catch {
-    throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
+    return false;
   }
+}
 
-  if (json.error) {
-    throw new Error(`OpenAI Image API error: ${json.error.message || JSON.stringify(json.error)}`);
-  }
+function resolveAspectFields(
+  baseUrl: string,
+  portrait: boolean,
+): Record<string, unknown> {
+  const dialect = ASPECT_DIALECTS.find((d) => hostMatches(baseUrl, d.hosts));
+  return (dialect?.fields ?? defaultAspectFields)(portrait);
+}
 
-  const data = json.data?.[0];
-  const imageUrl = data?.url;
-  if (!imageUrl) {
-    throw new Error(`No image URL in OpenAI response: ${text.slice(0, 300)}`);
-  }
-  // Generate a mock UUID since OpenAI compatible endpoint doesn't have UUIDs
-  const imageUuid = crypto.randomUUID();
-  return { imageUrl, imageUuid };
+// Every field name any dialect (or the default) can emit, derived from the
+// table itself so adding a dialect never desyncs the retry detector below.
+const ASPECT_FIELD_NAMES = Array.from(
+  new Set(
+    [defaultAspectFields, ...ASPECT_DIALECTS.map((d) => d.fields)].flatMap(
+      (fields) => [
+        ...Object.keys(fields(true)),
+        ...Object.keys(fields(false)),
+      ],
+    ),
+  ),
+);
+
+// Detect a "provider doesn't support this aspect argument" failure so we can
+// retry without it. Field names come from ASPECT_FIELD_NAMES, so any dialect
+// added to the table is covered automatically. Kept narrow to avoid masking
+// unrelated errors.
+function isUnsupportedAspectError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  const fieldPattern = new RegExp(`\\b(${ASPECT_FIELD_NAMES.join("|")})\\b`, "i");
+  return (
+    fieldPattern.test(msg) &&
+    /not supported|unsupported|unknown|invalid argument/i.test(msg)
+  );
 }
 
 // Runware task-array route — self-implemented to preserve the UUID/URL closed
