@@ -269,6 +269,8 @@ export const ja = {
     error: {
       title: "問題が発生しました",
       back: "戻る",
+      retry: "再試行",
+      close: "閉じる",
     },
 
     // Previous action

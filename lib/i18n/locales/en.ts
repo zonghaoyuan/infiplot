@@ -247,6 +247,8 @@ Dreamy watercolor style with soft tones and nostalgic atmosphere
     error: {
       title: "Something went wrong",
       back: "Back",
+      retry: "Retry",
+      close: "Close",
     },
 
     previousStep: "Previous action",

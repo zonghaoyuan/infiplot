@@ -269,6 +269,8 @@ export const zhCN = {
     error: {
       title: "出 · 了 · 点 · 状 · 况",
       back: "返 · 回",
+      retry: "重 · 试",
+      close: "关 · 闭",
     },
 
     // Previous action
