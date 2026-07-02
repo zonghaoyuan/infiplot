@@ -268,7 +268,7 @@ async function generateImageOpenAiCompatible(
   // disagree on how to express it (`size` vs `aspect_ratio`+`resolution`);
   // resolveAspectFields picks the right dialect for this host.
   const portrait = options?.orientation === "portrait";
-  const aspectFields = resolveAspectFields(config.baseUrl, portrait);
+  const aspectFields = resolveAspectFields(base, portrait);
 
   // `includeAspect` lets us retry with the aspect field dropped if a provider
   // rejects it, rather than crashing the whole scene.
@@ -296,6 +296,10 @@ async function generateImageOpenAiCompatible(
     try {
       json = JSON.parse(text);
     } catch {
+      throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
+    }
+
+    if (!res.ok && !json.error) {
       throw new Error(`OpenAI Image API error ${res.status}: ${text.slice(0, 500)}`);
     }
 
@@ -391,10 +395,16 @@ const ASPECT_FIELD_NAMES = Array.from(
 // unrelated errors.
 function isUnsupportedAspectError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  const fieldPattern = new RegExp(`\\b(${ASPECT_FIELD_NAMES.join("|")})\\b`, "i");
+  const specificFields = ASPECT_FIELD_NAMES.filter((f) => f !== "size");
+  const specificHit = specificFields.length > 0 &&
+    new RegExp(`\\b(${specificFields.join("|")})\\b`, "i").test(msg);
+  // "size" requires adjacent context to avoid false-positive on unrelated
+  // messages like "file size too large".
+  const sizeHit = /\bsize\b/i.test(msg) &&
+    /argument|parameter|param|field/i.test(msg);
   return (
-    fieldPattern.test(msg) &&
-    /not supported|unsupported|unknown|invalid argument/i.test(msg)
+    (specificHit || sizeHit) &&
+    /not supported|unsupported|unknown|invalid/i.test(msg)
   );
 }
 
