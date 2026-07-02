@@ -16,7 +16,7 @@ require_tests_review = false        # repo has no test framework
 require_can_be_split_review = true
 require_score_review = true
 require_todo_scan = true
-persistent_comment = false          # two model jobs would otherwise overwrite each other
+persistent_comment = true          # single job — edit the same comment on each sync instead of stacking new ones
 
 [pr_description]
 generate_ai_title = false
@@ -31,7 +31,7 @@ parallel_calls = true
 focus_only_on_problems = false       # also surface readability/reuse cleanups, not only bugs
 suggestions_score_threshold = 0
 dual_publishing_score_threshold = 7  # high-scoring suggestions also appear as inline comments
-persistent_comment = false           # two model jobs would otherwise overwrite each other
+persistent_comment = true           # single job — edit the same comment on each sync instead of stacking new ones
 
 [best_practices]
 enable_global_best_practices = false
