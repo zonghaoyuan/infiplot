@@ -1,14 +1,15 @@
 name: "CLA Assistant"
 
-# Requires the following GitHub repository secret to be configured:
-#   CLA_BOT_TOKEN — a fine-grained Personal Access Token with
-#   `Contents: Read and write` (and `Pull requests: Read`) scope on this
-#   repository. The GITHUB_TOKEN cannot commit to a protected branch, so a PAT
-#   is needed to record signatures into cla-signatures/version-1.json.
+# Signatures are stored on the UNPROTECTED `cla-signatures` branch of THIS
+# repository (no `remote-organization-name` / `remote-repository-name`
+# configured). In this mode the action uses the job's GITHUB_TOKEN to
+# read/create/update the signature file, so `contents: write` below is what
+# actually grants write access — no Personal Access Token is involved.
 #
-# To actually enforce the CLA, add `cla/cla-assistant.yml:CLAAssistant` (the
-# status check produced by this job) as a required status check in the branch
-# protection rules for `main` and `staging`.
+# This check is informational, NOT blocking: CLAAssistant is deliberately not
+# listed in the `main`/`staging` repository rulesets' required_status_checks.
+# A failed/missing CLA only posts a comment + a red check; it never blocks a
+# merge. To make it blocking, add `cla.yml:CLAAssistant` to a ruleset.
 
 on:
   issue_comment:
@@ -17,10 +18,17 @@ on:
     types: [opened, closed, synchronize]
 
 # Minimal explicit permissions: this workflow runs on pull_request_target and
-# issues a token, so do not rely on repo defaults. `statuses: write` is what the
-# branch-protection required check (cla/cla-assistant.yml) reports against.
+# issues a token, so do not rely on repo defaults.
+#   contents: write — required because signatures live in THIS repo's
+#     cla-signatures branch and the action writes via GITHUB_TOKEN.
+#     `read` here was the root cause of the "Resource not accessible by
+#     integration" failure.
+#   actions: write — lets the action re-run the pull_request_target workflow
+#     after a contributor signs, so the check flips from red to green.
+#   statuses: write — how the (optional) required-check status is reported.
 permissions:
-  contents: read
+  contents: write
+  actions: write
   pull-requests: write
   issues: write
   statuses: write
@@ -28,40 +36,21 @@ permissions:
 jobs:
   CLAAssistant:
     runs-on: ubuntu-latest
-    # Resolve "is the token configured?" once at job level. Step-level `if`
-    # cannot safely reference `secrets.*` (it may be empty or elided), so we
-    # materialize it into an env boolean string and test that instead. This is
-    # also what lets forks/renames of this repo skip the job cleanly when no
-    # CLA_BOT_TOKEN is set, instead of failing CI.
-    env:
-      HAS_CLA_BOT_TOKEN: ${{ secrets.CLA_BOT_TOKEN != '' }}
     steps:
-      # Guard: on the canonical repo, a missing CLA_BOT_TOKEN must FAIL the
-      # job rather than silently skipping. Otherwise, once this job becomes a
-      # required status check, a lost/expired token would let CLA checks pass
-      # green and CLA enforcement would degrade invisibly. Forks (and renamed
-      # copies) still skip cleanly below.
-      - name: "Fail when CLA token is missing on canonical repo"
-        if: ${{ github.repository == 'zonghaoyuan/infiplot' && env.HAS_CLA_BOT_TOKEN != 'true' }}
-        run: |
-          echo "CLA_BOT_TOKEN is required for CLA enforcement on ${{ github.repository }}." >&2
-          echo "Configure it under Settings → Secrets and variables → Actions." >&2
-          exit 1
       - name: "CLA Assistant"
-        # SKIPPED when no secrets are configured (e.g. on forks). Keep the
-        # whole predicate inside a single ${{ }} so && / || are evaluated as a
-        # boolean expression, not string-concatenated.
-        if: ${{ env.HAS_CLA_BOT_TOKEN == 'true' && ((github.event_name == 'issue_comment' && (github.event.comment.body == 'recheckcla' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')) || github.event_name == 'pull_request_target') }}
+        # Run on every pull_request_target event, and on a comment only when it
+        # is a CLA sign/recheck phrase. Keep the whole predicate inside a single
+        # ${{ }} so && / || are evaluated as a boolean expression.
+        if: ${{ (github.event_name == 'issue_comment' && (github.event.comment.body == 'recheckcla' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')) || github.event_name == 'pull_request_target' }}
         # Pinned to a full commit SHA (not a movable tag) because this step
-        # runs under pull_request_target with a writable PAT. Canonical repo:
+        # runs under pull_request_target. Canonical repo:
         # contributor-assistant/github-action (the action's original home; note
-        # `contributor-assistant/cla-assistant-action` does NOT exist and would
-        # 404). The repo is archived, but v2.6.1 still functions; re-evaluate
-        # only if it breaks against a future GitHub API change.
-        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08  # v2.6.1
+        # that `contributor-assistant/cla-assistant-action` does NOT exist and
+        # would 404). The repo is archived, but v2.6.1 still functions;
+        # re-evaluate only if it breaks against a future GitHub API change.
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_BOT_TOKEN }}
         with:
           # Signatures are stored on a dedicated UNPROTECTED orphan branch
           # (cla-signatures), NOT on main/staging. The action cannot push to
@@ -73,9 +62,8 @@ jobs:
           branch: "cla-signatures"
           # Link to the authoritative English CLA. Chinese reference:
           # https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.zh.md
-          path-to-cla-document: "https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.md"
+          path-to-document: "https://github.com/zonghaoyuan/infiplot/blob/staging/CLA.md"
           allowlist: "github-actions[bot],dependabot[bot],zonghaoyuan,web-flow,noreply@anthropic.com"
-          block-sharing-crucial-repositories: true
 
           create-file-commit-message: "docs(cla): create CLA signature store"
           custom-notsigned-prcomment: >
