@@ -78,6 +78,17 @@ type PendingResumeAction =
   | { kind: "freeform"; text: string }
   | { kind: "background-click"; x: number; y: number };
 
+// Descriptor for a retryable error action. Stored in a ref (not state) so the
+// retry always re-resolves the latest game state from refs instead of a stale
+// render snapshot. The `fn` variant wraps an already-captured closure (e.g.
+// the scene-generation retry); the other variants carry just the identifiers
+// needed to re-dispatch through the stable handler functions.
+type RetryAction =
+  | { kind: "fn"; fn: () => void }
+  | { kind: "choice"; choiceId: string }
+  | { kind: "freeform"; text: string }
+  | { kind: "background-click"; x: number; y: number };
+
 // Shape written to sessionStorage[PLAY_RESUME_KEY]. `imageOriginalUrl` is the
 // remote CDN URL (never the blob: URL — those are revoked on unmount and won't
 // survive the full-page reload); restorePlayResume re-resolves it to a fresh
@@ -639,6 +650,9 @@ function PlayInner() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorRetry, setErrorRetry] = useState<(() => void) | null>(null);
+  // Retry action descriptor lives in a ref (not state) so retryAfterError
+  // re-resolves the latest game state from refs instead of a stale snapshot.
+  const retryActionRef = useRef<RetryAction | null>(null);
   const [presentation, setPresentation] = useState(false);
   // Session-locked image orientation (see detectOrientation). "portrait" makes
   // the whole play surface render full-bleed vertical on phones.
@@ -966,20 +980,42 @@ function PlayInner() {
     });
   }
 
-  function showError(e: unknown, retry?: () => void): void {
+  function showError(e: unknown, action?: RetryAction): void {
     setError(e instanceof Error ? e.message : String(e));
-    setErrorRetry(() => retry ?? null);
+    retryActionRef.current = action ?? null;
+    setErrorRetry(action ? () => retryAfterError : null);
   }
 
-  function clearError(): void {
+  const clearError = useCallback((): void => {
     setError(null);
     setErrorRetry(null);
-  }
+    retryActionRef.current = null;
+  }, []);
 
   function retryAfterError(): void {
-    const retry = errorRetry;
+    const action = retryActionRef.current;
     clearError();
-    retry?.();
+    if (!action) return;
+    switch (action.kind) {
+      case "fn":
+        action.fn();
+        break;
+      case "choice": {
+        const beat = currentBeatRef.current;
+        const choice =
+          beat?.next.type === "choice"
+            ? beat.next.choices.find((c) => c.id === action.choiceId)
+            : undefined;
+        if (choice) onSelectChoice(choice);
+        break;
+      }
+      case "freeform":
+        onFreeformInput(action.text);
+        break;
+      case "background-click":
+        onBackgroundClick({ x: action.x, y: action.y });
+        break;
+    }
   }
 
   // Coarse liveness ping for active-time analytics. /play is a single SPA
@@ -2096,7 +2132,7 @@ function PlayInner() {
       }
       if (!handleAuthError(e, retry, action)) {
         trackPlayError("scene", e, sceneT0);
-        showError(e, retry);
+        showError(e, retry ? { kind: "fn", fn: retry } : undefined);
       }
       setPhase("ready");
     }
@@ -2175,7 +2211,7 @@ function PlayInner() {
       } catch (e) {
         if (!handleAuthError(e)) {
           trackPlayError("scene", e, replayT0);
-          showError(e, () => onSelectChoice(choice));
+          showError(e, { kind: "choice", choiceId: choice.id });
         }
         setPhase("ready");
       }
@@ -2389,7 +2425,7 @@ function PlayInner() {
     } catch (e) {
       if (!handleAuthError(e, () => onFreeformInput(text), { kind: "freeform", text })) {
         trackPlayError("freeform", e, freeformT0);
-        showError(e, () => onFreeformInput(text));
+        showError(e, { kind: "freeform", text });
       }
       setPhase("ready");
     }
@@ -2517,7 +2553,7 @@ function PlayInner() {
     } catch (e) {
       if (!handleAuthError(e, () => onBackgroundClick(click), { kind: "background-click", x: click.x, y: click.y })) {
         trackPlayError("vision", e, visionT0);
-        showError(e, () => onBackgroundClick(click));
+        showError(e, { kind: "background-click", x: click.x, y: click.y });
       }
       setPendingClick(null);
       setPhase("ready");
@@ -2535,12 +2571,24 @@ function PlayInner() {
       : [];
   const replayLocked = isRecordedReplayLockedAt(currentBeat);
 
+  // Dismiss the error overlay on Escape (accessibility). Reuses clearError so
+  // keyboard dismissal stays in lockstep with the close button's cleanup path.
+  useEffect(() => {
+    if (!error || !currentScene) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearError();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [error, currentScene, clearError]);
+
   const errorOverlay = error && currentScene ? (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-5 backdrop-blur-[2px]"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="play-error-title"
+      aria-describedby="play-error-desc"
     >
       <div
         className="w-full max-w-sm border px-6 py-5 text-center shadow-2xl animate-fade-in"
@@ -2556,7 +2604,10 @@ function PlayInner() {
         >
           {t("play.error.title")}
         </p>
-        <p className="font-serif text-[16px] leading-[1.65] text-white/90 mb-5 break-words">
+        <p
+          id="play-error-desc"
+          className="font-serif text-[16px] leading-[1.65] text-white/90 mb-5 break-words"
+        >
           {error}
         </p>
         <div className="flex items-center justify-center gap-3">
@@ -2567,17 +2618,18 @@ function PlayInner() {
               className="inline-flex items-center gap-2 border border-amber-300/55 bg-amber-300/15 px-4 py-2 text-[10px] smallcaps text-amber-100 transition-colors hover:bg-amber-300/25"
               style={{ borderRadius: "6px" }}
             >
-              <i className="fa-solid fa-rotate-right text-[10px]" />
+              <i aria-hidden="true" className="fa-solid fa-rotate-right text-[10px]" />
               {t("play.error.retry")}
             </button>
           )}
           <button
             type="button"
+            autoFocus
             onClick={clearError}
             className="inline-flex items-center gap-2 border border-white/20 bg-white/10 px-4 py-2 text-[10px] smallcaps text-white/75 transition-colors hover:bg-white/15 hover:text-white"
             style={{ borderRadius: "6px" }}
           >
-            <i className="fa-solid fa-xmark text-[10px]" />
+            <i aria-hidden="true" className="fa-solid fa-xmark text-[10px]" />
             {t("play.error.close")}
           </button>
         </div>
