@@ -1,0 +1,1 @@
+Temporary marker to verify the CLA Assistant workflow creates the signature file on first sign.
