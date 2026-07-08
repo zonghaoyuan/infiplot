@@ -1,4 +1,5 @@
 import type {
+  Beat,
   WriterScenePlan,
 } from "@infiplot/types";
 import type { WriterBeatsOutput } from "../agents/writer";
@@ -39,6 +40,42 @@ const DIALOGUE_RE =
 
 // Match <memory>{...}</memory> block anywhere in the story segment.
 const MEMORY_RE = /<memory>([\s\S]+?)<\/memory>/;
+
+const UPSTREAM_ERROR_PATTERNS = [
+  /\[(?:Gemini|Google|OpenAI|Claude|Anthropic)\s+Error:/i,
+  /\bPROHIBITED_CONTENT\b/i,
+  /\bSAFETY\b.*\b(block|blocked|filter|filtered)\b/i,
+  /\bcontent[_ -]?filter(?:ed)?\b/i,
+  /Generative AI Prohibited Use policy/i,
+];
+
+function looksLikeUpstreamError(raw: string): boolean {
+  return UPSTREAM_ERROR_PATTERNS.some((pattern) => pattern.test(raw));
+}
+
+function synthesizeGenerationErrorBeats(plan: WriterScenePlan): Beat[] {
+  const id = plan.entryBeatId || "b1";
+  return [
+    {
+      id,
+      narration: "生成暂时异常，请稍后重试。我们会继续优化这个问题。",
+      activeCharacters:
+        plan.entryActiveCharacters.length > 0
+          ? plan.entryActiveCharacters
+          : undefined,
+      next: {
+        type: "choice",
+        choices: [
+          {
+            id: `${id}__retry_later`,
+            label: "稍后再试",
+            effect: { kind: "change-scene", nextSceneSeed: "生成异常后稍后重试" },
+          },
+        ],
+      },
+    },
+  ];
+}
 
 /**
  * Extract and strip the <memory> JSON block from raw story prose.
@@ -117,6 +154,16 @@ export function splitProseToBeats(
   plan: WriterScenePlan,
 ): WriterBeatsOutput {
   try {
+    if (looksLikeUpstreamError(rawStory)) {
+      console.warn(
+        "[proseSplitter] upstream model error text detected, using fallback beats",
+      );
+      return {
+        beats: synthesizeGenerationErrorBeats(plan),
+        storyStatePatch: undefined,
+      };
+    }
+
     // 1. Extract <memory> block (story-state volatile patch)
     const { patch, cleanedProse } = extractMemoryBlock(rawStory);
 
