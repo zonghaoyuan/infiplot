@@ -240,7 +240,7 @@ InfiPlot 会与四类模型供应商通信。**文本（Text）和视觉（Visio
 
 ## Star 趋势
 
-[![Star History Chart](https://api.star-history.com/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.com/#zonghaoyuan/infiplot&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.dera.page/#zonghaoyuan/infiplot&Date)
 
 ---
 
