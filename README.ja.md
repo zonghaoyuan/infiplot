@@ -240,7 +240,7 @@ Xiaomi は TTS モデルに RPM/TPM 制限を設けています。公開デプ�
 
 ## スター推移
 
-[![Star History Chart](https://api.star-history.com/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.com/#zonghaoyuan/infiplot&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.dera.page/#zonghaoyuan/infiplot&Date)
 
 ---
 

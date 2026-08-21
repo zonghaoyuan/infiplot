@@ -241,7 +241,7 @@ Scan to join our **beta community on QQ** (group ID `575404333`) to share feedba
 
 ## Star history
 
-[![Star History Chart](https://api.star-history.com/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.com/#zonghaoyuan/infiplot&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=zonghaoyuan/infiplot&type=Date)](https://star-history.dera.page/#zonghaoyuan/infiplot&Date)
 
 ---
 
